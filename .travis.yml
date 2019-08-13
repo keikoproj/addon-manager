@@ -1,0 +1,36 @@
+language: go
+
+go:
+  - 1.12.x
+
+git:
+  depth: 1
+
+env:
+  global:
+    - GO111MODULE=on
+    - KUBECONFIG=$HOME/.kube/config
+
+cache:
+  directories:
+    - $HOME/.local
+    - $HOME/.kube
+
+install: skip
+
+jobs:
+  include:
+
+    - stage: unit-test
+      if: type IN (push, pull_request)
+      script:
+        - go test ./api/... ./controllers/... ./pkg/... ./cmd/... -coverprofile coverage.txt
+        - bash <(curl -s https://codecov.io/bash)
+
+    - stage: publish-image
+      if: type IN (push)
+      script:
+        - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+        - if [ $TRAVIS_EVENT_TYPE = push ]; then export IMG=orkaproj/addon-manager:$TRAVIS_BRANCH; fi
+        - make docker-build
+        - make docker-push
