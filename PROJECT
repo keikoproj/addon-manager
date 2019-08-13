@@ -1,0 +1,7 @@
+version: "2"
+domain: orkaproj.io
+repo: github.com/orkaproj/addon-manager
+resources:
+- group: addonmgr
+  version: v1alpha1
+  kind: Addon

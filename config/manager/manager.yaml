@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: service
+  namespace: system
+  labels:
+    control-plane: addon-manager
+spec:
+  selector:
+    control-plane: addon-manager
+  ports:
+    - port: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: system
+  labels:
+    control-plane: addon-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: addon-manager
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: addon-manager
+    spec:
+      containers:
+      - command:
+        - /manager
+        args:
+        - --enable-leader-election
+        image: orkaproj/addon-manager:latest
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-installer-sa
+  namespace: system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: addon-workflow-cr
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io", ""]
+    resources: ["namespaces", "clusterroles", "clusterrolebindings", "configmaps", "events", "pods", "serviceaccounts"]
+    verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps", "extensions"]
+    resources: ["deployments", "daemonsets", "statefulsets", "replicasets", "ingresses", "controllerrevisions", "customresourcedefinitions"]
+    verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "watch", "list", "create", "update", "patch"]
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: addon-workflow-crb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: addon-workflow-cr
+subjects:
+  - kind: ServiceAccount
+    name: workflow-installer-sa
+    namespace: system

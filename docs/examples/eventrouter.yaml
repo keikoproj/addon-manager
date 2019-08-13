@@ -1,0 +1,142 @@
+apiVersion: addonmgr.orkaproj.io/v1alpha1
+kind: Addon
+metadata:
+  name: event-router
+  namespace: addon-manager-system
+spec:
+  pkgName: event-router
+  pkgVersion: v0.2
+  pkgType: composite
+  pkgDescription: "Event router"
+  params:
+    namespace: addon-event-router-ns
+    context:
+      clusterName: "kops-aws-usw2.cluster.k8s.local"
+      clusterRegion: us-west-2
+  lifecycle:
+    prereqs:
+      template: |
+        apiVersion: argoproj.io/v1alpha1
+        kind: Workflow
+        spec:
+          entrypoint: entry
+          serviceAccountName: addon-manager-workflow-installer-sa
+          templates:
+          - name: entry
+            steps:
+            - - name: prereq-resources
+                template: submit
+
+          - name: submit
+            resource:
+              action: apply
+              manifest: |
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: "{{workflow.parameters.namespace}}"
+                ---
+                apiVersion: v1
+                kind: ServiceAccount
+                metadata:
+                  name: event-router-sa
+                  namespace: "{{workflow.parameters.namespace}}"
+                ---
+                apiVersion: v1
+                data:
+                  config.json: |-
+                    {
+                      "sink": "stdout"
+                    }
+                kind: ConfigMap
+                metadata:
+                  name: event-router-cm
+                  namespace: "{{workflow.parameters.namespace}}"
+                ---
+                apiVersion: rbac.authorization.k8s.io/v1beta1
+                kind: ClusterRole
+                metadata:
+                  name: event-router-cr
+                rules:
+                - apiGroups: [""]
+                  resources: ["events"]
+                  verbs: ["get", "watch", "list"]
+                ---
+                apiVersion: rbac.authorization.k8s.io/v1beta1
+                kind: ClusterRoleBinding
+                metadata:
+                  name: event-router-crb
+                roleRef:
+                  apiGroup: rbac.authorization.k8s.io
+                  kind: ClusterRole
+                  name: event-router-cr
+                subjects:
+                - kind: ServiceAccount
+                  name: event-router-sa
+                  namespace: "{{workflow.parameters.namespace}}"
+    install:
+      template: |
+        apiVersion: argoproj.io/v1alpha1
+        kind: Workflow
+        spec:
+          entrypoint: entry
+          serviceAccountName: addon-manager-workflow-installer-sa
+          templates:
+          - name: entry
+            steps:
+            - - name: install-deployment
+                template: submit
+
+          - name: submit
+            resource:
+              action: apply
+              manifest: |
+                apiVersion: apps/v1
+                kind: Deployment
+                metadata:
+                  name: event-router
+                  namespace: "{{workflow.parameters.namespace}}"
+                  labels:
+                    app: event-router
+                spec:
+                  replicas: 1
+                  selector:
+                    matchLabels:
+                      app: event-router
+                  template:
+                    metadata:
+                      labels:
+                        app: event-router
+                    spec:
+                      containers:
+                        - name: kube-event-router
+                          image: gcr.io/heptio-images/eventrouter:v0.2
+                          imagePullPolicy: IfNotPresent
+                          volumeMounts:
+                          - name: config-volume
+                            mountPath: /etc/eventrouter
+                      serviceAccount: event-router-sa
+                      volumes:
+                        - name: config-volume
+                          configMap:
+                            name: event-router-cm
+
+    delete:
+      template: |
+        apiVersion: argoproj.io/v1alpha1
+        kind: Workflow
+        spec:
+          entrypoint: delete-wf
+          serviceAccountName: addon-manager-workflow-installer-sa
+
+          templates:
+            - name: delete-wf
+              steps:
+                - - name: delete-ns
+                    template: delete-ns
+
+            - name: delete-ns
+              container:
+                image: expert360/kubectl-awscli:v1.11.2
+                command: [sh, -c]
+                args: ["kubectl delete all -n {{workflow.parameters.namespace}} --all"]

@@ -1,0 +1,168 @@
+apiVersion: kops/v1alpha2
+kind: Cluster
+metadata:
+  creationTimestamp: null
+  name: kops-aws-usw2.cluster.k8s.local
+spec:
+  api:
+    loadBalancer:
+      type: Public
+  authorization:
+    rbac: {}
+  channel: stable
+  cloudProvider: aws
+  configBase: s3://kops-state-store-233444812205-us-west-2/kops-aws-usw2.cluster.k8s.local
+  etcdClusters:
+  - cpuRequest: 200m
+    etcdMembers:
+    - instanceGroup: master-us-west-2a
+      name: a
+    - instanceGroup: master-us-west-2b
+      name: b
+    - instanceGroup: master-us-west-2c
+      name: c
+    memoryRequest: 100Mi
+    name: main
+  - cpuRequest: 100m
+    etcdMembers:
+    - instanceGroup: master-us-west-2a
+      name: a
+    - instanceGroup: master-us-west-2b
+      name: b
+    - instanceGroup: master-us-west-2c
+      name: c
+    memoryRequest: 100Mi
+    name: events
+  iam:
+    allowContainerRegistry: true
+    legacy: false
+  kubelet:
+    anonymousAuth: false
+  kubernetesApiAccess:
+  - 172.20.0.0/16
+  - 65.204.229.0/24
+  - 207.207.160.0/25
+  - 67.207.111.40/30
+  kubernetesVersion: 1.12.9
+  masterPublicName: api.kops-aws-usw2.cluster.k8s.local
+  networkCIDR: 172.20.0.0/16
+  networking:
+    amazonvpc: {}
+  nonMasqueradeCIDR: 172.20.0.0/16
+  sshAccess:
+  - 172.20.0.0/16
+  - 65.204.229.0/24
+  - 207.207.160.0/25
+  - 67.207.111.40/30
+  subnets:
+  - cidr: 172.20.32.0/19
+    name: us-west-2a
+    type: Private
+    zone: us-west-2a
+  - cidr: 172.20.64.0/19
+    name: us-west-2b
+    type: Private
+    zone: us-west-2b
+  - cidr: 172.20.96.0/19
+    name: us-west-2c
+    type: Private
+    zone: us-west-2c
+  - cidr: 172.20.0.0/22
+    name: utility-us-west-2a
+    type: Utility
+    zone: us-west-2a
+  - cidr: 172.20.4.0/22
+    name: utility-us-west-2b
+    type: Utility
+    zone: us-west-2b
+  - cidr: 172.20.8.0/22
+    name: utility-us-west-2c
+    type: Utility
+    zone: us-west-2c
+  topology:
+    dns:
+      type: Public
+    masters: private
+    nodes: private
+
+---
+
+apiVersion: kops/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: kops-aws-usw2.cluster.k8s.local
+  name: master-us-west-2a
+spec:
+  image: kope.io/k8s-1.12-debian-stretch-amd64-hvm-ebs-2019-06-21
+  machineType: m5.large
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    kops.k8s.io/instancegroup: master-us-west-2a
+  role: Master
+  subnets:
+  - us-west-2a
+
+---
+
+apiVersion: kops/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: kops-aws-usw2.cluster.k8s.local
+  name: master-us-west-2b
+spec:
+  image: kope.io/k8s-1.12-debian-stretch-amd64-hvm-ebs-2019-06-21
+  machineType: m5.large
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    kops.k8s.io/instancegroup: master-us-west-2b
+  role: Master
+  subnets:
+  - us-west-2b
+
+---
+
+apiVersion: kops/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: kops-aws-usw2.cluster.k8s.local
+  name: master-us-west-2c
+spec:
+  image: kope.io/k8s-1.12-debian-stretch-amd64-hvm-ebs-2019-06-21
+  machineType: m5.large
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    kops.k8s.io/instancegroup: master-us-west-2c
+  role: Master
+  subnets:
+  - us-west-2c
+
+---
+
+apiVersion: kops/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: null
+  labels:
+    kops.k8s.io/cluster: kops-aws-usw2.cluster.k8s.local
+  name: nodes
+spec:
+  image: kope.io/k8s-1.12-debian-stretch-amd64-hvm-ebs-2019-06-21
+  machineType: m5.xlarge
+  maxSize: 3
+  minSize: 3
+  nodeLabels:
+    kops.k8s.io/instancegroup: nodes
+  role: Node
+  subnets:
+  - us-west-2a
+  - us-west-2b
+  - us-west-2c
