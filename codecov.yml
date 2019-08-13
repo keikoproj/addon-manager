@@ -1,2 +1,8 @@
 coverage:
   range: "70...90"
+
+ignore:
+  - "**/zz_generated.*"
+  - "bin"
+  - "config"
+  - "hack"
