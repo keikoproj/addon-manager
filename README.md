@@ -1,4 +1,13 @@
 # Addon Manager
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)][GithubMaintainedUrl]
+[![PR](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)][GithubPrsUrl]
+[![slack](https://img.shields.io/badge/slack-join%20the%20conversation-ff69b4.svg)][SlackUrl]
+
+![version](https://img.shields.io/badge/version-0.1.0-blue.svg?cacheSeconds=2592000)
+[![Build Status][BuildStatusImg]][BuildMasterUrl]
+[![codecov][CodecovImg]][CodecovUrl]
+[![Go Report Card][GoReportImg]][GoReportUrl]
+
 Addons are critical components within a Kubernetes cluster that provide critical services needed by applications like 
 DNS, Ingress, Metrics, Logging, etc. Addon Manager provides a CRD for lifecycle management of such addons using 
 Argo Workflows.
@@ -207,6 +216,34 @@ Please see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 Please see [DEVELOPER.md](.github/DEVELOPER.md).
 
+## Other Orka Projects
+[Instance Manager][InstanceManagerUrl] -
+[Kube Forensics][KubeForensicsUrl] -
+[Active Monitor][ActiveMonitorUrl] -
+[Upgrade Manager][UpgradeManagerUrl] -
+[Minion Manager][MinionManagerUrl] -
+[Governor][GovernorUrl]
+
 <!-- Markdown link -->
 [install]: docs/README.md
 [ext_link]: https://upload.wikimedia.org/wikipedia/commons/d/d9/VisualEditor_-_Icon_-_External-link.svg
+
+[InstanceManagerUrl]: https://github.com/orkaproj/instance-manager
+[KubeForensicsUrl]: https://github.com/orkaproj/kube-forensics
+[ActiveMonitorUrl]: https://github.com/orkaproj/active-monitor
+[UpgradeManagerUrl]: https://github.com/orkaproj/upgrade-manager
+[MinionManagerUrl]: https://github.com/orkaproj/minion-manager
+[GovernorUrl]: https://github.com/orkaproj/governor
+
+[GithubMaintainedUrl]: https://github.com/orkaproj/addon-manager/graphs/commit-activity
+[GithubPrsUrl]: https://github.com/orkaproj/addon-manager/pulls
+[SlackUrl]: https://orkaproj.slack.com/messages/addon-manager
+
+[BuildStatusImg]: https://travis-ci.org/orkaproj/addon-manager.svg?branch=master
+[BuildMasterUrl]: https://travis-ci.org/orkaproj/addon-manager
+
+[CodecovImg]: https://codecov.io/gh/orkaproj/addon-manager/branch/master/graph/badge.svg
+[CodecovUrl]: https://codecov.io/gh/orkaproj/addon-manager
+
+[GoReportImg]: https://goreportcard.com/badge/github.com/orkaproj/addon-manager
+[GoReportUrl]: https://goreportcard.com/report/github.com/orkaproj/addon-manager
