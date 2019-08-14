@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
+// ClusterContext represents a minimal context that can be provided to an addon
 type ClusterContext struct {
 	// ClusterName name of the cluster
 	// +optional
@@ -35,18 +36,22 @@ type ClusterContext struct {
 	AdditionalConfigs map[string]FlexString `json:"additionalConfigs,omitempty" protobuf:"bytes,2,rep,name=data"`
 }
 
+// AddonParams are the parameters which will be available to the template workflows
 type AddonParams struct {
 	// +kubebuilder:validation:MinLength=1
 	Namespace string `json:"namespace,omitempty"`
-
+	// Context values passed directly to the addon
+	// +optional
 	Context ClusterContext `json:"context,omitempty"`
 	// Data values that will be parameters injected into workflows
 	// +optional
 	Data map[string]FlexString `json:"data,omitempty"`
 }
 
+// FlexString is a ptr to string type that is used to provide additional configs
 type FlexString string
 
+// UnmarshalJSON overrides unmarshaler.UnmarshalJSON in converter
 func (fs *FlexString) UnmarshalJSON(b []byte) error {
 	var out string
 	if b[0] == '"' {
@@ -78,12 +83,14 @@ func (fs *FlexString) UnmarshalJSON(b []byte) error {
 	return fmt.Errorf("unable to unmarshal from bool or int into string")
 }
 
+// KustomizeTemplate is used to specify override patch templates in Kustomize format
 type KustomizeTemplate struct {
 	// Template patch yamls as per Kustomize spec
 	// +optional
 	Template map[string]string `json:"template,omitempty" protobuf:"bytes,2,rep,name=template"`
 }
 
+// KustomizeSpec is used to specify common Kustomize spec features
 type KustomizeSpec struct {
 	// Common labels as per Kustomize spec
 	// +optional
@@ -102,16 +109,23 @@ type KustomizeSpec struct {
 	Overlay KustomizeTemplate `json:"overlay,omitempty"`
 }
 
+// PackageType is a specific deployer type that will be used for deploying templates
 type PackageType string
 
 const (
-	HelmPkg      PackageType = "helm"
-	ShipPkg      PackageType = "ship"
+	// HelmPkg is a deployer package type representing Helm package structure
+	HelmPkg PackageType = "helm"
+	// ShipPkg is a deployer package type representing Ship package structure
+	ShipPkg PackageType = "ship"
+	// KustomizePkg is a deployer package type representing Kustomize package structure
 	KustomizePkg PackageType = "kustomize"
-	CnabPkg      PackageType = "cnab"
+	// CnabPkg is a deployer package type representing CNAB package structure
+	CnabPkg PackageType = "cnab"
+	// CompositePkg is a package type representing a composite package structure, just yamls
 	CompositePkg PackageType = "composite"
 )
 
+// CmdType represents a function that can be performed with arguments
 type CmdType int
 
 const (
@@ -141,25 +155,33 @@ const (
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
 )
 
+// DeploymentPhase represents the status of observed resources
 type DeploymentPhase string
 
 const (
+	// InProgress deployment phase for resources in addon
 	InProgress DeploymentPhase = "InProgress"
-
+	// Ready deployment phase for resources in addon
 	Ready DeploymentPhase = "Ready"
-
+	// Unknown deployment phase for resources in addon
 	Unknown DeploymentPhase = "Unknown"
 )
 
+// LifecycleStep is a string representation of the lifecycle steps available in Addon spec: prereqs, install, delete, validate
 type LifecycleStep string
 
 const (
-	Prereqs  LifecycleStep = "prereqs"
-	Install  LifecycleStep = "install"
-	Delete   LifecycleStep = "delete"
+	// Prereqs constant
+	Prereqs LifecycleStep = "prereqs"
+	// Install constant
+	Install LifecycleStep = "install"
+	// Delete constant
+	Delete LifecycleStep = "delete"
+	// Validate constant
 	Validate LifecycleStep = "validate"
 )
 
+// AddonOverridesSpec represents a template of the resources that can be deployed or patched alongside the main deployment
 type AddonOverridesSpec struct {
 	// Kustomize specs
 	// +optional
@@ -169,12 +191,14 @@ type AddonOverridesSpec struct {
 	Template map[string]string `json:"template,omitempty" protobuf:"bytes,2,rep,name=template"`
 }
 
+// SecretCmdSpec is a secret list and/or generator for secrets using the available commands: random, cert.
 type SecretCmdSpec struct {
 	Name string   `json:"name"`
 	Cmd  CmdType  `json:"cmd,omitempty"`
 	Args []string `json:"args,omitempty" protobuf:"bytes,4,rep,name=args"`
 }
 
+// WorkflowType allows user to specify workflow templates with optional namePrefix, workflowRole or role.
 type WorkflowType struct {
 	// NamePrefix is a prefix for the name of workflow
 	// +kubebuilder:validation:MaxLength=10
@@ -186,10 +210,11 @@ type WorkflowType struct {
 	// WorkflowRole used to denote the role annotation that should be used by the workflow
 	// +optional
 	WorkflowRole string `json:"workflowRole,omitempty"`
-
+	// Template is used to provide the workflow spec
 	Template string `json:"template"`
 }
 
+// LifecycleWorkflowSpec is where all of the lifecycle workflow templates will be specified under
 type LifecycleWorkflowSpec struct {
 	Prereqs  WorkflowType `json:"prereqs,omitempty"`
 	Install  WorkflowType `json:"install,omitempty"`
@@ -197,6 +222,7 @@ type LifecycleWorkflowSpec struct {
 	Validate WorkflowType `json:"validate,omitempty"`
 }
 
+// PackageSpec is the package level details needed by addon
 type PackageSpec struct {
 	PkgChannel     string            `json:"pkgChannel,omitempty"`
 	PkgName        string            `json:"pkgName"`
@@ -288,6 +314,7 @@ func init() {
 	SchemeBuilder.Register(&Addon{}, &AddonList{})
 }
 
+// GetPackageSpec returns the addon package details from addon spec
 func (a *Addon) GetPackageSpec() PackageSpec {
 	return PackageSpec{
 		PkgName:        a.Spec.PkgName,
@@ -299,7 +326,7 @@ func (a *Addon) GetPackageSpec() PackageSpec {
 	}
 }
 
-// GetAddonParametersMap returns an object copying the params submitted as part of the addon spec
+// GetAllAddonParameters returns an object copying the params submitted as part of the addon spec
 func (a *Addon) GetAllAddonParameters() map[string]string {
 	params := make(map[string]string)
 	params["namespace"] = a.Spec.Params.Namespace

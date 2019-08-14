@@ -219,7 +219,7 @@ func newRootCommand() *cobra.Command {
 				return
 			}
 
-			kClient := dynamic.NewForConfigOrDie(cfg)
+			kubeClient := dynamic.NewForConfigOrDie(cfg)
 
 			addonMap := make(map[string]interface{})
 			jsonInstance, _ := json.Marshal(instance)
@@ -232,13 +232,13 @@ func newRootCommand() *cobra.Command {
 
 			addon := unstructured.Unstructured{}
 			addon.SetUnstructuredContent(addonMap)
-			addonObject, err := kClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Get(addonName, metav1.GetOptions{})
+			addonObject, err := kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Get(addonName, metav1.GetOptions{})
 
 			if err == nil {
 				fmt.Printf("Updating addon %s...\n", addonName)
 				resourceVersion := addonObject.GetResourceVersion()
 				addon.SetResourceVersion(resourceVersion)
-				_, err = kClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Update(&addon, metav1.UpdateOptions{})
+				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Update(&addon, metav1.UpdateOptions{})
 				if err != nil {
 					fmt.Println(err)
 					return
@@ -246,7 +246,7 @@ func newRootCommand() *cobra.Command {
 
 			} else {
 				fmt.Printf("Creating addon %s...\n", addonName)
-				_, err = kClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Create(&addon, metav1.CreateOptions{})
+				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Create(&addon, metav1.CreateOptions{})
 				if err != nil {
 					fmt.Println(err)
 					return

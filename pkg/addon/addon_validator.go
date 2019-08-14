@@ -172,6 +172,7 @@ func (av *addonValidator) validateDependencies() error {
 	for pkgName, pkgVersion := range av.addon.Spec.PkgDeps {
 		pkgName = strings.TrimSpace(pkgName)
 		pkgVersion = strings.TrimSpace(pkgVersion)
+
 		if pkgVersion == "*" {
 			// Ignore version
 			versions := av.cache.GetVersions(pkgName)
@@ -188,11 +189,9 @@ func (av *addonValidator) validateDependencies() error {
 				}
 			}
 
-			if versionFound == true {
-				continue
+			if !versionFound {
+				return fmt.Errorf("required dependency %s has no valid versions installed", pkgName)
 			}
-
-			return fmt.Errorf("required dependency %s has no valid versions installed", pkgName)
 		} else {
 			// Check for specific version
 			v := av.cache.GetVersion(pkgName, pkgVersion)

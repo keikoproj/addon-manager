@@ -416,6 +416,7 @@ spec:
                         be used by the deployment resource
                       type: string
                     template:
+                      description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
                       description: WorkflowRole used to denote the role annotation
@@ -435,6 +436,7 @@ spec:
                         be used by the deployment resource
                       type: string
                     template:
+                      description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
                       description: WorkflowRole used to denote the role annotation
@@ -454,6 +456,7 @@ spec:
                         be used by the deployment resource
                       type: string
                     template:
+                      description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
                       description: WorkflowRole used to denote the role annotation
@@ -473,6 +476,7 @@ spec:
                         be used by the deployment resource
                       type: string
                     template:
+                      description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
                       description: WorkflowRole used to denote the role annotation
@@ -526,6 +530,7 @@ spec:
                 addon
               properties:
                 context:
+                  description: Context values passed directly to the addon
                   properties:
                     additionalConfigs:
                       additionalProperties:
