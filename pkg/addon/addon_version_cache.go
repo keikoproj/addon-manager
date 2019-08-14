@@ -52,9 +52,9 @@ func (c *cached) AddVersion(v Version) {
 	c.Lock()
 	defer c.Unlock()
 
-	mm, ok := c.addons[v.PkgName]
+	_, ok := c.addons[v.PkgName]
 	if !ok {
-		mm = make(map[string]Version)
+		mm := make(map[string]Version)
 		c.addons[v.PkgName] = mm
 	}
 	c.addons[v.PkgName][v.PkgVersion] = v
