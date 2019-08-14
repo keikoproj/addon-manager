@@ -119,7 +119,7 @@ const (
 	random
 )
 
-// ApplicationAssemblyPhase tracks the Addon CRD phases: pending, succeded, failed, deleting, deleteFailed
+// ApplicationAssemblyPhase tracks the Addon CRD phases: pending, succeeded, failed, deleting, deleteFailed
 type ApplicationAssemblyPhase string
 
 // Constants
