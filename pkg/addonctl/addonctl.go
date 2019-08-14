@@ -125,14 +125,14 @@ func newRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&clusterRegion, "cluster-region", "", "Cluster region")
 	rootCmd.MarkFlagRequired("cluster-region")
 	rootCmd.PersistentFlags().StringVar(&description, "desc", "", "Description of the addon")
-	rootCmd.PersistentFlags().StringVar(&dependencies, "deps", "", "Comma seperated dependencies list in the format 'pkgName:pkgVersion'")
+	rootCmd.PersistentFlags().StringVar(&dependencies, "deps", "", "Comma separated dependencies list in the format 'pkgName:pkgVersion'")
 	rootCmd.PersistentFlags().StringVarP(&pkgChannel, "channel", "c", "", "Channel for the addon package")
 	rootCmd.MarkFlagRequired("channel")
 	rootCmd.PersistentFlags().StringVarP(&pkgType, "type", "t", "", "Addon package type")
 	rootCmd.MarkFlagRequired("type")
 	rootCmd.PersistentFlags().StringVarP(&pkgVersion, "version", "v", "", "Addon package version")
 	rootCmd.MarkFlagRequired("version")
-	rootCmd.PersistentFlags().StringVar(&secretsRaw, "secrets", "", "Comma seperated list of secret names which are validated as part ofthe addon-manager-system namespace")
+	rootCmd.PersistentFlags().StringVar(&secretsRaw, "secrets", "", "Comma separated list of secret names which are validated as part ofthe addon-manager-system namespace")
 	rootCmd.PersistentFlags().StringVar(&selector, "selector", "", "Selector applied to all resources?")
 	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "Namespace where the addon will be deployed")
 	rootCmd.MarkFlagRequired("namespace")
@@ -219,7 +219,7 @@ func newRootCommand() *cobra.Command {
 				return
 			}
 
-			kClient := dynamic.NewForConfigOrDie(cfg)
+			kubeClient := dynamic.NewForConfigOrDie(cfg)
 
 			addonMap := make(map[string]interface{})
 			jsonInstance, _ := json.Marshal(instance)
@@ -232,13 +232,13 @@ func newRootCommand() *cobra.Command {
 
 			addon := unstructured.Unstructured{}
 			addon.SetUnstructuredContent(addonMap)
-			addonObject, err := kClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Get(addonName, metav1.GetOptions{})
+			addonObject, err := kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Get(addonName, metav1.GetOptions{})
 
 			if err == nil {
 				fmt.Printf("Updating addon %s...\n", addonName)
 				resourceVersion := addonObject.GetResourceVersion()
 				addon.SetResourceVersion(resourceVersion)
-				_, err = kClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Update(&addon, metav1.UpdateOptions{})
+				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Update(&addon, metav1.UpdateOptions{})
 				if err != nil {
 					fmt.Println(err)
 					return
@@ -246,7 +246,7 @@ func newRootCommand() *cobra.Command {
 
 			} else {
 				fmt.Printf("Creating addon %s...\n", addonName)
-				_, err = kClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Create(&addon, metav1.CreateOptions{})
+				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Create(&addon, metav1.CreateOptions{})
 				if err != nil {
 					fmt.Println(err)
 					return
@@ -273,9 +273,9 @@ func parseSelector(sel string) error {
 	}
 	s := strings.Split(sel, ":")
 	if len(s) == 1 && s[0] == ":" {
-		return errors.New("Missing ':' seperator in selector")
+		return errors.New("Missing ':' separator in selector")
 	} else if len(s) != 2 {
-		return errors.New("Dependency had multiple seperators")
+		return errors.New("Dependency had multiple separators")
 	}
 	selectorMap[s[0]] = s[1]
 	return nil
@@ -292,7 +292,7 @@ func parseAddonParams(raw string) error {
 	for _, item := range rawList {
 		kv := strings.Split(item, "=")
 		if len(kv) == 1 && kv[0] == "=" {
-			return fmt.Errorf("Unable to parse addon params: '%s'. Key-value pair %s does not have seperator '='", raw, item)
+			return fmt.Errorf("Unable to parse addon params: '%s'. Key-value pair %s does not have separator '='", raw, item)
 		}
 		params[kv[0]] = kv[1]
 	}
@@ -316,9 +316,9 @@ func parseDependencies(deps string) error {
 	for _, dep := range strings.Split(deps, ",") {
 		d := strings.Split(dep, ":")
 		if len(d) == 1 && d[0] == ":" {
-			log.Fatal("Missing ':' seperator in dependency")
+			log.Fatal("Missing ':' separator in dependency")
 		} else if len(d) != 2 {
-			log.Fatal("Dependency had multiple seperators")
+			log.Fatal("Dependency had multiple separators")
 		}
 		dependenciesMap[d[0]] = d[1]
 	}

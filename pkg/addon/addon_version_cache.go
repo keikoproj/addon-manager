@@ -20,6 +20,7 @@ import (
 	"sync"
 )
 
+// VersionCacheClient interface clients must implement for addon version cache.
 type VersionCacheClient interface {
 	AddVersion(Version)
 	GetVersions(pkgName string) map[string]Version
@@ -30,6 +31,7 @@ type VersionCacheClient interface {
 	GetAllVersions() map[string]map[string]Version
 }
 
+// Version data that will be cached
 type Version struct {
 	Name      string
 	Namespace string
@@ -42,6 +44,7 @@ type cached struct {
 	addons map[string]map[string]Version
 }
 
+// NewAddonVersionCacheClient returns a new instance of VersionCacheClient
 func NewAddonVersionCacheClient() VersionCacheClient {
 	return &cached{
 		addons: make(map[string]map[string]Version),
@@ -52,9 +55,9 @@ func (c *cached) AddVersion(v Version) {
 	c.Lock()
 	defer c.Unlock()
 
-	mm, ok := c.addons[v.PkgName]
+	_, ok := c.addons[v.PkgName]
 	if !ok {
-		mm = make(map[string]Version)
+		mm := make(map[string]Version)
 		c.addons[v.PkgName] = mm
 	}
 	c.addons[v.PkgName][v.PkgVersion] = v

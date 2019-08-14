@@ -14,30 +14,7 @@
 
 package common
 
-import (
-	"encoding/json"
-	"errors"
-)
-
-func DeepCopyJSON(src map[string]interface{}, dest map[string]interface{}) error {
-	if src == nil {
-		return errors.New("src is nil. You cannot read from a nil map")
-	}
-	if dest == nil {
-		return errors.New("dest is nil. You cannot insert to a nil map")
-	}
-	jsonStr, err := json.Marshal(src)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(jsonStr, &dest)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Helper functions to check and remove string from a slice of strings.
+// ContainsString helper function to check string in a slice of strings.
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
@@ -47,6 +24,7 @@ func ContainsString(slice []string, s string) bool {
 	return false
 }
 
+// RemoveString helper function to remove a string in a slice of strings.
 func RemoveString(slice []string, s string) (result []string) {
 	for _, item := range slice {
 		if item == s {

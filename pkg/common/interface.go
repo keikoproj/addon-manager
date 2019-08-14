@@ -14,6 +14,7 @@
 
 package common
 
+// Validator is a common interface for validators
 type Validator interface {
 	Validate() (bool, error)
 }
