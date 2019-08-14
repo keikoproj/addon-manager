@@ -72,6 +72,7 @@ type AddonReconciler struct {
 	recorder        record.EventRecorder
 }
 
+// NewAddonReconciler returns an instance of AddonReconciler
 func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 	return &AddonReconciler{
 		Client:          mgr.GetClient(),
@@ -94,6 +95,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 // +kubebuilder:rbac:groups=extensions,resources=deployments;daemonsets;replicasets;ingresses,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch;create;update;patch
 
+// Reconcile method for all addon requests
 func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("addon", req.NamespacedName)
@@ -122,6 +124,7 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ret, err
 }
 
+// SetupWithManager is called to setup manager and watchers
 func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := r.Log
 	//var addongrp = common.AddonGVR().Group
@@ -441,6 +444,7 @@ func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alp
 	return observed, nil
 }
 
+// Finalize runs finalizer for addon
 func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle, finalizerName string) error {
 	// Has Delete workflow defined, let's run it.
 	var removeFinalizer = true

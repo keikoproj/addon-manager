@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// AddonGVR returns the schema representaion of the addon resource
+// AddonGVR returns the schema representation of the addon resource
 func AddonGVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
 		Group:    "addonmgr.orkaproj.io",
@@ -28,7 +28,7 @@ func AddonGVR() schema.GroupVersionResource {
 	}
 }
 
-// CRDGVR returns the schema representaion for customresourcedefinitions
+// CRDGVR returns the schema representation for customresourcedefinitions
 func CRDGVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
 		Group:    "apiextensions.k8s.io",
@@ -37,7 +37,7 @@ func CRDGVR() schema.GroupVersionResource {
 	}
 }
 
-// SecretGVR returns the schema representaion of the secret resource
+// SecretGVR returns the schema representation of the secret resource
 func SecretGVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
 		Group:    "",
@@ -46,7 +46,7 @@ func SecretGVR() schema.GroupVersionResource {
 	}
 }
 
-// WorkflowGVR returns the schema representaion of the workflow resource
+// WorkflowGVR returns the schema representation of the workflow resource
 func WorkflowGVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
 		Group:    "argoproj.io",
@@ -55,6 +55,7 @@ func WorkflowGVR() schema.GroupVersionResource {
 	}
 }
 
+// WorkflowType return an unstructured workflow type object
 func WorkflowType() *unstructured.Unstructured {
 	wf := &unstructured.Unstructured{}
 	wf.SetGroupVersionKind(schema.GroupVersionKind{

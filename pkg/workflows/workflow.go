@@ -334,7 +334,7 @@ func (w *workflowLifecycle) processArtifacts(workflowStepObject interface{}, wt 
 			kind := resource["kind"].(string)
 			if kind == "StatefulSet" || kind == "Deployment" || kind == "DaemonSet" || kind == "ReplicaSet" || kind == "Service" {
 				// Add the default labels to the resource yaml
-				resource, err := w.addDefaultLabelsToResource(resource)
+				resource, err = w.addDefaultLabelsToResource(resource)
 				if err != nil {
 					return err
 				}

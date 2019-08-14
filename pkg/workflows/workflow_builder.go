@@ -24,10 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-const DefaultPython3ScriptImage = "python:3"
-const DefaultSubmitContainerImage = "expert360/kubectl-awscli:v1.11.2"
+const defaultPython3ScriptImage = "python:3"
+const defaultSubmitContainerImage = "expert360/kubectl-awscli:v1.11.2"
 
-var delete = false
+var doDelete = false
 
 // WorkflowBuilder interface for building an unstructured workflow
 type WorkflowBuilder interface {
@@ -58,7 +58,7 @@ func New() WorkflowBuilder {
 
 	// default submit container
 	dsc := make(map[string]interface{})
-	dsc["image"] = DefaultSubmitContainerImage
+	dsc["image"] = defaultSubmitContainerImage
 	dsc["command"] = []string{"sh", "-c"}
 	dsc["args"] = []string{"kubectl apply -f /tmp/doc"}
 
@@ -97,7 +97,7 @@ func New() WorkflowBuilder {
 	deleteNSTemplate := make(map[string]interface{})
 	deleteNSTemplate["name"] = "delete-ns"
 	deleteNSTemplate["container"] = make(map[string]interface{})
-	deleteNSTemplate["container"].(map[string]interface{})["image"] = DefaultSubmitContainerImage
+	deleteNSTemplate["container"].(map[string]interface{})["image"] = defaultSubmitContainerImage
 	deleteNSTemplate["container"].(map[string]interface{})["command"] = []string{"sh", "-c"}
 	deleteNSTemplate["container"].(map[string]interface{})["args"] = []string{"kubectl delete all -n {{workflow.parameters.namespace}} --all"}
 
@@ -117,7 +117,7 @@ func (wb *workflowBuilder) Build() unstructured.Unstructured {
 	wf := unstructured.Unstructured{}
 
 	// append the entry and submit templates to the existing templates list
-	if !delete {
+	if !doDelete {
 		wb.defaultContent["spec"].(map[string]interface{})["templates"] = append(wb.defaultContent["spec"].(map[string]interface{})["templates"].([]map[string]interface{}), wb.defaultEntryTemplate, wb.defaultSubmitTemplate)
 	} else {
 		wb.defaultContent["spec"].(map[string]interface{})["templates"] = append(wb.defaultContent["spec"].(map[string]interface{})["templates"].([]map[string]interface{}), wb.deleteTemplates[0], wb.deleteTemplates[1])
@@ -145,7 +145,7 @@ func ConvertUnstructuredWorkflowToString(u unstructured.Unstructured) string {
 }
 
 func (wb *workflowBuilder) Delete() WorkflowBuilder {
-	delete = true
+	doDelete = true
 	return wb
 }
 
@@ -181,7 +181,7 @@ func (wb *workflowBuilder) Scripts(scripts map[string]string) WorkflowBuilder {
 		// TODO verify that the name is ok
 		tempScript["name"] = tempName
 		tempScript["script"] = make(map[string]interface{})
-		tempScript["script"].(map[string]interface{})["image"] = DefaultPython3ScriptImage
+		tempScript["script"].(map[string]interface{})["image"] = defaultPython3ScriptImage
 		tempScript["script"].(map[string]interface{})["command"] = []string{"pyhton"}
 		tempScript["script"].(map[string]interface{})["source"] = scriptData
 

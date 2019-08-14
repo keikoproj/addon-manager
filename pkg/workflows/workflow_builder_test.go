@@ -51,7 +51,7 @@ func TestWorkflowBuilder(t *testing.T) {
 	submitTemplateContainer := templates[1]["container"].(map[string]interface{})
 	g.Expect(submitTemplateContainer["args"]).To(gomega.Equal([]string{"kubectl apply -f /tmp/doc"}))
 	g.Expect(submitTemplateContainer["command"]).To(gomega.Equal([]string{"sh", "-c"}))
-	g.Expect(submitTemplateContainer["image"]).To(gomega.Equal(DefaultSubmitContainerImage))
+	g.Expect(submitTemplateContainer["image"]).To(gomega.Equal(defaultSubmitContainerImage))
 
 	submitTemplateInputs := templates[1]["inputs"].(map[string]interface{})
 	g.Expect(submitTemplateInputs["parameters"]).To(gomega.Equal(make([]map[string]interface{}, 0)))
@@ -85,5 +85,5 @@ func TestDeleteWorkflowBuilder(t *testing.T) {
 	deleteNSContainer := templates[1]["container"].(map[string]interface{})
 	g.Expect(deleteNSContainer["args"]).To(gomega.Equal([]string{"kubectl delete all -n {{workflow.parameters.namespace}} --all"}))
 	g.Expect(deleteNSContainer["command"]).To(gomega.Equal([]string{"sh", "-c"}))
-	g.Expect(deleteNSContainer["image"]).To(gomega.Equal(DefaultSubmitContainerImage))
+	g.Expect(deleteNSContainer["image"]).To(gomega.Equal(defaultSubmitContainerImage))
 }

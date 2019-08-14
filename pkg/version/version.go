@@ -17,12 +17,19 @@ package version
 import "fmt"
 
 // The below variables will be overrriden using ldflags set by goreleaser during the build process
-var VERSION = "DEV"
-var GIT_COMMIT = "NONE"
-var BUILD_DATE = "UNKNOWN"
+
+// Version is the version string
+var Version = "DEV"
+
+// GitCommit is the git commit hash
+var GitCommit = "NONE"
+
+// BuildDate is the date of the build
+var BuildDate = "UNKNOWN"
 
 const versionStringFmt = `{"version": "%s", "gitCommit": "%s", "buildDate": "%s"}`
 
+// ToString returns the output of Version, GitCommit, BuildDate
 func ToString() string {
-	return fmt.Sprintf(versionStringFmt, VERSION, GIT_COMMIT, BUILD_DATE)
+	return fmt.Sprintf(versionStringFmt, Version, GitCommit, BuildDate)
 }
