@@ -7,7 +7,7 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - addonmgr.orkaproj.io
+  - addonmgr.keikoproj.io
   resources:
   - addons
   verbs:
@@ -19,7 +19,7 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - addonmgr.orkaproj.io
+  - addonmgr.keikoproj.io
   resources:
   - addons/status
   verbs:

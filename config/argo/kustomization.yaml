@@ -6,4 +6,4 @@ commonLabels:
   app.kubernetes.io/name: addon-manager-argo-addon
   app.kubernetes.io/version: "v2.3.0-rc3"
   app.kubernetes.io/part-of: addon-manager-argo-addon
-  app.kubernetes.io/managed-by: addonmgr.orkaproj.io
+  app.kubernetes.io/managed-by: addonmgr.keikoproj.io

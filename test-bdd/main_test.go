@@ -30,9 +30,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	addonmgrv1alpha1 "github.com/orkaproj/addon-manager/api/v1alpha1"
-	"github.com/orkaproj/addon-manager/pkg/common"
-	"github.com/orkaproj/addon-manager/test-bdd/testutil"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/test-bdd/testutil"
 )
 
 var log = logrus.New()
@@ -63,7 +63,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 			"app.kubernetes.io/name":       spec["pkgName"].(string),
 			"app.kubernetes.io/version":    spec["pkgVersion"].(string),
 			"app.kubernetes.io/part-of":    metadata["name"].(string),
-			"app.kubernetes.io/managed-by": "addonmgr.orkaproj.io",
+			"app.kubernetes.io/managed-by": "addonmgr.keikoproj.io",
 		}
 	}
 

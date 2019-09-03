@@ -16,7 +16,7 @@ package addon
 
 import (
 	"github.com/Masterminds/semver"
-	addonmgrv1alpha1 "github.com/orkaproj/addon-manager/api/v1alpha1"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"sync"
 )
 

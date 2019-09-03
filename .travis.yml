@@ -34,5 +34,5 @@ jobs:
     - stage: docker-build
       if: type IN (push, pull_request)
       script:
-        - if [ $TRAVIS_EVENT_TYPE = push ]; then export IMG=orkaproj/addon-manager:$TRAVIS_BRANCH; fi
+        - if [ $TRAVIS_EVENT_TYPE = push ]; then export IMG=keikoproj/addon-manager:$TRAVIS_BRANCH; fi
         - make docker-build
