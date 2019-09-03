@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= orkaproj/addon-manager:latest
+IMG ?= keikoproj/addon-manager:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.2

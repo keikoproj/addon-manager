@@ -1,4 +1,4 @@
-apiVersion: addonmgr.orkaproj.io/v1alpha1
+apiVersion: addonmgr.keikoproj.io/v1alpha1
 kind: Addon
 metadata:
   name: event-router

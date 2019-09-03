@@ -1,4 +1,4 @@
-module github.com/orkaproj/addon-manager
+module github.com/keikoproj/addon-manager
 
 go 1.12
 

@@ -17,7 +17,7 @@ Argo Workflows.
 * kubectl-1.14+
 
 ## Installation
-To use: `kubectl kustomize github.com/orkaproj/addon-manager.git/config/default | kubectl apply -f -`
+To use: `kubectl kustomize github.com/keikoproj/addon-manager.git/config/default | kubectl apply -f -`
 
 ## Usage example
 An Addon describes a kubernetes resource-based application that is deployed to a cluster. The Addon CRD defines a spec 
@@ -26,7 +26,7 @@ Argo Workflows is used for each lifecycle step to specify and submit the resourc
 The design spec for the Addon CRD is as follows:
 
 ```yaml
-apiVersion: addonmgr.orkaproj.io/v1alpha1
+apiVersion: addonmgr.keikoproj.io/v1alpha1
 kind: Addon
 metadata:
   name: fluentd-addon
@@ -216,7 +216,7 @@ Please see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 Please see [DEVELOPER.md](.github/DEVELOPER.md).
 
-## Other Orka Projects
+## Other KeikoProj Projects
 [Instance Manager][InstanceManagerUrl] -
 [Kube Forensics][KubeForensicsUrl] -
 [Active Monitor][ActiveMonitorUrl] -
@@ -228,22 +228,22 @@ Please see [DEVELOPER.md](.github/DEVELOPER.md).
 [install]: docs/README.md
 [ext_link]: https://upload.wikimedia.org/wikipedia/commons/d/d9/VisualEditor_-_Icon_-_External-link.svg
 
-[InstanceManagerUrl]: https://github.com/orkaproj/instance-manager
-[KubeForensicsUrl]: https://github.com/orkaproj/kube-forensics
-[ActiveMonitorUrl]: https://github.com/orkaproj/active-monitor
-[UpgradeManagerUrl]: https://github.com/orkaproj/upgrade-manager
-[MinionManagerUrl]: https://github.com/orkaproj/minion-manager
-[GovernorUrl]: https://github.com/orkaproj/governor
+[InstanceManagerUrl]: https://github.com/keikoproj/instance-manager
+[KubeForensicsUrl]: https://github.com/keikoproj/kube-forensics
+[ActiveMonitorUrl]: https://github.com/keikoproj/active-monitor
+[UpgradeManagerUrl]: https://github.com/keikoproj/upgrade-manager
+[MinionManagerUrl]: https://github.com/keikoproj/minion-manager
+[GovernorUrl]: https://github.com/keikoproj/governor
 
-[GithubMaintainedUrl]: https://github.com/orkaproj/addon-manager/graphs/commit-activity
-[GithubPrsUrl]: https://github.com/orkaproj/addon-manager/pulls
-[SlackUrl]: https://orkaproj.slack.com/messages/addon-manager
+[GithubMaintainedUrl]: https://github.com/keikoproj/addon-manager/graphs/commit-activity
+[GithubPrsUrl]: https://github.com/keikoproj/addon-manager/pulls
+[SlackUrl]: https://keikoproj.slack.com/messages/addon-manager
 
-[BuildStatusImg]: https://travis-ci.org/orkaproj/addon-manager.svg?branch=master
-[BuildMasterUrl]: https://travis-ci.org/orkaproj/addon-manager
+[BuildStatusImg]: https://travis-ci.org/keikoproj/addon-manager.svg?branch=master
+[BuildMasterUrl]: https://travis-ci.org/keikoproj/addon-manager
 
-[CodecovImg]: https://codecov.io/gh/orkaproj/addon-manager/branch/master/graph/badge.svg
-[CodecovUrl]: https://codecov.io/gh/orkaproj/addon-manager
+[CodecovImg]: https://codecov.io/gh/keikoproj/addon-manager/branch/master/graph/badge.svg
+[CodecovUrl]: https://codecov.io/gh/keikoproj/addon-manager
 
-[GoReportImg]: https://goreportcard.com/badge/github.com/orkaproj/addon-manager
-[GoReportUrl]: https://goreportcard.com/report/github.com/orkaproj/addon-manager
+[GoReportImg]: https://goreportcard.com/badge/github.com/keikoproj/addon-manager
+[GoReportUrl]: https://goreportcard.com/report/github.com/keikoproj/addon-manager
