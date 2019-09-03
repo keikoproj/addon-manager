@@ -204,7 +204,8 @@ addonctl create my-addon -n my-addon-ns \
 ```
 
 ## Release History
-
+* 0.2.0
+  * Update api version to Keikoproj
 * 0.1.0
   * Release alpha version of addon-manager
 
