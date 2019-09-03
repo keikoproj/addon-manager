@@ -24,8 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	addonmgrv1alpha1 "github.com/orkaproj/addon-manager/api/v1alpha1"
-	"github.com/orkaproj/addon-manager/pkg/common"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
 type addonValidator struct {

@@ -23,8 +23,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	addonmgrv1alpha1 "github.com/orkaproj/addon-manager/api/v1alpha1"
-	"github.com/orkaproj/addon-manager/controllers"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/controllers"
 	// +kubebuilder:scaffold:imports
 )
 

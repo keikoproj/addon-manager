@@ -42,10 +42,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	addonmgrv1alpha1 "github.com/orkaproj/addon-manager/api/v1alpha1"
-	"github.com/orkaproj/addon-manager/pkg/addon"
-	"github.com/orkaproj/addon-manager/pkg/common"
-	"github.com/orkaproj/addon-manager/pkg/workflows"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/addon"
+	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/pkg/workflows"
 )
 
 // Watched resources
@@ -58,7 +58,7 @@ var (
 		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
 		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
 	}
-	finalizerName = "delete.addonmgr.orkaproj.io"
+	finalizerName = "delete.addonmgr.keikoproj.io"
 )
 
 // AddonReconciler reconciles a Addon object
@@ -85,8 +85,8 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 	}
 }
 
-// +kubebuilder:rbac:groups=addonmgr.orkaproj.io,resources=addons,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=addonmgr.orkaproj.io,resources=addons/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=argoproj.io,resources=workflows,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=list
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;patch;create

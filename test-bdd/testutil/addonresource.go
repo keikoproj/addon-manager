@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/orkaproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
 var addonGroupSchema = common.AddonGVR()

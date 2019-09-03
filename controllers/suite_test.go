@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	addonmgrv1alpha1 "github.com/orkaproj/addon-manager/api/v1alpha1"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
