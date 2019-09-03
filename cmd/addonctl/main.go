@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/orkaproj/addon-manager/pkg/addonctl"
+import "github.com/keikoproj/addon-manager/pkg/addonctl"
 
 func init() {
 

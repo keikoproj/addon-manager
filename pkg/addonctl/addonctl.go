@@ -33,10 +33,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	addonmgrv1alpha1 "github.com/orkaproj/addon-manager/api/v1alpha1"
-	"github.com/orkaproj/addon-manager/pkg/common"
-	"github.com/orkaproj/addon-manager/pkg/version"
-	"github.com/orkaproj/addon-manager/pkg/workflows"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/pkg/version"
+	"github.com/keikoproj/addon-manager/pkg/workflows"
 )
 
 var addonName string
@@ -165,7 +165,7 @@ func newRootCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			instance := &addonmgrv1alpha1.Addon{}
 			instance.SetGroupVersionKind(schema.GroupVersionKind{
-				Group:   "addonmgr.orkaproj.io",
+				Group:   "addonmgr.keikoproj.io",
 				Version: "v1alpha1",
 				Kind:    "Addon",
 			})

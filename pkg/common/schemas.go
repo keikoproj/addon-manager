@@ -22,7 +22,7 @@ import (
 // AddonGVR returns the schema representation of the addon resource
 func AddonGVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
-		Group:    "addonmgr.orkaproj.io",
+		Group:    "addonmgr.keikoproj.io",
 		Version:  "v1alpha1",
 		Resource: "addons",
 	}

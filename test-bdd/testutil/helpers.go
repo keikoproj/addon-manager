@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/orkaproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
 // PathToOSFile takes a relatice path and returns the full path on the OS
