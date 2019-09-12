@@ -16,7 +16,6 @@ package workflows
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -165,10 +164,6 @@ func TestWorkflowLifecycle_Install(t *testing.T) {
 	var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
 	g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
 		Should(Succeed())
-	fmt.Println(wfv1)
-	// Assert that workflow has resources labeled.
-	//unstructured.NestedString(wfv1.UnstructuredContent(), "")
-	//g.Expect()
 }
 
 // Test that an empty workflow type will fail
