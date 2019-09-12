@@ -48,6 +48,9 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/workflows"
 )
 
+// addon ttl time
+const TTL int64 = 180000
+
 // Watched resources
 var (
 	resources = [...]runtime.Object{
@@ -70,6 +73,7 @@ type AddonReconciler struct {
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
+	startTime       int64
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -82,8 +86,10 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
+		startTime:       common.GetCurretTimestamp(),
 	}
 }
+
 
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons/status,verbs=get;update;patch
@@ -269,6 +275,18 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 		return reconcile.Result{}, err
 	}
+	
+	//handle Prereqs failure
+	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Failed {
+		reason := fmt.Sprintf("Addon %s/%s Prereqs status is Failed", instance.Namespace, instance.Name)
+		r.recorder.Event(instance, "Warning", "Failed", reason)
+		log.Error(err, "Addon prereqs workflow failed.")
+		// if prereqs failed, set install status to failed as well so that STATUS is updated
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.Reason = reason
+
+		return reconcile.Result{}, fmt.Errorf(reason)
+	}
 
 	// Validate secrets are in the addon deployment namespace, this is here and not in validator b/c namespace must be used to validate.
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
@@ -310,6 +328,17 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 	if len(observed) > 0 {
 		instance.Status.Resources = observed
+	}
+	
+	if common.IsExpired(r.startTime, TTL) && (instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending ||
+		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting)  {
+		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
+		r.recorder.Event(instance, "Warning", "Failed", reason)
+		log.Error(err, "Addon expired.")
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.Reason = reason
+
+		return reconcile.Result{}, fmt.Errorf(reason)
 	}
 
 	return ctrl.Result{}, nil
