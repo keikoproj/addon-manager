@@ -341,13 +341,37 @@ func (a *Addon) GetAllAddonParameters() map[string]string {
 	return params
 }
 
+// GetWorkflowType returns the WorkflowType under the addon lifecycle spec
+func (a *Addon) GetWorkflowType(step LifecycleStep) (*WorkflowType, error) {
+	var wt *WorkflowType
+	switch step {
+	case Install:
+		wt = &a.Spec.Lifecycle.Install
+	case Prereqs:
+		wt = &a.Spec.Lifecycle.Prereqs
+	case Delete:
+		wt = &a.Spec.Lifecycle.Delete
+	case Validate:
+		wt = &a.Spec.Lifecycle.Validate
+	default:
+		return nil, fmt.Errorf("no WorkflowType of type %s exists", step)
+	}
+
+	return wt, nil
+}
+
 // GetFormattedWorkflowName used the addon name, workflow prefix, addon checksum, and lifecycle step to compose the workflow name
-func (a *Addon) GetFormattedWorkflowName(wt *WorkflowType, lifecycleStep string) string {
+func (a *Addon) GetFormattedWorkflowName(lifecycleStep LifecycleStep) string {
+	wt, err := a.GetWorkflowType(lifecycleStep)
+	if err != nil {
+		return ""
+	}
+
 	prefix := a.GetName()
 	if wt.NamePrefix != "" {
 		prefix = fmt.Sprintf("%s-%s", prefix, wt.NamePrefix)
 	}
-	wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", prefix, lifecycleStep, a.Status.Checksum)
+	wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", prefix, lifecycleStep, a.CalculateChecksum())
 	return wfIdentifierName
 }
 
