@@ -168,7 +168,7 @@ var _ = Describe("Addon", func() {
 			// Update status checksum
 			fetched.Status.Checksum = checksum
 
-			wfName := fetched.GetFormattedWorkflowName(&fetched.Spec.Lifecycle.Install, "install")
+			wfName := fetched.GetFormattedWorkflowName(Install)
 			Expect(wfName).To(Equal(fmt.Sprintf("foo-install-%s-wf", checksum)))
 
 			By("updating labels")
