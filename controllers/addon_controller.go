@@ -73,7 +73,6 @@ type AddonReconciler struct {
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
-	startTime       int64
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -86,7 +85,6 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
-		startTime:       common.GetCurretTimestamp(),
 	}
 }
 
@@ -200,6 +198,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Resources list
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
+	//set ttl starttime if it is 0
+	if instance.Status.TTLTime == 0 {
+		instance.Status.TTLTime = common.GetCurretTimestamp()
+	}
+
 	// Clear out the reason
 	instance.Status.Reason = ""
 
@@ -208,6 +211,24 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Pending
 		log.Info("Requeue to set pending status")
 		return reconcile.Result{Requeue: true}, nil
+	}
+
+	//if addon installation expired
+	if common.IsExpired(instance.Status.TTLTime, TTL) && (instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending ||
+		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting)  {
+		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
+		r.recorder.Event(instance, "Warning", "Failed", reason)
+		err := fmt.Errorf(reason)
+		log.Error(err, "Addon expired.")
+		if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
+		} else {
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		}
+		instance.Status.Reason = reason
+		instance.Status.TTLTime = 0
+
+		return reconcile.Result{}, err
 	}
 
 	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
@@ -226,6 +247,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
+			instance.Status.TTLTime = 0
 			instance.Status.Reason = reason
 			log.Error(err, "Failed to finalize addon.")
 			return reconcile.Result{}, err
@@ -240,6 +262,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		// Record an event if addon is not valid
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.TTLTime = 0
 		instance.Status.Reason = reason
 		log.Error(err, "Failed to validate addon.")
 
@@ -255,6 +278,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Failed to add finalizer for addon.")
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.TTLTime = 0
 		instance.Status.Reason = reason
 		return reconcile.Result{}, err
 	}
@@ -271,6 +295,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		log.Error(err, "Addon prereqs workflow failed.")
 		// if prereqs failed, set install status to failed as well so that STATUS is updated
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.TTLTime = 0
 		instance.Status.Reason = reason
 
 		return reconcile.Result{}, err
@@ -283,6 +308,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		log.Error(err, "Addon prereqs workflow failed.")
 		// if prereqs failed, set install status to failed as well so that STATUS is updated
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.TTLTime = 0
 		instance.Status.Reason = reason
 
 		return reconcile.Result{}, fmt.Errorf(reason)
@@ -295,6 +321,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon could not validate secrets.")
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+			instance.Status.TTLTime = 0
 			instance.Status.Reason = reason
 
 			return reconcile.Result{}, err
@@ -306,6 +333,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 			reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon install workflow failed.")
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+			instance.Status.TTLTime = 0
 			instance.Status.Reason = reason
 
 			return reconcile.Result{}, err
@@ -321,6 +350,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Addon failed to find deployed resources.")
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.TTLTime = 0
 		instance.Status.Reason = reason
 
 		return reconcile.Result{}, err
@@ -328,17 +358,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 	if len(observed) > 0 {
 		instance.Status.Resources = observed
-	}
-	
-	if common.IsExpired(r.startTime, TTL) && (instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending ||
-		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting)  {
-		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Addon expired.")
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.Reason = reason
-
-		return reconcile.Result{}, fmt.Errorf(reason)
 	}
 
 	return ctrl.Result{}, nil
