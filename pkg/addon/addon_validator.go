@@ -101,11 +101,11 @@ func (av *addonValidator) validateDuplicate(version *Version) error {
 func (av *addonValidator) validateWorkflow() error {
 	var data map[string]interface{}
 
-	workflowTypes := map[string]addonmgrv1alpha1.WorkflowType{
-		"prereqs":  av.addon.Spec.Lifecycle.Prereqs,
-		"install":  av.addon.Spec.Lifecycle.Install,
-		"delete":   av.addon.Spec.Lifecycle.Delete,
-		"validate": av.addon.Spec.Lifecycle.Validate,
+	workflowTypes := map[addonmgrv1alpha1.LifecycleStep]addonmgrv1alpha1.WorkflowType{
+		addonmgrv1alpha1.Prereqs:  av.addon.Spec.Lifecycle.Prereqs,
+		addonmgrv1alpha1.Install:  av.addon.Spec.Lifecycle.Install,
+		addonmgrv1alpha1.Delete:   av.addon.Spec.Lifecycle.Delete,
+		addonmgrv1alpha1.Validate: av.addon.Spec.Lifecycle.Validate,
 	}
 
 	for key, wt := range workflowTypes {
@@ -152,7 +152,7 @@ func (av *addonValidator) validateWorkflow() error {
 		for _, wfParam := range wfParameters {
 			wfParamName := wfParam.(map[string]interface{})["name"].(string)
 			if _, in := addonParams[wfParamName]; in {
-				return fmt.Errorf("invalid workflow, parameter named %q found in addon params and in workflow %s", wfParamName, av.addon.GetFormattedWorkflowName(&wt, key))
+				return fmt.Errorf("invalid workflow, parameter named %q found in addon params and in workflow %s", wfParamName, av.addon.GetFormattedWorkflowName(key))
 			}
 		}
 	}

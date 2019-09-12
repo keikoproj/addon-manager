@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	dynfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/tools/record"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -41,38 +42,48 @@ var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.Even
 var wfSpecTemplate = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
-metadata:
-  generateName: scripts-python-
 spec:
-  entrypoint: python-script-example
+  entrypoint: entry
+  serviceAccountName: addon-manager-workflow-installer-sa
   templates:
-    - name: python-script-example
-      steps:
-        - - name: generate
-            template: gen-random-int
-        - - name: print
-            template: print-message
-            arguments:
-              parameters:
-                - name: message
-                  value: "{{steps.generate.outputs.result}}"
+  - name: entry
+    steps:
+    - - name: install-deployment
+        template: submit
 
-    - name: gen-random-int
-      script:
-        image: python:alpine3.6
-        command: [python]
-        source: |
-          import random
-          i = random.randint(1, 100)
-          print(i)
-    - name: print-message
-      inputs:
-        parameters:
-          - name: message
-      container:
-        image: alpine:latest
-        command: [sh, -c]
-        args: ["echo result was: {{inputs.parameters.message}}"]
+  - name: submit
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: event-router
+          namespace: "{{workflow.parameters.namespace}}"
+          labels:
+            app: event-router
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: event-router
+          template:
+            metadata:
+              labels:
+                app: event-router
+            spec:
+              containers:
+                - name: kube-event-router
+                  image: gcr.io/heptio-images/eventrouter:v0.2
+                  imagePullPolicy: IfNotPresent
+                  volumeMounts:
+                  - name: config-volume
+                    mountPath: /etc/eventrouter
+              serviceAccount: event-router-sa
+              volumes:
+                - name: config-volume
+                  configMap:
+                    name: event-router-cm
 `
 
 func init() {
@@ -109,7 +120,7 @@ func TestWorkflowLifecycle_Install(t *testing.T) {
 
 	a := &v1alpha1.Addon{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "foo",
+			Name:      "addon-wf",
 			Namespace: "default",
 		},
 		Spec: v1alpha1.AddonSpec{
@@ -125,21 +136,34 @@ func TestWorkflowLifecycle_Install(t *testing.T) {
 					"app": "my-app",
 				},
 			},
+			Lifecycle: v1alpha1.LifecycleWorkflowSpec{
+				Install: v1alpha1.WorkflowType{
+					NamePrefix: "test",
+					Role:       "myrole",
+					Template:   wfSpecTemplate,
+				},
+			},
 		},
 	}
 
 	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfName := a.GetFormattedWorkflowName(v1alpha1.Install)
+	wt, _ := a.GetWorkflowType(v1alpha1.Install)
 
-	wt := &v1alpha1.WorkflowType{
-		NamePrefix: "test",
-		Role:       "myrole",
-		Template:   wfSpecTemplate,
-	}
-
-	phase, err := wfl.Install(context.Background(), wt, "addon-wf-test")
+	phase, err := wfl.Install(context.Background(), wt, wfName)
 
 	g.Expect(err).To(Not(HaveOccurred()))
 	g.Expect(phase).To(Equal(v1alpha1.Pending))
+
+	var wfv1 = &unstructured.Unstructured{}
+	wfv1.SetGroupVersionKind(schema.GroupVersionKind{
+		Kind:    "Workflow",
+		Group:   "argoproj.io",
+		Version: "v1alpha1",
+	})
+	var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
+	g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
+		Should(Succeed())
 }
 
 // Test that an empty workflow type will fail
