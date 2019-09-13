@@ -1,1 +1,0 @@
-8ef9b8e072c3fe73354f15de622cbaef58d6286faae78b254b9798996d8affa1  addon-manager_0.2.28_linux_amd64.tar.gz
