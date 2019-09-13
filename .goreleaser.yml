@@ -19,10 +19,10 @@ builds:
       - GO111MODULE=on
     
     goos:
-      linux 
+      - linux 
 
     goarch:
-      amd64
+      - amd64
     
 changelog:
   sort: asc
