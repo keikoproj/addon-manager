@@ -3,8 +3,8 @@ builds:
   # You can have multiple builds defined as a yaml list
   -
     main: ./cmd/manager/main.go
-    flags:
-       - -race
+    # flags:
+    #    - -race
     # Custom ldflags templates.
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
     # ldflags:
@@ -15,7 +15,7 @@ builds:
     # Custom environment variables to be set during the builds.
     # Default is empty.
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     
     goarch:
       - linux/amd64
@@ -30,7 +30,8 @@ changelog:
     - '^test:'
 checksum:
   name_template: 'checksums.txt'
-
+snapshot:
+  name_template: "{{ .Tag }}-next"
 archives:
 - replacements:
       darwin: Darwin
