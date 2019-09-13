@@ -40,5 +40,6 @@ jobs:
     - stage: release
       if: type IN (push, pull_request)
       script:
+        - bash <(export GITHUB_TOKEN=$GITHUB_TOKEN)
         - bash <(curl -sL https://git.io/goreleaser | bash)
 
