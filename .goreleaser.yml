@@ -4,6 +4,7 @@ builds:
   - 
     id: 'manager'
     main: ./cmd/manager/main.go
+    binary: addon-manager
   
   # flags:
   #    - -race
@@ -27,6 +28,7 @@ builds:
   # You can have multiple builds defined as a yaml list
   - 
     id: 'addonctl'
+    binary: addonctl
     main: ./cmd/addonctl/main.go
   
   # flags:
