@@ -14,6 +14,8 @@
 
 package common
 
+import "time"
+
 // ContainsString helper function to check string in a slice of strings.
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
