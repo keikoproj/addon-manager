@@ -1,7 +1,7 @@
 before:
   hooks:
     - chmod a+x .goreleaserHook.sh
-    - ./.goreleaserHook.sh
+    - sh ./.goreleaserHook.sh
 builds:
   - 
     id: 'manager'
