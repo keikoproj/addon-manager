@@ -118,7 +118,12 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ret, err := r.processAddon(ctx, req, log, instance)
 
 	// Always update cache, status
-	r.updateAddonStatus(ctx, instance)
+	err = r.updateAddonStatus(ctx, instance)
+	if err != nil {
+		// Force retry when status fails to update
+		ret.Requeue = true
+		return ret, err
+	}
 	r.addAddonToCache(instance)
 
 	return ret, err
@@ -324,18 +329,9 @@ func ignoreNotFound(err error) error {
 
 func (r *AddonReconciler) runWorkflow(lifecycleStep addonmgrv1alpha1.LifecycleStep, addon *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
 	log := r.Log.WithValues("addon", fmt.Sprintf("%s/%s", addon.Namespace, addon.Name))
-	var wt *addonmgrv1alpha1.WorkflowType
-	switch lifecycleStep {
-	case addonmgrv1alpha1.Prereqs:
-		wt = &addon.Spec.Lifecycle.Prereqs
-	case addonmgrv1alpha1.Install:
-		wt = &addon.Spec.Lifecycle.Install
-	case addonmgrv1alpha1.Delete:
-		wt = &addon.Spec.Lifecycle.Delete
-	case addonmgrv1alpha1.Validate:
-		wt = &addon.Spec.Lifecycle.Validate
-	default:
-		err := fmt.Errorf("no workflowType of this type %s exists", lifecycleStep)
+
+	wt, err := addon.GetWorkflowType(lifecycleStep)
+	if err != nil {
 		log.Error(err, "lifecycleStep is not a field in LifecycleWorkflowSpec", "lifecycleStep", lifecycleStep)
 		return addonmgrv1alpha1.Failed, err
 	}
@@ -345,7 +341,10 @@ func (r *AddonReconciler) runWorkflow(lifecycleStep addonmgrv1alpha1.LifecycleSt
 		return addonmgrv1alpha1.Succeeded, nil
 	}
 
-	wfIdentifierName := addon.GetFormattedWorkflowName(wt, string(lifecycleStep))
+	wfIdentifierName := addon.GetFormattedWorkflowName(lifecycleStep)
+	if wfIdentifierName == "" {
+		return addonmgrv1alpha1.Failed, fmt.Errorf("could not generate workflow template name")
+	}
 	phase, err := wfl.Install(context.TODO(), wt, wfIdentifierName)
 	if err != nil {
 		return phase, err
@@ -374,12 +373,15 @@ func (r *AddonReconciler) validateSecrets(addon *addonmgrv1alpha1.Addon) error {
 	return nil
 }
 
-func (r *AddonReconciler) updateAddonStatus(ctx context.Context, addon *addonmgrv1alpha1.Addon) {
+func (r *AddonReconciler) updateAddonStatus(ctx context.Context, addon *addonmgrv1alpha1.Addon) error {
 	log := r.Log.WithValues("addon", fmt.Sprintf("%s/%s", addon.Namespace, addon.Name))
 	if err := r.Status().Update(ctx, addon); err != nil {
 		log.Error(err, "Addon status could not be updated.")
 		r.recorder.Event(addon, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", addon.Namespace, addon.Name, err))
+		return err
 	}
+
+	return nil
 }
 
 func (r *AddonReconciler) addAddonToCache(instance *addonmgrv1alpha1.Addon) {
