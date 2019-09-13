@@ -198,7 +198,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Resources list
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
-	//set ttl starttime if it is 0.
+	//set ttl starttime if it is 0
 	if instance.Status.StartTime == 0 {
 		instance.Status.StartTime = common.GetCurretTimestamp()
 	}
