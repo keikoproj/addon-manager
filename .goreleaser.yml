@@ -3,11 +3,11 @@ builds:
   -
     # ID of the build.
     # Defaults to the project name.
-    id: "manager-build"
+    # id: "manager-build"
 
     # Path to main.go file or main package.
     # Default is `.`.
-    main: ./cmd/manager/main.go
+    # main: ./cmd/manager/main.go
 
     # Custom flags templates.
     # Default is empty.
