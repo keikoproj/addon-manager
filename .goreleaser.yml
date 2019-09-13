@@ -9,11 +9,6 @@ builds:
     # Default is `.`.
     main: ./cmd/manager/main.go
 
-    # Binary name.
-    # Can be a path (e.g. `bin/app`) to wrap the binary in a directory.
-    # Default is the name of the project directory.
-    binary: manager
-
     # Custom flags templates.
     # Default is empty.
     flags:
@@ -44,11 +39,6 @@ builds:
     # Path to main.go file or main package.
     # Default is `.`.
     main: ./cmd/addonctl/main.go
-
-    # Binary name.
-    # Can be a path (e.g. `bin/app`) to wrap the binary in a directory.
-    # Default is the name of the project directory.
-    binary: addonctl
 
     # Custom flags templates.
     # Default is empty.
