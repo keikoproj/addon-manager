@@ -1,22 +1,10 @@
-before:
-  hooks:
-    - make manager
+
 builds:
   # You can have multiple builds defined as a yaml list
   -
-    # ID of the build.
-    # Defaults to the project name.
-    # id: "manager-build"
-
-    # Path to main.go file or main package.
-    # Default is `.`.
-    # main: ./cmd/manager/main.go
-
-    # Custom flags templates.
-    # Default is empty.
-    # flags:
-    #   - -race
-    #   - -o dist/manager
+    main: ./cmd/manager/main.go
+    flags:
+       - -race
     # Custom ldflags templates.
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
     # ldflags:
