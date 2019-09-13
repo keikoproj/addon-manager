@@ -9,9 +9,9 @@ builds:
     binary: addon-manager
   
     ldflags:
-      - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{.Env.BUILD}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{.Env.COMMIT}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.version={{.Env.VERSION}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{.Timestamp}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{.ShortCommit}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.version={{.Tag}}
 
     env:
       - CGO_ENABLED=0
