@@ -1,7 +1,3 @@
-before:
-  hooks:
-    - chmod a+x .goreleaserHook.sh
-    - sh ./.goreleaserHook.sh
 builds:
   - 
     id: 'manager'
@@ -9,9 +5,9 @@ builds:
     binary: addon-manager
   
     ldflags:
-      - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{.Timestamp}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{.ShortCommit}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.version={{.Tag}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Tag}}
 
     env:
       - CGO_ENABLED=0
@@ -29,9 +25,9 @@ builds:
     main: ./cmd/addonctl/main.go
   
     ldflags:
-      - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{.Timestamp}} 
-      - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{.ShortCommit}} 
-      - -X github.com/keikoproj/addon-manager/pkg/version.version={{.Tag}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}} 
+      - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}} 
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Tag}}
 
     env:
       - CGO_ENABLED=0
