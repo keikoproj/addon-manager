@@ -16,6 +16,13 @@ builds:
     # Default is empty.
     env:
       - CGO_ENABLED=0
+      - GO111MODULE=on
+    
+    goos:
+      linux 
+
+    goarch:
+      amd64
     
 changelog:
   sort: asc
