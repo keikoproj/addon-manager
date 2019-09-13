@@ -7,12 +7,13 @@ builds:
 
     # Path to main.go file or main package.
     # Default is `.`.
-    # main: ./cmd/manager/main.go
+    main: ./cmd/manager/main.go
 
     # Custom flags templates.
     # Default is empty.
     flags:
       - -race
+      - -o dist/manager
     # Custom ldflags templates.
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
     # ldflags:
