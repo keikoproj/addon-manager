@@ -1,6 +1,67 @@
 builds:
-- env:
-  - CGO_ENABLED=0
+  # You can have multiple builds defined as a yaml list
+  -
+    # ID of the build.
+    # Defaults to the project name.
+    id: "manager-build"
+
+    # Path to main.go file or main package.
+    # Default is `.`.
+    main: ./cmd/manager/main.go
+
+    # Binary name.
+    # Can be a path (e.g. `bin/app`) to wrap the binary in a directory.
+    # Default is the name of the project directory.
+    binary: manager
+
+    # Custom flags templates.
+    # Default is empty.
+    flags:
+      - -race
+    # Custom ldflags templates.
+    # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
+    ldflags:
+     - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{date +%FT%T%z}} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{git rev-parse HEAD}} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.version={{1.0}} 
+
+    # Custom environment variables to be set during the builds.
+    # Default is empty.
+    env:
+      - CGO_ENABLED=0
+
+  # You can have multiple builds defined as a yaml list
+  -
+    # ID of the build.
+    # Defaults to the project name.
+    id: "addonctl-build"
+
+    # Path to main.go file or main package.
+    # Default is `.`.
+    main: ./cmd/addonctl/main.go
+
+    # Binary name.
+    # Can be a path (e.g. `bin/app`) to wrap the binary in a directory.
+    # Default is the name of the project directory.
+    binary: addonctl
+
+    # Custom flags templates.
+    # Default is empty.
+    flags:
+      - -race
+    # Custom ldflags templates.
+    # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
+    ldflags:
+     - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{date +%FT%T%z}} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{git rev-parse HEAD}} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.version={{1.0}} 
+
+    # Custom environment variables to be set during the builds.
+    # Default is empty.
+    env:
+      - CGO_ENABLED=0
+
+
 archives:
 - replacements:
     darwin: Darwin

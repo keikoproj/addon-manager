@@ -5,14 +5,6 @@ IMG ?= keikoproj/addon-manager:latest
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.2
 
-COMMIT=`git rev-parse HEAD`
-BUILD=`date +%FT%T%z`
-VERSION=`echo ${version}`
-
-LDFLAG_LOCATION=github.com/keikoproj/addon-manager/pkg/version
-
-LDFLAGS=-ldflags "-X ${LDFLAG_LOCATION}.buildDate=${BUILD} -X ${LDFLAG_LOCATION}.gitCommit=${COMMIT} -X  ${LDFLAG_LOCATION}.version=${VERSION}"
-
 .EXPORT_ALL_VARIABLES:
 GO111MODULE=on
 
@@ -28,11 +20,11 @@ bdd: fmt vet deploy
 
 # Build manager binary
 manager: generate fmt vet
-	go build ${LDFLAGS} -race -o bin/manager cmd/manager/main.go
+	go build -race -o bin/manager cmd/manager/main.go
 
 # Build addonctl binary
 addonctl: generate fmt vet
-	go build ${LDFLAGS} -race -o bin/addonctl cmd/addonctl/main.go
+	go build -race -o bin/addonctl cmd/addonctl/main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
