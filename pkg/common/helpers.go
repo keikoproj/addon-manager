@@ -34,3 +34,16 @@ func RemoveString(slice []string, s string) (result []string) {
 	}
 	return
 }
+
+// GetCurretTimestamp -- get current timestamp in millisecond
+func GetCurretTimestamp() int64 {
+	return time.Now().UnixNano() / int64(time.Millisecond)
+}
+
+// IsExpired --- check if reached ttl time
+func IsExpired(startTime int64, ttlTime int64) bool {
+	if GetCurretTimestamp() - startTime >= ttlTime {
+		return true
+	}
+	return false
+}
