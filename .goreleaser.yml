@@ -29,6 +29,11 @@ builds:
     # Default is empty.
     env:
       - CGO_ENABLED=1
+    
+    goarch:
+      - linux/amd64
+      - darwin/amd64
+      - windows/amd64
 
   # You can have multiple builds defined as a yaml list
   -
@@ -61,12 +66,16 @@ builds:
     env:
       - CGO_ENABLED=1
 
+    goarch:
+      - linux/amd64
+      - darwin/amd64
+      - windows/amd64
 
-archives:
-- replacements:
-    darwin: darwin/amd64
-    linux: linux/amd64
-    amd64: x86_64
+# archives:
+# - replacements:
+#     darwin: darwin/amd64
+#     linux: linux/amd64
+#     amd64: x86_64
 changelog:
   sort: asc
   filters:
