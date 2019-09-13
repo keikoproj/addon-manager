@@ -28,7 +28,7 @@ builds:
     # Custom environment variables to be set during the builds.
     # Default is empty.
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
 
   # You can have multiple builds defined as a yaml list
   -
