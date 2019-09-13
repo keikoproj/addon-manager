@@ -27,7 +27,7 @@ var GitCommit = "NONE"
 // BuildDate is the date of the build
 var BuildDate = "UNKNOWN"
 
-const versionStringFmt = `{"Version": "%s", "GitCommit": "%s", "BuildDate": "%s"}`
+const versionStringFmt = `{"version": "%s", "gitCommit": "%s", "buildDate": "%s"}`
 
 // ToString returns the output of Version, GitCommit, BuildDate
 func ToString() string {
