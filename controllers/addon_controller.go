@@ -203,7 +203,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		instance.Status.StartTime = common.GetCurretTimestamp()
 	}
 
-	// Clear out the reason
+	// Clear out the reason to start with
 	instance.Status.Reason = ""
 
 	// Update status that we have started reconciling this addon.
