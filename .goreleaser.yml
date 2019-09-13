@@ -71,14 +71,11 @@ builds:
       - darwin/amd64
       - windows/amd64
 
-# archives:
-# - replacements:
-#     darwin: darwin/amd64
-#     linux: linux/amd64
-#     amd64: x86_64
 changelog:
   sort: asc
   filters:
     exclude:
     - '^docs:'
     - '^test:'
+checksum:
+  name_template: 'checksums.txt'
