@@ -36,3 +36,9 @@ jobs:
       script:
         - if [ $TRAVIS_EVENT_TYPE = push ]; then export IMG=keikoproj/addon-manager:$TRAVIS_BRANCH; fi
         - make docker-build
+
+    - stage: release
+      if: type IN (push, pull_request)
+      script:
+        - bash <(curl -sL https://git.io/goreleaser | bash)
+
