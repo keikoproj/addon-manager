@@ -21,9 +21,9 @@ builds:
     # Custom ldflags templates.
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
     ldflags:
-     - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{date +%FT%T%z}} 
-     - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{git rev-parse HEAD}} 
-     - -X github.com/keikoproj/addon-manager/pkg/version.version={{1.0}} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.buildDate=${BUILD} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit=${COMMIT} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.version=${VERSION} 
 
     # Custom environment variables to be set during the builds.
     # Default is empty.
@@ -52,9 +52,9 @@ builds:
     # Custom ldflags templates.
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
     ldflags:
-     - -X github.com/keikoproj/addon-manager/pkg/version.buildDate={{date +%FT%T%z}} 
-     - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit={{git rev-parse HEAD}} 
-     - -X github.com/keikoproj/addon-manager/pkg/version.version={{1.0}} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.buildDate=${BUILD} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit=${COMMIT} 
+     - -X github.com/keikoproj/addon-manager/pkg/version.version=${VERSION} 
 
     # Custom environment variables to be set during the builds.
     # Default is empty.
