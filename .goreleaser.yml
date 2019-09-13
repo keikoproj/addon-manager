@@ -17,10 +17,10 @@ builds:
     env:
       - CGO_ENABLED=0
     
-    goarch:
-      - linux/amd64
-      - darwin/amd64
-      - windows/amd64
+    # goarch:
+    #   - linux/amd64
+    #   - darwin/amd64
+    #   - windows/amd64
 
 changelog:
   sort: asc
