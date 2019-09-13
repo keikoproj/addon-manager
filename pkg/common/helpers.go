@@ -14,6 +14,8 @@
 
 package common
 
+import "time"
+
 // ContainsString helper function to check string in a slice of strings.
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
@@ -33,4 +35,17 @@ func RemoveString(slice []string, s string) (result []string) {
 		result = append(result, item)
 	}
 	return
+}
+
+// GetCurretTimestamp -- get current timestamp in millisecond
+func GetCurretTimestamp() int64 {
+	return time.Now().UnixNano() / int64(time.Millisecond)
+}
+
+// IsExpired --- check if reached ttl time
+func IsExpired(startTime int64, ttlTime int64) bool {
+	if GetCurretTimestamp() - startTime >= ttlTime {
+		return true
+	}
+	return false
 }
