@@ -2,7 +2,7 @@ builds:
   - 
     id: 'manager'
     main: ./cmd/manager/main.go
-    binary: addon-manager
+    binary: manager
   
     ldflags:
       - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
