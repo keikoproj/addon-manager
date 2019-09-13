@@ -2,9 +2,11 @@
 builds:
   # You can have multiple builds defined as a yaml list
   -
-    main: ./cmd/manager/main.go
-    flags:
-       - -race
+    main: 
+      - ./cmd/manager/main.go
+      - ./cmd/addonctl/main.go
+    # flags:
+    #    - -race
     # Custom ldflags templates.
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
     ldflags:
