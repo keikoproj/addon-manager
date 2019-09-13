@@ -1,30 +1,27 @@
 
 builds:
   # You can have multiple builds defined as a yaml list
-  -
-    main: 
-      - ./cmd/manager/main.go
-      - ./cmd/addonctl/main.go
-    # flags:
-    #    - -race
-    # Custom ldflags templates.
-    # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
-    ldflags:
-     - -X github.com/keikoproj/addon-manager/pkg/version.buildDate=${BUILD} 
-     - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit=${COMMIT} 
-     - -X github.com/keikoproj/addon-manager/pkg/version.version=${VERSION} 
+  main: 
+    - ./cmd/manager/main.go
+    - ./cmd/addonctl/main.go
+  # flags:
+  #    - -race
+  # Custom ldflags templates.
+  # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
+  ldflags:
+    - -X github.com/keikoproj/addon-manager/pkg/version.buildDate=${BUILD} 
+    - -X github.com/keikoproj/addon-manager/pkg/version.gitCommit=${COMMIT} 
+    - -X github.com/keikoproj/addon-manager/pkg/version.version=${VERSION} 
 
-    # Custom environment variables to be set during the builds.
-    # Default is empty.
-    env:
-      - CGO_ENABLED=0
-      - GO111MODULE=on
-    
-    goos:
-      - linux 
+  env:
+    - CGO_ENABLED=0
+    - GO111MODULE=on
+  
+  goos:
+    - linux 
 
-    goarch:
-      - amd64
+  goarch:
+    - amd64
     
 changelog:
   sort: asc
