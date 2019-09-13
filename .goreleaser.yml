@@ -1,7 +1,9 @@
 
 builds:
   # You can have multiple builds defined as a yaml list
-  - main: ./cmd/manager/main.go
+  - 
+    id: 'manager'
+    main: ./cmd/manager/main.go
   
   # flags:
   #    - -race
@@ -23,7 +25,9 @@ builds:
       - amd64
 
   # You can have multiple builds defined as a yaml list
-  - main: ./cmd/addonctl/main.go
+  - 
+    id: 'addonctl'
+    main: ./cmd/addonctl/main.go
   
   # flags:
   #    - -race
