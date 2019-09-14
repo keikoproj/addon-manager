@@ -21,3 +21,7 @@
 bin/
 .DS_Store
 *.yaml-e
+
+dist/
+
+.vscode/*

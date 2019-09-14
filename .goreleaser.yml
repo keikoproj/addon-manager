@@ -1,0 +1,51 @@
+builds:
+  - 
+    id: 'manager'
+    main: ./cmd/manager/main.go
+    binary: manager
+  
+    ldflags:
+      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Tag}}
+
+    env:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
+    
+    goos:
+      - linux 
+
+    goarch:
+      - amd64
+
+  - 
+    id: 'addonctl'
+    binary: addonctl
+    main: ./cmd/addonctl/main.go
+  
+    ldflags:
+      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}} 
+      - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}} 
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Tag}}
+
+    env:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
+    
+    goos:
+      - linux 
+
+    goarch:
+      - amd64
+    
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
