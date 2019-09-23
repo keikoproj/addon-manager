@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ghodss/yaml"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -86,6 +87,66 @@ spec:
                     name: event-router-cm
 `
 
+var wfPrereqsTemplate = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+spec:
+  entrypoint: entry
+  serviceAccountName: addon-manager-workflow-installer-sa
+  templates:
+  - name: entry
+    steps:
+    - - name: prereq-resources
+        template: submit
+
+  - name: submit
+    resource:
+      action: apply
+      manifest: |
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: "{{workflow.parameters.namespace}}"
+        ---
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: event-router-sa
+          namespace: "{{workflow.parameters.namespace}}"
+        ---
+        apiVersion: v1
+        data:
+          config.json: |-
+            {
+              "sink": "stdout"
+            }
+        kind: ConfigMap
+        metadata:
+          name: event-router-cm
+          namespace: "{{workflow.parameters.namespace}}"
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1beta1
+        kind: ClusterRole
+        metadata:
+          name: event-router-cr
+        rules:
+        - apiGroups: [""]
+          resources: ["events"]
+          verbs: ["get", "watch", "list"]
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1beta1
+        kind: ClusterRoleBinding
+        metadata:
+          name: event-router-crb
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: event-router-cr
+        subjects:
+        - kind: ServiceAccount
+          name: event-router-sa
+          namespace: "{{workflow.parameters.namespace}}"
+`
 func init() {
 	wf := &unstructured.Unstructured{}
 	wf.SetGroupVersionKind(schema.GroupVersionKind{
@@ -137,6 +198,9 @@ func TestWorkflowLifecycle_Install(t *testing.T) {
 				},
 			},
 			Lifecycle: v1alpha1.LifecycleWorkflowSpec{
+				Prereqs: v1alpha1.WorkflowType{
+					Template:     wfPrereqsTemplate,
+				},
 				Install: v1alpha1.WorkflowType{
 					NamePrefix: "test",
 					Role:       "myrole",
@@ -147,23 +211,41 @@ func TestWorkflowLifecycle_Install(t *testing.T) {
 	}
 
 	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
-	wfName := a.GetFormattedWorkflowName(v1alpha1.Install)
-	wt, _ := a.GetWorkflowType(v1alpha1.Install)
+	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
-	phase, err := wfl.Install(context.Background(), wt, wfName)
+		wfName := a.GetFormattedWorkflowName(lifecycle)
+		wt, _ := a.GetWorkflowType(lifecycle)
 
-	g.Expect(err).To(Not(HaveOccurred()))
-	g.Expect(phase).To(Equal(v1alpha1.Pending))
+		phase, err := wfl.Install(context.Background(), wt, wfName)
 
-	var wfv1 = &unstructured.Unstructured{}
-	wfv1.SetGroupVersionKind(schema.GroupVersionKind{
-		Kind:    "Workflow",
-		Group:   "argoproj.io",
-		Version: "v1alpha1",
-	})
-	var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
-	g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
-		Should(Succeed())
+		g.Expect(err).To(Not(HaveOccurred()))
+		g.Expect(phase).To(Equal(v1alpha1.Pending))
+
+		var wfv1= &unstructured.Unstructured{}
+		wfv1.SetGroupVersionKind(schema.GroupVersionKind{
+			Kind:    "Workflow",
+			Group:   "argoproj.io",
+			Version: "v1alpha1",
+		})
+		var wfv1Key= types.NamespacedName{Name: wfName, Namespace: "default"}
+		g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
+			Should(Succeed())
+
+		// Verify labels and annotations were added to resources
+		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
+		g.Expect(found).To(BeTrue())
+
+		step := templates[1]
+		manifest, found, _ := unstructured.NestedString(step.(map[string]interface{}), "resource", "manifest")
+		g.Expect(found).To(BeTrue())
+		u := &unstructured.Unstructured{}
+		_ = yaml.Unmarshal([]byte(manifest), u)
+		labels := u.GetLabels()
+		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/name", "addon-wf"))
+		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/version", "1.0.0"))
+		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/part-of", "addon-wf"))
+		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "addonmgr.keikoproj.io"))
+	}
 }
 
 // Test that an empty workflow type will fail

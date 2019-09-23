@@ -44,7 +44,7 @@ func GetCurretTimestamp() int64 {
 
 // IsExpired --- check if reached ttl time
 func IsExpired(startTime int64, ttlTime int64) bool {
-	if GetCurretTimestamp() - startTime >= ttlTime {
+	if GetCurretTimestamp()-startTime >= ttlTime {
 		return true
 	}
 	return false
