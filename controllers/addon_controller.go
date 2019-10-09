@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -73,6 +74,7 @@ type AddonReconciler struct {
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
+	statusWG        *sync.WaitGroup
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -85,6 +87,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
+		statusWG:        &sync.WaitGroup{},
 	}
 }
 
@@ -104,6 +107,10 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("addon", req.NamespacedName)
 
 	log.Info("Starting addon-manager reconcile ...")
+	// Wait to process until we have finished updating
+	r.statusWG.Wait()
+	r.statusWG.Add(1)
+	defer r.statusWG.Done()
 
 	var instance = &addonmgrv1alpha1.Addon{}
 	if err := r.Get(context.TODO(), req.NamespacedName, instance); err != nil {
@@ -120,7 +127,7 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Process addon instance
 	ret, err := r.processAddon(ctx, req, log, instance)
 
-	// Always update cache, status
+	// Always update status, cache
 	err = r.updateAddonStatus(ctx, instance)
 	if err != nil {
 		// Force retry when status fails to update
@@ -216,10 +223,10 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		log.Info("Requeue to set pending status")
 		return reconcile.Result{Requeue: true}, nil
 	}
-	
+
 	//check if addon installation expired.
 	if common.IsExpired(instance.Status.StartTime, TTL) && (instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending ||
-		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting)  {
+		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting) {
 		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
@@ -304,7 +311,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 		return reconcile.Result{}, err
 	}
-	
+
 	//handle Prereqs failure
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Failed {
 		reason := fmt.Sprintf("Addon %s/%s Prereqs status is Failed", instance.Namespace, instance.Name)

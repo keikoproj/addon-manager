@@ -52,7 +52,7 @@ type workflowLifecycle struct {
 	scheme    *runtime.Scheme
 }
 
-// NewWorkflowLifecycle returns a NewWorkflowLifecycle object
+// NewWorkflowLifecycle returns a AddonLifecycle object
 func NewWorkflowLifecycle(client client.Client, dynClient dynamic.Interface, addon *addonmgrv1alpha1.Addon, recorder record.EventRecorder, scheme *runtime.Scheme) AddonLifecycle {
 	return &workflowLifecycle{
 		Client:    client,
@@ -291,7 +291,7 @@ func (w *workflowLifecycle) configureWorkflowArtifacts(wf *unstructured.Unstruct
 	}
 
 	// workflow.spec.arguments.artifacts may exist
-	err = w.processArtifacts(spec, wt)
+	err = w.processWorkflowResources(spec, wt)
 	if err != nil {
 		return err
 	}
@@ -301,17 +301,23 @@ func (w *workflowLifecycle) configureWorkflowArtifacts(wf *unstructured.Unstruct
 		return err
 	}
 	for _, template := range templates.([]interface{}) {
+		// Process templates with resource
+		err := w.processWorkflowResources(template, wt)
+		if err != nil {
+			return err
+		}
+
 		if allSteps, found, err := unstructured.NestedFieldNoCopy(template.(map[string]interface{}), "steps"); found {
 			for _, steps := range allSteps.([]interface{}) {
 				steps := steps.([]interface{})
 				for _, step := range steps {
-					err := w.processArtifacts(step, wt)
+					err := w.processWorkflowResources(step, wt)
 					if err != nil {
 						return err
 					}
 				}
 			}
-		} else {
+		} else if err != nil {
 			return err
 		}
 	}
@@ -319,78 +325,96 @@ func (w *workflowLifecycle) configureWorkflowArtifacts(wf *unstructured.Unstruct
 	return nil
 }
 
-func (w *workflowLifecycle) processArtifacts(workflowStepObject interface{}, wt *addonmgrv1alpha1.WorkflowType) error {
-	artifacts, _, err := unstructured.NestedFieldNoCopy(workflowStepObject.(map[string]interface{}), "arguments", "artifacts")
+func (w *workflowLifecycle) processWorkflowResources(workflowStepObject interface{}, wt *addonmgrv1alpha1.WorkflowType) error {
+	artifacts, foundArtifacts, err := unstructured.NestedFieldNoCopy(workflowStepObject.(map[string]interface{}), "arguments", "artifacts")
 	if err != nil {
 		return err
 	}
 
-	if artifacts == nil {
-		return nil
-	}
-
-	for _, artifact := range artifacts.([]interface{}) {
-		artifact := artifact.(map[string]interface{})
-		data, _, _ := unstructured.NestedString(artifact, "raw", "data")
-		resources := strings.Split(data, "---\n")
-
-		var newData []string
-		for _, obj := range resources {
-			resource := make(map[string]interface{})
-			err := yaml.Unmarshal([]byte(obj), &resource)
+	if foundArtifacts {
+		for _, artifact := range artifacts.([]interface{}) {
+			artifact := artifact.(map[string]interface{})
+			data, _, err := unstructured.NestedString(artifact, "raw", "data")
 			if err != nil {
-				return fmt.Errorf("unable to unmarshall artifact: %s", obj)
+				return err
 			}
 
-			kind := resource["kind"].(string)
-			if kind == "StatefulSet" || kind == "Deployment" || kind == "DaemonSet" || kind == "ReplicaSet" || kind == "Service" {
-				// Add the default labels to the resource yaml
-				resource, err = w.addDefaultLabelsToResource(resource)
+			var objs []string
+			for _, obj := range strings.Split(data, "---\n") {
+				resource := &unstructured.Unstructured{}
+				data, err = w.processArtifact(obj, resource, wt)
 				if err != nil {
 					return err
 				}
-				// Add the provided role annotation to the resource yaml
-				if wt.Role != "" {
-					resource, err = w.addRoleAnnotateToResource(resource, wt)
-					if err != nil {
-						return err
-					}
-				}
+				objs = append(objs, data)
 			}
-			appendData, err := yaml.Marshal(resource)
+			data = strings.Join(objs, "---\n")
+			err = unstructured.SetNestedField(artifact, data, "raw", "data")
 			if err != nil {
-				return fmt.Errorf("unable to marshall resource: %+v", resource)
+				return err
 			}
-			newData = append(newData, string(appendData))
 		}
-		data = strings.Join(newData, "---\n")
-		err := unstructured.SetNestedField(artifact, data, "raw", "data")
+	} else {
+		// Look for manifest resources
+		manifests, foundManifests, err := unstructured.NestedFieldNoCopy(workflowStepObject.(map[string]interface{}), "resource", "manifest")
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
 
-func (w *workflowLifecycle) addDefaultLabelsToResource(resource map[string]interface{}) (map[string]interface{}, error) {
-	metadata, _, err := unstructured.NestedMap(resource, "metadata")
-	if err != nil {
-		return nil, err
-	}
-	if _, found, err := unstructured.NestedMap(metadata, "labels"); err != nil {
-		return nil, err
-	} else if !found {
-		err = unstructured.SetNestedMap(metadata, make(map[string]interface{}), "labels")
-		if err != nil {
-			return nil, err
+		if foundManifests {
+			var objs []string
+			for _, obj := range strings.Split(manifests.(string), "---\n") {
+				resource := &unstructured.Unstructured{}
+				data, err := w.processArtifact(obj, resource, wt)
+				if err != nil {
+					return err
+				}
+				objs = append(objs, data)
+			}
+			manifests = strings.Join(objs, "---\n")
+			err = unstructured.SetNestedField(workflowStepObject.(map[string]interface{}), manifests, "resource", "manifest")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	labels, _, err := unstructured.NestedMap(metadata, "labels")
-	if err != nil {
-		return nil, err
+	return nil
+}
+
+func (w *workflowLifecycle) processArtifact(obj string, resource *unstructured.Unstructured, wt *addonmgrv1alpha1.WorkflowType) (string, error) {
+	obj = strings.TrimSpace(obj)
+	if obj == "" {
+		// Ignore empty manifest objects
+		return obj, nil
 	}
+	var data map[string]interface{}
+	if err := yaml.Unmarshal([]byte(obj), &data); err != nil {
+		return "", fmt.Errorf("unable to unmarshall artifact: %v. %v", obj, err)
+	}
+
+	resource.SetUnstructuredContent(data)
+
+	// Add the default labels to the resource
+	w.addDefaultLabelsToResource(resource)
+
+	// Add the provided role annotation to the resource
+	w.addRoleAnnotationToResource(resource, wt)
+
+	appendData, err := yaml.Marshal(resource)
+	if err != nil {
+		return "", fmt.Errorf("unable to marshall resource: %+v", resource)
+	}
+
+	return string(appendData), nil
+}
+
+func (w *workflowLifecycle) addDefaultLabelsToResource(resource *unstructured.Unstructured) {
 	packageSpec := w.addon.GetPackageSpec()
+	labels := resource.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
 
 	// Set default labels
 	labels["app.kubernetes.io/name"] = w.addon.Name
@@ -398,52 +422,21 @@ func (w *workflowLifecycle) addDefaultLabelsToResource(resource map[string]inter
 	labels["app.kubernetes.io/part-of"] = w.addon.Name
 	labels["app.kubernetes.io/managed-by"] = common.AddonGVR().Group
 
-	err = unstructured.SetNestedMap(resource, labels, "metadata", "labels")
-	if err != nil {
-		return nil, err
-	}
-
-	return resource, nil
+	resource.SetLabels(labels)
 }
 
-func (w *workflowLifecycle) addRoleAnnotateToResource(resource map[string]interface{}, wt *addonmgrv1alpha1.WorkflowType) (map[string]interface{}, error) {
-	metadata, found, err := unstructured.NestedMap(resource, "spec", "template", "metadata")
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		err := unstructured.SetNestedMap(resource, make(map[string]interface{}), "spec", "template", "metadata")
-		if err != nil {
-			return nil, err
-		}
-		metadata, _, err = unstructured.NestedMap(resource, "spec", "template", "metadata")
-		if err != nil {
-			return nil, err
-		}
+func (w *workflowLifecycle) addRoleAnnotationToResource(resource *unstructured.Unstructured, wt *addonmgrv1alpha1.WorkflowType) {
+	annotations := resource.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
 	}
 
-	if _, found, err := unstructured.NestedMap(metadata, "annotations"); err != nil {
-		return nil, err
-	} else if !found {
-		err := unstructured.SetNestedMap(metadata, make(map[string]interface{}), "annotations")
-		if err != nil {
-			return nil, err
-		}
+	if wt.Role != "" {
+		// TODO change this role name to a config value
+		annotations["iam.amazonaws.com/role"] = wt.Role
 	}
 
-	annotations, _, err := unstructured.NestedMap(metadata, "annotations")
-	if err != nil {
-		return nil, err
-	}
-
-	annotations["iam.amazonaws.com/role"] = wt.Role
-
-	err = unstructured.SetNestedMap(resource, annotations, "spec", "template", "metadata", "annotations")
-	if err != nil {
-		return nil, err
-	}
-
-	return resource, nil
+	resource.SetAnnotations(annotations)
 }
 
 func (w *workflowLifecycle) deleteCollisionWorkflows(wfv1 *unstructured.Unstructured) (bool, error) {
