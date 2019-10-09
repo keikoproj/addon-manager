@@ -665,6 +665,9 @@ spec:
                     type: string
                 type: object
               type: array
+            starttime:
+              format: int64
+              type: integer
           required:
           - checksum
           - lifecycle

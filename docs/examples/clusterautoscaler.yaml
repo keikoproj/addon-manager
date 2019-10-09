@@ -19,8 +19,6 @@ spec:
       template: |
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
-        metadata:
-          generateName: prereqs-cluster-autoscaler-
         spec:
           entrypoint: entry
           serviceAccountName: addon-manager-workflow-installer-sa
