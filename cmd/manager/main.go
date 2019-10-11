@@ -26,7 +26,6 @@ import (
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/controllers"
 	"github.com/keikoproj/addon-manager/pkg/version"
-
 	// +kubebuilder:scaffold:imports
 )
 
