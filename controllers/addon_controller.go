@@ -134,8 +134,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	err := r.updateAddonStatus(ctx, instance)
 	if err != nil {
 		// Force retry when status fails to update
-		ret.Requeue = true
-		return ret, err
+		return reconcile.Result{Requeue: true}, err
 	}
 	r.addAddonToCache(instance)
 	return ret, procErr
