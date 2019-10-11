@@ -144,7 +144,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		return ret, err
 	}
 	r.addAddonToCache(instance)
-	return ret, nil
+	return ret, err
 }
 
 // SetupWithManager is called to setup manager and watchers
