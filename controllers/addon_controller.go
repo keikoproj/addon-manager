@@ -123,9 +123,18 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		return reconcile.Result{}, ignoreNotFound(err)
 	}
+	
+	return r.execAddon(ctx, req, log, instance)
+}
 
+func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
+		}
+	}()
 	// Process addon instance
-	ret, err := r.processAddon(ctx, req, log, instance)
+	ret, procErr := r.processAddon(ctx, req, log, instance)
 
 	// Always update status, cache
 	err = r.updateAddonStatus(ctx, instance)
@@ -135,8 +144,7 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ret, err
 	}
 	r.addAddonToCache(instance)
-
-	return ret, err
+	return ret, procErr
 }
 
 // SetupWithManager is called to setup manager and watchers
