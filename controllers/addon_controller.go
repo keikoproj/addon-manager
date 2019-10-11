@@ -123,7 +123,7 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		return reconcile.Result{}, ignoreNotFound(err)
 	}
-	
+
 	return r.execAddon(ctx, req, log, instance)
 }
 
@@ -137,7 +137,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	ret, procErr := r.processAddon(ctx, req, log, instance)
 
 	// Always update status, cache
-	err = r.updateAddonStatus(ctx, instance)
+	err := r.updateAddonStatus(ctx, instance)
 	if err != nil {
 		// Force retry when status fails to update
 		ret.Requeue = true
