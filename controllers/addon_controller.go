@@ -130,7 +130,7 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Error(err, "panic occurred during execAdd %s/%s ", instance.Namespace, instance.Name)
+			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
 		}
 	}()
 	// Process addon instance
