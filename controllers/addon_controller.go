@@ -134,7 +134,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		}
 	}()
 	// Process addon instance
-	ret, err := r.processAddon(ctx, req, log, instance)
+	ret, procErr := r.processAddon(ctx, req, log, instance)
 
 	// Always update status, cache
 	err = r.updateAddonStatus(ctx, instance)
@@ -144,7 +144,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		return ret, err
 	}
 	r.addAddonToCache(instance)
-	return ret, err
+	return ret, procErr
 }
 
 // SetupWithManager is called to setup manager and watchers
