@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/addonmgr.keikoproj.io_addons.yaml
+- bases/argoproj_v1alpha1_workflows.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 #patchesStrategicMerge:
