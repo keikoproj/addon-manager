@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -74,7 +73,6 @@ type AddonReconciler struct {
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
-	statusWG        *sync.WaitGroup
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -87,7 +85,6 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
-		statusWG:        &sync.WaitGroup{},
 	}
 }
 
@@ -107,10 +104,6 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("addon", req.NamespacedName)
 
 	log.Info("Starting addon-manager reconcile ...")
-	// Wait to process until we have finished updating
-	r.statusWG.Wait()
-	r.statusWG.Add(1)
-	defer r.statusWG.Done()
 
 	var instance = &addonmgrv1alpha1.Addon{}
 	if err := r.Get(context.TODO(), req.NamespacedName, instance); err != nil {
