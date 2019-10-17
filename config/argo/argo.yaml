@@ -2,23 +2,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: argo
+  namespace: system  
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: argo-ui
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: argo-role
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
+  namespace: system  
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -150,37 +140,6 @@ rules:
   - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: argo-ui-cluster-role
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/exec
-  - pods/log
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflows
-  - workflowtemplates
-  verbs:
-  - get
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: argo-binding
@@ -191,6 +150,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: argo
+  namespace: system  
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -204,6 +164,7 @@ subjects:
 - kind: ServiceAccount
   name: argo
   namespace: argo
+  namespace: system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -217,74 +178,60 @@ subjects:
 - kind: ServiceAccount
   name: argo-ui
   namespace: argo
+  namespace: system
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: workflow-controller-configmap
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: argo-ui
-spec:
-  ports:
-  - port: 80
-    targetPort: 8001
-  selector:
-    app: argo-ui
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: argo-ui
-spec:
-  selector:
-    matchLabels:
-      app: argo-ui
-  template:
-    metadata:
-      labels:
-        app: argo-ui
-    spec:
-      containers:
-      - env:
-        - name: ARGO_NAMESPACE
-          valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.namespace
-        - name: IN_CLUSTER
-          value: "true"
-        - name: ENABLE_WEB_CONSOLE
-          value: "false"
-        - name: BASE_HREF
-          value: /
-        image: argoproj/argoui:v2.4.1
-        name: argo-ui
-      serviceAccountName: argo-ui
+  namespace: system
+data:
+  config: |
+    namespace: addon-manager-system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: workflow-controller
+  namespace: system
+  labels:
+    app.kubernetes.io/component: workflow-controller
 spec:
   selector:
     matchLabels:
-      app: workflow-controller
+      app.kubernetes.io/component: workflow-controller
   template:
     metadata:
       labels:
-        app: workflow-controller
+        app.kubernetes.io/component: workflow-controller
     spec:
       containers:
-      - args:
-        - --configmap
-        - workflow-controller-configmap
-        - --executor-image
-        - argoproj/argoexec:v2.4.1
-        command:
-        - workflow-controller
-        image: argoproj/workflow-controller:v2.4.1
-        name: workflow-controller
+        - args:
+            - --configmap
+            - addon-manager-workflow-controller-configmap
+            - --executor-image
+            - argoproj/argoexec:v2.4.1
+          command:
+            - workflow-controller
+          image: argoproj/workflow-controller:v2.4.1
+          name: workflow-controller
       serviceAccountName: argo
+---
+apiVersion: addonmgr.keikoproj.io/v1alpha1
+kind: Addon
+metadata:
+  name: argo-addon
+  namespace: system
+spec:
+  pkgName: addon-argo-workflow
+  pkgVersion: v2.4.1
+  pkgType: composite
+  pkgDescription: "Argo Workflow Controller for Addon Controller."
+  params:
+    namespace: addon-manager-system # the suffix is usually added through kustomize but it doesn't reach this scope
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: addon-manager-argo-addon
+      app.kubernetes.io/version: "v2.4.1"
+      app.kubernetes.io/part-of: addon-manager-argo-addon
+      app.kubernetes.io/managed-by: addonmgr.keikoproj.io
