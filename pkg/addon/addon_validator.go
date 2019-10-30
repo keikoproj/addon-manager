@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ghodss/yaml"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
