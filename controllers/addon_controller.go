@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -181,7 +182,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return err
 		}
 
-		bldr = bldr.Watches(&source.Informer{Informer: inf.Informer()}, &handler.EnqueueRequestsFromMapFunc{
+		bldr = bldr.Watches(&source.Informer{Informer: inf.Informer().(cache.Informer)}, &handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				var reqs = make([]reconcile.Request, 0)
 				var labels = a.Meta.GetLabels()
