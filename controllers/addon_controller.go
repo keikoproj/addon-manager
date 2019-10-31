@@ -131,7 +131,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	ret, procErr := r.processAddon(ctx, req, log, instance)
 
 	// Always update status, cache
-	err := r.updateAddonStatus(ctx, instance)
+	err := r.updateAddonStatus(ctx, log, instance)
 	if err != nil {
 		// Force retry when status fails to update
 		return reconcile.Result{Requeue: true}, err
@@ -427,8 +427,7 @@ func (r *AddonReconciler) validateSecrets(addon *addonmgrv1alpha1.Addon) error {
 	return nil
 }
 
-func (r *AddonReconciler) updateAddonStatus(ctx context.Context, addon *addonmgrv1alpha1.Addon) error {
-	log := r.Log.WithValues("addon", fmt.Sprintf("%s/%s", addon.Namespace, addon.Name))
+func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
 	if err := r.Status().Update(ctx, addon); err != nil {
 		log.Error(err, "Addon status could not be updated.")
 		r.recorder.Event(addon, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", addon.Namespace, addon.Name, err))
