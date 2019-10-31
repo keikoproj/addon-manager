@@ -130,13 +130,15 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	// Process addon instance
 	ret, procErr := r.processAddon(ctx, req, log, instance)
 
-	// Always update status, cache
+	// Always update cache, status
+	r.addAddonToCache(instance)
+
 	err := r.updateAddonStatus(ctx, log, instance)
 	if err != nil {
 		// Force retry when status fails to update
-		return reconcile.Result{Requeue: true}, err
+		return reconcile.Result{RequeueAfter: 1 * time.Second}, err
 	}
-	r.addAddonToCache(instance)
+
 	return ret, procErr
 }
 
