@@ -210,10 +210,10 @@ spec:
             - --configmap
             - addon-manager-workflow-controller-configmap
             - --executor-image
-            - argoproj/argoexec:v2.4.1
+            - argoproj/argoexec:v2.4.2
           command:
             - workflow-controller
-          image: argoproj/workflow-controller:v2.4.1
+          image: argoproj/workflow-controller:v2.4.2
           name: workflow-controller
       serviceAccountName: argo
 ---
@@ -224,7 +224,7 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v2.4.1
+  pkgVersion: v2.4.2
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:
@@ -232,6 +232,6 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: addon-manager-argo-addon
-      app.kubernetes.io/version: "v2.4.1"
+      app.kubernetes.io/version: "v2.4.2"
       app.kubernetes.io/part-of: addon-manager-argo-addon
       app.kubernetes.io/managed-by: addonmgr.keikoproj.io
