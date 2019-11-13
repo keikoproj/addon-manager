@@ -35,8 +35,7 @@ install: manifests
 	kubectl apply -f config/crd/bases
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
-	kubectl apply -f config/crd/bases
+deploy: install
 	kubectl kustomize config/default | kubectl apply -f -
 
 clean:
