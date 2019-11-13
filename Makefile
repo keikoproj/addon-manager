@@ -3,7 +3,7 @@
 IMG ?= keikoproj/addon-manager:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
-KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.2
+KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.3
 
 .EXPORT_ALL_VARIABLES:
 GO111MODULE=on
@@ -46,13 +46,13 @@ kops-cluster:
 	kops create cluster
 
 kind-cluster-config:
-	export KUBECONFIG="$$(kind get kubeconfig-path --name="kind")"
+	export KUBECONFIG=$$(kind get kubeconfig-path --name="kind")
 
-kind-cluster: cluster-config
+kind-cluster: kind-cluster-config
 	kind create cluster --config hack/kind.cluster.yaml $(KUBERNETES_LOCAL_CLUSTER_VERSION)
 	kind load docker-image ${IMG}
 
-kind-cluster-delete: cluster-config
+kind-cluster-delete: kind-cluster-config
 	kind delete cluster
 
 # Generate manifests e.g. CRD, RBAC etc.
