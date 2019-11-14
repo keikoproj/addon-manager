@@ -10,6 +10,7 @@ env:
   global:
     - GO111MODULE=on
     - KUBECONFIG=$HOME/.kube/config
+    - IMG=keikoproj/addon-manager:latest
 
 cache:
   directories:
@@ -35,7 +36,7 @@ jobs:
       if: type IN (push, pull_request)
       script:
         - if [ $TRAVIS_EVENT_TYPE = push ]; then export IMG=keikoproj/addon-manager:$TRAVIS_BRANCH; fi
-        - make docker-build
+        - docker build --no-cache -t ${IMG} .
 
     - stage: release
       provider: script
