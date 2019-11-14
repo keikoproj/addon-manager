@@ -7,37 +7,80 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - clusterroles
+  - configmaps
+  - events
+  - namespaces
+  - pods
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - addonmgr.keikoproj.io
   resources:
   - addons
   verbs:
+  - create
+  - delete
   - get
   - list
-  - watch
-  - create
-  - update
   - patch
-  - delete
+  - update
+  - watch
 - apiGroups:
   - addonmgr.keikoproj.io
   resources:
   - addons/status
   verbs:
   - get
-  - update
   - patch
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - replicasets
+  - statefulsets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - argoproj.io
   resources:
   - workflows
   verbs:
+  - create
+  - delete
   - get
   - list
-  - watch
-  - create
-  - update
   - patch
-  - delete
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -45,69 +88,26 @@ rules:
   verbs:
   - list
 - apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - clusterroles
-  - clusterrolebindings
-  verbs:
-  - get
-  - list
-  - patch
-  - create
-- apiGroups:
-  - ""
-  resources:
-  - namespaces
-  - clusterroles
-  - configmaps
-  - events
-  - pods
-  - serviceaccounts
-  - services
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-- apiGroups:
   - extensions
   resources:
-  - deployments
   - daemonsets
-  - replicasets
+  - deployments
   - ingresses
+  - replicasets
   verbs:
+  - create
   - get
   - list
-  - watch
-  - create
-  - update
   - patch
+  - update
+  - watch
 - apiGroups:
-  - batch
+  - rbac.authorization.k8s.io
   resources:
-  - jobs
-  - cronjobs
+  - clusterrolebindings
+  - clusterroles
   verbs:
+  - create
   - get
   - list
-  - watch
-  - create
-  - update
   - patch
