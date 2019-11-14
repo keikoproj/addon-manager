@@ -10,6 +10,7 @@ env:
   global:
     - GO111MODULE=on
     - KUBECONFIG=$HOME/.kube/config
+    - IMG=keikoproj/addon-manager:latest
 
 cache:
   directories:
@@ -18,9 +19,9 @@ cache:
 
 install:
   # install dependencies needed by jobs
-  - wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.0.0-beta.0/kubebuilder_2.0.0-beta.0_linux_amd64.tar.gz
-  - tar -zxvf  kubebuilder_2.0.0-beta.0_linux_amd64.tar.gz
-  - sudo mv kubebuilder_2.0.0-beta.0_linux_amd64 /usr/local/kubebuilder
+  - wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.1.0/kubebuilder_2.1.0_linux_amd64.tar.gz
+  - tar -zxvf  kubebuilder_2.1.0_linux_amd64.tar.gz
+  - sudo mv kubebuilder_2.1.0_linux_amd64 /usr/local/kubebuilder
 
 jobs:
   include:
@@ -35,7 +36,8 @@ jobs:
       if: type IN (push, pull_request)
       script:
         - if [ $TRAVIS_EVENT_TYPE = push ]; then export IMG=keikoproj/addon-manager:$TRAVIS_BRANCH; fi
-        - make docker-build
+        - docker build --no-cache -t ${IMG} .
+
     - stage: release
       provider: script
       skip_cleanup: true
