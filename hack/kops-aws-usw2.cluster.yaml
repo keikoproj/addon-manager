@@ -41,7 +41,7 @@ spec:
   kubernetesApiAccess:
   - 172.20.0.0/16
   - 65.204.229.0/24
-  - 207.207.160.0/25
+  - 207.207.160.0/19
   - 67.207.111.40/30
   kubernetesVersion: 1.12.9
   masterPublicName: api.kops-aws-usw2.cluster.k8s.local
@@ -52,7 +52,7 @@ spec:
   sshAccess:
   - 172.20.0.0/16
   - 65.204.229.0/24
-  - 207.207.160.0/25
+  - 207.207.160.0/19
   - 67.207.111.40/30
   subnets:
   - cidr: 172.20.32.0/19

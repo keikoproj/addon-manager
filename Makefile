@@ -3,10 +3,12 @@
 IMG ?= keikoproj/addon-manager:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
-KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.2
+KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.3
 
 .EXPORT_ALL_VARIABLES:
 GO111MODULE=on
+KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
+KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
 
 all: test manager addonctl
 
@@ -35,8 +37,7 @@ install: manifests
 	kubectl apply -f config/crd/bases
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
-	kubectl apply -f config/crd/bases
+deploy: install
 	kubectl kustomize config/default | kubectl apply -f -
 
 clean:
@@ -44,16 +45,23 @@ clean:
 	kubectl kustomize config/deploy | kubectl delete -f - || true
 
 kops-cluster:
-	kops create cluster
+	kops replace --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
+	kops create secret --state ${KOPS_STATE_STORE} --name ${KOPS_CLUSTER_NAME} sshpublickey admin -i ~/.ssh/id_rsa.pub
+	kops update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes
+	kops rolling-update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes --cloudonly
+	kops validate cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME}
+
+kops-cluster-delete:
+	kops delete --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
 
 kind-cluster-config:
-	export KUBECONFIG="$$(kind get kubeconfig-path --name="kind")"
+	export KUBECONFIG=$$(kind get kubeconfig-path --name="kind")
 
-kind-cluster: cluster-config
+kind-cluster: kind-cluster-config
 	kind create cluster --config hack/kind.cluster.yaml $(KUBERNETES_LOCAL_CLUSTER_VERSION)
 	kind load docker-image ${IMG}
 
-kind-cluster-delete: cluster-config
+kind-cluster-delete: kind-cluster-config
 	kind delete cluster
 
 # Generate manifests e.g. CRD, RBAC etc.
@@ -86,8 +94,15 @@ docker-push:
 # download controller-gen if necessary
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.0-beta.5
-CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
+	@{ \
+	set -e ;\
+	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CONTROLLER_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2 ;\
+	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
+	}
+CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif

@@ -16,11 +16,12 @@ package workflows
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/ghodss/yaml"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -371,13 +372,21 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		manifest, found, _ := unstructured.NestedString(step.(map[string]interface{}), "resource", "manifest")
 		g.Expect(found).To(BeTrue())
 
-		u := &unstructured.Unstructured{}
-		_ = yaml.Unmarshal([]byte(manifest), u)
-		labels := u.GetLabels()
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/name", addon.GetName()))
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/version", addon.Spec.PkgVersion))
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/part-of", addon.GetName()))
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "addonmgr.keikoproj.io"))
+		for _, obj := range strings.Split(manifest, "---\n") {
+			var data map[string]interface{}
+
+			err = yaml.Unmarshal([]byte(obj), &data)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			u := &unstructured.Unstructured{}
+			u.SetUnstructuredContent(data)
+
+			labels := u.GetLabels()
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/name", addon.GetName()))
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/version", addon.Spec.PkgVersion))
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/part-of", addon.GetName()))
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "addonmgr.keikoproj.io"))
+		}
 	}
 }
 
@@ -438,14 +447,14 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
 		g.Expect(found).To(BeTrue())
 		template := templates[0]
-		var data string
+		var manifest string
 		if steps, found, _ := unstructured.NestedSlice(template.(map[string]interface{}), "steps"); found {
 			for _, step := range steps {
 				for _, stepTemplate := range step.([]interface{}) {
 					if artifacts, found, _ := unstructured.NestedFieldNoCopy(stepTemplate.(map[string]interface{}), "arguments", "artifacts"); found {
 						for _, argArtifact := range artifacts.([]interface{}) {
-							if manifest, found, _ := unstructured.NestedString(argArtifact.(map[string]interface{}), "raw", "data"); found {
-								data = manifest
+							if data, found, _ := unstructured.NestedString(argArtifact.(map[string]interface{}), "raw", "data"); found {
+								manifest = data
 							} else {
 								t.Errorf("No raw data resources found. Expected that we would find resources at .spec.templates[].arguments.artifacts[].raw.data")
 							}
@@ -458,13 +467,22 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		} else {
 			t.Errorf("No resources found. Expected that we would find one of resource patterns in workflow.")
 		}
-		u := &unstructured.Unstructured{}
-		_ = yaml.Unmarshal([]byte(data), u)
-		labels := u.GetLabels()
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/name", addon.GetName()))
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/version", addon.Spec.PkgVersion))
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/part-of", addon.GetName()))
-		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "addonmgr.keikoproj.io"))
+
+		for _, obj := range strings.Split(manifest, "---\n") {
+			var data map[string]interface{}
+
+			err = yaml.Unmarshal([]byte(obj), &data)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			u := &unstructured.Unstructured{}
+			u.SetUnstructuredContent(data)
+
+			labels := u.GetLabels()
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/name", addon.GetName()))
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/version", addon.Spec.PkgVersion))
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/part-of", addon.GetName()))
+			g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "addonmgr.keikoproj.io"))
+		}
 	}
 
 }

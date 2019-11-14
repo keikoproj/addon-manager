@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -129,14 +130,15 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	// Process addon instance
 	ret, procErr := r.processAddon(ctx, req, log, instance)
 
-	// Always update status, cache
-	err := r.updateAddonStatus(ctx, instance)
+	// Always update cache, status
+	r.addAddonToCache(instance)
+
+	err := r.updateAddonStatus(ctx, log, instance)
 	if err != nil {
 		// Force retry when status fails to update
-		ret.Requeue = true
-		return ret, err
+		return reconcile.Result{RequeueAfter: 1 * time.Second}, err
 	}
-	r.addAddonToCache(instance)
+
 	return ret, procErr
 }
 
@@ -181,7 +183,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return err
 		}
 
-		bldr = bldr.Watches(&source.Informer{Informer: inf.Informer()}, &handler.EnqueueRequestsFromMapFunc{
+		bldr = bldr.Watches(&source.Informer{Informer: inf.Informer().(cache.Informer)}, &handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				var reqs = make([]reconcile.Request, 0)
 				var labels = a.Meta.GetLabels()
@@ -231,7 +233,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
-		log.Error(err, "Addon %s/%s expired.", instance.Namespace, instance.Name)
+		log.Error(err, reason)
 		if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
 		} else {
@@ -427,8 +429,7 @@ func (r *AddonReconciler) validateSecrets(addon *addonmgrv1alpha1.Addon) error {
 	return nil
 }
 
-func (r *AddonReconciler) updateAddonStatus(ctx context.Context, addon *addonmgrv1alpha1.Addon) error {
-	log := r.Log.WithValues("addon", fmt.Sprintf("%s/%s", addon.Namespace, addon.Name))
+func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
 	if err := r.Status().Update(ctx, addon); err != nil {
 		log.Error(err, "Addon status could not be updated.")
 		r.recorder.Event(addon, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", addon.Namespace, addon.Name, err))
