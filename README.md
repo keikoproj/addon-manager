@@ -204,11 +204,11 @@ addonctl create my-addon -n my-addon-ns \
 ```
 
 ## Release History
-* 0.1.0
+* v0.1.0
  * First Stable Release
-* 0.0.2
+* v0.0.2
   * Update api version to Keikoproj
-* 0.0.1
+* v0.0.1
   * Release alpha version of addon-manager
 
 ## ❤ Contributing ❤
