@@ -7,7 +7,7 @@
 - Argo Workflow controller updated to 2.4.2 
 - Upgraded Kubebuilder to v2.2.0 
 ### Fixed
-- Various fixes and improvements
+- Various fixes and improvements (#39)
 
 <a name="v0.0.2"></a>
 ## [v0.0.2] - 2019-09-03
