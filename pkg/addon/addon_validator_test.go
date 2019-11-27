@@ -241,17 +241,17 @@ kind: Workflow
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 spec:
-	entrypoint: entry
-	serviceAccountName: addon-manager-workflow-installer-sa
-	templates:
-	- name: entry
-	steps:
-	- - name: prereq-resources
-		template: submit
-		arguments:
-		  parameters:
-			- name: foo
-			  value: bar
+  entrypoint: entry
+  serviceAccountName: addon-manager-workflow-installer-sa
+  templates:
+  - name: entry
+    steps:
+    - - name: prereq-resources
+        template: submit
+        arguments:
+          parameters:
+          - name: foo
+            value: bar
 `,
 					},
 				},
@@ -278,18 +278,18 @@ spec:
 						Template: `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
-spec:
-	entrypoint: entry
-	serviceAccountName: addon-manager-workflow-installer-sa
-	templates:
-	- name: entry
-	steps:
-	- - name: prereq-resources
-		template: submit
-		arguments:
-		  parameters:
-			- name: foo
-			  value: bar
+spec: 
+  entrypoint: entry
+  serviceAccountName: addon-manager-workflow-installer-sa
+  arguments: 
+    parameters: 
+    - name: foo
+      value: bar
+  templates: 
+    - name: entry
+      steps: 
+      - - name: prereq-resources
+          template: submit
 `,
 					},
 				},
