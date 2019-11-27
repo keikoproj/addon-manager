@@ -91,7 +91,7 @@ func (av *addonValidator) Validate() (bool, error) {
 }
 
 func (av *addonValidator) validateDuplicate(version *Version) error {
-	if v := av.cache.GetVersion(version.PkgName, version.PkgVersion); v != nil {
+	if v := av.cache.GetVersion(version.PkgName, version.PkgVersion); v != nil && v.Name != version.Name {
 		return fmt.Errorf("package version %s:%s already exists and cannot be installed as a duplicate", av.addon.Spec.PkgName, av.addon.Spec.PkgVersion)
 	}
 

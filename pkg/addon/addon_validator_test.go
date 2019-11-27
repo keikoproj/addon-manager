@@ -717,7 +717,7 @@ func Test_validateDuplicate_Fail(t *testing.T) {
 
 	av := &addonValidator{
 		addon: &addonmgrv1alpha1.Addon{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-addon-1", Namespace: "default"},
+			ObjectMeta: metav1.ObjectMeta{Name: "test-addon-2", Namespace: "default"},
 			Spec: addonmgrv1alpha1.AddonSpec{
 				PackageSpec: addonmgrv1alpha1.PackageSpec{
 					PkgType: addonmgrv1alpha1.CompositePkg,
