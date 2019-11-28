@@ -205,7 +205,7 @@ addonctl create my-addon -n my-addon-ns \
 
 ## Release History
 * v0.1.0
- * First Stable Release
+  * First Stable Release
 * v0.0.2
   * Update api version to Keikoproj
 * v0.0.1
