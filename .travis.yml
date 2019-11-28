@@ -27,7 +27,7 @@ stages:
   - unit-test
   - docker-build
   - name: release
-    if: branch = master
+    if: NOT (type = pull_request) AND branch = master
 
 jobs:
   include:
