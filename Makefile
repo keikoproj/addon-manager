@@ -4,11 +4,11 @@ IMG ?= keikoproj/addon-manager:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.3
+KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
+KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
 
 .EXPORT_ALL_VARIABLES:
 GO111MODULE=on
-KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
-KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
 
 all: test manager addonctl
 
@@ -44,15 +44,17 @@ clean:
 	kubectl delete addons -n addon-manager-system --all
 	kubectl kustomize config/deploy | kubectl delete -f - || true
 
-kops-cluster:
-	kops replace --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
+kops-cluster-setup:
+	kops replace --force --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
 	kops create secret --state ${KOPS_STATE_STORE} --name ${KOPS_CLUSTER_NAME} sshpublickey admin -i ~/.ssh/id_rsa.pub
+
+kops-cluster:
 	kops update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes
 	kops rolling-update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes --cloudonly
 	kops validate cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME}
 
 kops-cluster-delete:
-	kops delete --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
+	kops delete --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
 
 kind-cluster-config:
 	export KUBECONFIG=$$(kind get kubeconfig-path --name="kind")
