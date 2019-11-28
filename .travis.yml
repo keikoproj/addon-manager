@@ -23,21 +23,24 @@ install:
   - tar -zxvf  kubebuilder_2.2.0_linux_amd64.tar.gz
   - sudo mv kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
 
+stages:
+  - unit-test
+  - docker-build
+  - name: release
+    if: branch = master
+
 jobs:
   include:
 
     - stage: unit-test
-      if: type IN (push, pull_request)
       script:
         - go test ./api/... ./controllers/... ./pkg/... ./cmd/... -coverprofile coverage.txt
         - bash <(curl -s https://codecov.io/bash)
 
     - stage: docker-build
-      if: type IN (push, pull_request)
       script:
         - if [ $TRAVIS_EVENT_TYPE = push ]; then export IMG=keikoproj/addon-manager:$TRAVIS_BRANCH; fi
         - docker build --no-cache -t ${IMG} .
 
     - stage: release
-      if: branch = master
       script: curl -sL https://git.io/goreleaser | bash -s release --rm-dist
