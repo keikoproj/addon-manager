@@ -241,17 +241,17 @@ kind: Workflow
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 spec:
-	entrypoint: entry
-	serviceAccountName: addon-manager-workflow-installer-sa
-	templates:
-	- name: entry
-	steps:
-	- - name: prereq-resources
-		template: submit
-		arguments:
-		  parameters:
-			- name: foo
-			  value: bar
+  entrypoint: entry
+  serviceAccountName: addon-manager-workflow-installer-sa
+  templates:
+  - name: entry
+    steps:
+    - - name: prereq-resources
+        template: submit
+        arguments:
+          parameters:
+          - name: foo
+            value: bar
 `,
 					},
 				},
@@ -278,18 +278,18 @@ spec:
 						Template: `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
-spec:
-	entrypoint: entry
-	serviceAccountName: addon-manager-workflow-installer-sa
-	templates:
-	- name: entry
-	steps:
-	- - name: prereq-resources
-		template: submit
-		arguments:
-		  parameters:
-			- name: foo
-			  value: bar
+spec: 
+  entrypoint: entry
+  serviceAccountName: addon-manager-workflow-installer-sa
+  arguments: 
+    parameters: 
+    - name: foo
+      value: bar
+  templates: 
+    - name: entry
+      steps: 
+      - - name: prereq-resources
+          template: submit
 `,
 					},
 				},
@@ -668,4 +668,80 @@ func Test_resolveDependencies_Fail(t *testing.T) {
 		PackageSpec: av.addon.GetPackageSpec(),
 		PkgPhase:    addonmgrv1alpha1.Pending,
 	}, visited, 0)).ShouldNot(gomega.Succeed(), "Should not validate")
+}
+
+func Test_validateDuplicate_Fail(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	cached := NewAddonVersionCacheClient()
+
+	// Add core/A
+	cached.AddVersion(Version{
+		Name:      "core-a",
+		Namespace: "default",
+		PackageSpec: addonmgrv1alpha1.PackageSpec{
+			PkgName:    "core/A",
+			PkgVersion: "1.0.3",
+			PkgDeps: map[string]string{
+				"core/C": "*",
+			},
+		},
+		PkgPhase: addonmgrv1alpha1.Succeeded,
+	})
+
+	// Add core/B
+	cached.AddVersion(Version{
+		Name:      "core-b",
+		Namespace: "default",
+		PackageSpec: addonmgrv1alpha1.PackageSpec{
+			PkgName:    "core/B",
+			PkgVersion: "1.0.0",
+			PkgDeps: map[string]string{
+				"core/C": "*",
+			},
+		},
+		PkgPhase: addonmgrv1alpha1.Succeeded,
+	})
+
+	// Add test-addon-1
+	cached.AddVersion(Version{
+		Name:      "test-addon-1",
+		Namespace: "default",
+		PackageSpec: addonmgrv1alpha1.PackageSpec{
+			PkgName:    "test/addon-1",
+			PkgVersion: "1.0.0",
+			PkgDeps:    map[string]string{},
+		},
+		PkgPhase: addonmgrv1alpha1.Succeeded,
+	})
+
+	av := &addonValidator{
+		addon: &addonmgrv1alpha1.Addon{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-addon-2", Namespace: "default"},
+			Spec: addonmgrv1alpha1.AddonSpec{
+				PackageSpec: addonmgrv1alpha1.PackageSpec{
+					PkgType: addonmgrv1alpha1.CompositePkg,
+					// Duplicate package name and version
+					PkgName:    "test/addon-1",
+					PkgVersion: "1.0.0",
+					PkgDeps: map[string]string{
+						"core/A": "*",
+						"core/B": "v1.0.0",
+					},
+				},
+				Params: addonmgrv1alpha1.AddonParams{
+					Namespace: "addon-test-ns",
+				},
+			},
+		},
+		cache:     cached,
+		dynClient: dynClient,
+	}
+
+	g.Expect(av.validateDuplicate(&Version{
+		Name:        av.addon.Name,
+		Namespace:   av.addon.Namespace,
+		PackageSpec: av.addon.GetPackageSpec(),
+		PkgPhase:    addonmgrv1alpha1.Pending,
+	})).ShouldNot(gomega.Succeed(), "Should not validate")
 }

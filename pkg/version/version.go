@@ -17,15 +17,16 @@ package version
 import "fmt"
 
 // The below variables will be overrriden using ldflags set by goreleaser during the build process
+var (
+	// Version is the version string
+	Version = "DEV"
 
-// Version is the version string
-var Version = "DEV"
+	// GitCommit is the git commit hash
+	GitCommit = "NONE"
 
-// GitCommit is the git commit hash
-var GitCommit = "NONE"
-
-// BuildDate is the date of the build
-var BuildDate = "UNKNOWN"
+	// BuildDate is the date of the build
+	BuildDate = "UNKNOWN"
+)
 
 const versionStringFmt = `{"version": "%s", "gitCommit": "%s", "buildDate": "%s"}`
 

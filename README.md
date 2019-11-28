@@ -3,7 +3,7 @@
 [![PR](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)][GithubPrsUrl]
 [![slack](https://img.shields.io/badge/slack-join%20the%20conversation-ff69b4.svg)][SlackUrl]
 
-![version](https://img.shields.io/badge/version-0.2.0-blue.svg?cacheSeconds=2592000)
+![version](https://img.shields.io/badge/version-0.1.0-blue.svg?cacheSeconds=2592000)
 [![Build Status][BuildStatusImg]][BuildMasterUrl]
 [![codecov][CodecovImg]][CodecovUrl]
 [![Go Report Card][GoReportImg]][GoReportUrl]
@@ -204,9 +204,11 @@ addonctl create my-addon -n my-addon-ns \
 ```
 
 ## Release History
-* 0.2.0
+* v0.1.0
+ * First Stable Release
+* v0.0.2
   * Update api version to Keikoproj
-* 0.1.0
+* v0.0.1
   * Release alpha version of addon-manager
 
 ## ❤ Contributing ❤
