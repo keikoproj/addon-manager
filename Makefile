@@ -54,7 +54,7 @@ kops-cluster:
 	kops validate cluster --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME};
 
 kops-cluster-delete:
-	kops delete --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
+	kops delete --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
 
 kind-cluster-config:
 	export KUBECONFIG=$$(kind get kubeconfig-path --name="kind")
