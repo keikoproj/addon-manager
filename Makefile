@@ -45,13 +45,13 @@ clean:
 	kubectl kustomize config/deploy | kubectl delete -f - || true
 
 kops-cluster-setup:
-	kops replace --force --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
-	kops create secret --state ${KOPS_STATE_STORE} --name ${KOPS_CLUSTER_NAME} sshpublickey admin -i ~/.ssh/id_rsa.pub
+	kops replace --force --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
+	kops create secret --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME} sshpublickey admin -i ~/.ssh/id_rsa.pub
 
 kops-cluster:
-	kops update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes
-	kops rolling-update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes --cloudonly
-	kops validate cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME}
+	kops update cluster --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME} --yes
+	kops rolling-update cluster --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME} --yes --cloudonly
+	kops validate cluster --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME};
 
 kops-cluster-delete:
 	kops delete --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
