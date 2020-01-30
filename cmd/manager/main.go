@@ -49,7 +49,7 @@ func init() {
 }
 
 func main() {
-	ctrl.SetLogger(zap.Logger(debug))
+	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
