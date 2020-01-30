@@ -62,7 +62,7 @@ var (
 		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
 		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
 	}
-	finalizerName = "delete.addonmgr.keikoproj.io"
+	finalizerName      = "delete.addonmgr.keikoproj.io"
 	generatedInformers informers.SharedInformerFactory
 )
 
