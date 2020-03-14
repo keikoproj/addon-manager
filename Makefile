@@ -29,7 +29,7 @@ bdd: fmt vet deploy
 
 # Build manager binary
 manager: generate fmt vet
-	go build -race -o bin/manager cmd/manager/main.go
+	go build -race -o bin/manager main.go
 
 # Build addonctl binary
 addonctl: generate fmt vet
