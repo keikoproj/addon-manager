@@ -23,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	addonmgrv1 "github.com/keikoproj/addon-manager/api/v1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/controllers"
 	"github.com/keikoproj/addon-manager/pkg/version"
@@ -45,6 +46,7 @@ func init() {
 	flag.Parse()
 
 	_ = addonmgrv1alpha1.AddToScheme(scheme)
+	_ = addonmgrv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -64,6 +66,14 @@ func main() {
 	err = controllers.NewAddonReconciler(mgr, ctrl.Log.WithName("controllers").WithName("Addon")).SetupWithManager(mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Addon")
+		os.Exit(1)
+	}
+	if err = (&controllers.Guestbook1Reconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Guestbook1"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Guestbook1")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
