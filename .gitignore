@@ -18,6 +18,7 @@
 # Ignore project files
 .idea
 *.code-workspace
+.vscode/*
 
 bin/
 .DS_Store
@@ -25,4 +26,4 @@ bin/
 
 dist/
 
-.vscode/*
+
