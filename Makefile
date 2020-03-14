@@ -7,6 +7,13 @@ KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.3
 KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
 KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
 
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
 .EXPORT_ALL_VARIABLES:
 GO111MODULE=on
 
@@ -14,7 +21,7 @@ all: test manager addonctl
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./api/... ./controllers/... ./pkg/... ./cmd/... -coverprofile cover.out
+	go test ./... -coverprofile cover.out
 
 # Run E2E tests
 bdd: fmt vet deploy
@@ -101,7 +108,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5 ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
