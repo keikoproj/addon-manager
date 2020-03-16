@@ -3,7 +3,7 @@ module github.com/keikoproj/addon-manager
 go 1.14
 
 require (
-	github.com/Masterminds/semver v1.5.0
+	github.com/Masterminds/semver/v3 v3.0.3
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/jinzhu/inflection v1.0.0
