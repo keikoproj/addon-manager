@@ -40,7 +40,7 @@ var log = logrus.New()
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "InstanceGroup Type Suite", []Reporter{junitReporter})
+	RunSpecsWithDefaultAndCustomReporters(t, "Addon Type Suite", []Reporter{junitReporter})
 }
 
 var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
