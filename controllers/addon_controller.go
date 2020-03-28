@@ -229,17 +229,13 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	}
 
 	//check if addon installation expired.
-	if common.IsExpired(instance.Status.StartTime, TTL) && (instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending ||
-		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting) {
+	if  instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL) {
 		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
 		log.Error(err, reason)
-		if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
-		} else {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		}
+
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.Reason = reason
 		instance.Status.StartTime = 0
 
