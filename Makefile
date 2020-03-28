@@ -21,7 +21,7 @@ all: test manager addonctl
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	go test ./api/... ./controllers/... ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Run E2E tests
 bdd: fmt vet deploy
