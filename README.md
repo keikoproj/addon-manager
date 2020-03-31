@@ -203,14 +203,6 @@ addonctl create my-addon -n my-addon-ns \
   --dryrun
 ```
 
-## Release History
-* v0.1.0
-  * First Stable Release
-* v0.0.2
-  * Update api version to Keikoproj
-* v0.0.1
-  * Release alpha version of addon-manager
-
 ## ❤ Contributing ❤
 
 Please see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
