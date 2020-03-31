@@ -1,6 +1,15 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.2.0"></a>
+## [v0.2.0] - 2020-03-31
+### Changed
+- Updated to Go 1.14 
+- Argo Workflow controller updated to 2.4.3
+- Upgraded Kubebuilder to v2.3.0 
+### Fixed
+- Various fixes and improvements (#46)
+
 <a name="v0.1.0"></a>
 ## [v0.1.0] - 2019-11-27
 ### Changed
