@@ -178,22 +178,6 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 		}
 	})
 
-	//It("should label the addon deployment pods with the provided role annotation", func() {
-	//	addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
-	//	Expect(err).NotTo(HaveOccurred())
-	//	deploymentNamespace, found, _ := unstructured.NestedString(addonObject.UnstructuredContent(), "spec", "params", "namespace")
-	//	Expect(found).To(BeTrue())
-	//	installRole, found, _ := unstructured.NestedString(addonObject.UnstructuredContent(), "spec", "lifecycle", "install", "role")
-	//	Expect(found).To(BeTrue())
-	//	pods, err := kubeClient.CoreV1().Pods(deploymentNamespace).List(metav1.ListOptions{})
-	//	Expect(err).NotTo(HaveOccurred())
-	//
-	//	for _, pod := range pods.Items {
-	//		annotations := pod.GetObjectMeta().GetAnnotations()
-	//		Expect(annotations["iam.amazonaws.com/role"]).To(Equal(installRole))
-	//	}
-	//})
-
 	It("should list argo as an addon with watched resources", func() {
 		argoAddonName := "addon-manager-argo-addon"
 		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(argoAddonName, metav1.GetOptions{})
