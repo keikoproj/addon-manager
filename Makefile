@@ -7,6 +7,13 @@ KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.3
 KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
 KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
 
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
 .EXPORT_ALL_VARIABLES:
 GO111MODULE=on
 
@@ -22,7 +29,7 @@ bdd: fmt vet deploy
 
 # Build manager binary
 manager: generate fmt vet
-	go build -race -o bin/manager cmd/manager/main.go
+	go build -race -o bin/manager main.go
 
 # Build addonctl binary
 addonctl: generate fmt vet
@@ -30,7 +37,7 @@ addonctl: generate fmt vet
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
-	go run ./cmd/manager/main.go
+	go run ./main.go
 
 # Install CRDs into a cluster
 install: manifests
@@ -45,16 +52,16 @@ clean:
 	kubectl kustomize config/deploy | kubectl delete -f - || true
 
 kops-cluster-setup:
-	kops replace --force --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
-	kops create secret --state ${KOPS_STATE_STORE} --name ${KOPS_CLUSTER_NAME} sshpublickey admin -i ~/.ssh/id_rsa.pub
+	kops replace --force --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
+	kops create secret --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME} sshpublickey admin -i ~/.ssh/id_rsa.pub
 
 kops-cluster:
-	kops update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes
-	kops rolling-update cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME} --yes --cloudonly
-	kops validate cluster --state ${KOPS_STATE_STORE} ${KOPS_CLUSTER_NAME}
+	kops update cluster --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME} --yes
+	kops rolling-update cluster --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME} --yes --cloudonly
+	kops validate cluster --state=${KOPS_STATE_STORE} --name=${KOPS_CLUSTER_NAME};
 
 kops-cluster-delete:
-	kops delete --state ${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
+	kops delete --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
 
 kind-cluster-config:
 	export KUBECONFIG=$$(kind get kubeconfig-path --name="kind")
@@ -101,7 +108,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5 ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen

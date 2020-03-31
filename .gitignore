@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+*.tar.gz
 
 # Test binary, build with `go test -c`
 *.test
@@ -17,6 +18,7 @@
 # Ignore project files
 .idea
 *.code-workspace
+.vscode/*
 
 bin/
 .DS_Store
@@ -24,4 +26,4 @@ bin/
 
 dist/
 
-.vscode/*
+

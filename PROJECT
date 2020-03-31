@@ -1,5 +1,6 @@
 version: "2"
 domain: keikoproj.io
+multigroup: true
 repo: github.com/keikoproj/addon-manager
 resources:
 - group: addonmgr

@@ -49,12 +49,13 @@ func init() {
 }
 
 func main() {
-	ctrl.SetLogger(zap.Logger(debug))
+	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   "addonmgr.keikoproj.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -66,6 +67,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Addon")
 		os.Exit(1)
 	}
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
