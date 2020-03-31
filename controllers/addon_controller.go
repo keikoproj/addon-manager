@@ -62,7 +62,8 @@ var (
 		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
 		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
 	}
-	finalizerName = "delete.addonmgr.keikoproj.io"
+	finalizerName      = "delete.addonmgr.keikoproj.io"
+	generatedInformers informers.SharedInformerFactory
 )
 
 // AddonReconciler reconciles a Addon object
@@ -104,7 +105,7 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("addon", req.NamespacedName)
 
-	log.Info("Starting addon-manager reconcile ...")
+	log.Info("Starting addon-manager reconcile...")
 
 	var instance = &addonmgrv1alpha1.Addon{}
 	if err := r.Get(context.TODO(), req.NamespacedName, instance); err != nil {
@@ -154,7 +155,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			OwnerType:    &addonmgrv1alpha1.Addon{},
 		})
 
-	generatedInformers := informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
+	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 
 	err := mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
 		generatedInformers.Start(s)
@@ -228,17 +229,13 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	}
 
 	//check if addon installation expired.
-	if common.IsExpired(instance.Status.StartTime, TTL) && (instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending ||
-		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting) {
+	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL) {
 		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
 		log.Error(err, reason)
-		if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
-		} else {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		}
+
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.Reason = reason
 		instance.Status.StartTime = 0
 
@@ -456,7 +453,7 @@ func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alp
 	if len(labelSelector.MatchLabels) == 0 {
 		labelSelector.MatchLabels = make(map[string]string)
 	}
-	// Always add app.kubernetes.io/managed-by and app.kubernetes.io/name to label to selector
+	// Always add app.kubernetes.io/managed-by and app.kubernetes.io/name to label selector
 	labelSelector.MatchLabels["app.kubernetes.io/managed-by"] = common.AddonGVR().Group
 	labelSelector.MatchLabels["app.kubernetes.io/name"] = fmt.Sprintf("%s", a.GetName())
 
@@ -464,8 +461,6 @@ func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alp
 	if err != nil {
 		return observed, fmt.Errorf("label selector is invalid. %v", err)
 	}
-
-	generatedInformers := informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 
 	for _, resc := range resources {
 

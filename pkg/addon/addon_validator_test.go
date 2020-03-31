@@ -15,6 +15,7 @@
 package addon
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -278,16 +279,16 @@ spec:
 						Template: `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
-spec: 
+spec:
   entrypoint: entry
   serviceAccountName: addon-manager-workflow-installer-sa
-  arguments: 
-    parameters: 
+  arguments:
+    parameters:
     - name: foo
       value: bar
-  templates: 
+  templates:
     - name: entry
-      steps: 
+      steps:
       - - name: prereq-resources
           template: submit
 `,
@@ -738,10 +739,15 @@ func Test_validateDuplicate_Fail(t *testing.T) {
 		dynClient: dynClient,
 	}
 
-	g.Expect(av.validateDuplicate(&Version{
+	err := av.validateDuplicate(&Version{
 		Name:        av.addon.Name,
 		Namespace:   av.addon.Namespace,
 		PackageSpec: av.addon.GetPackageSpec(),
 		PkgPhase:    addonmgrv1alpha1.Pending,
-	})).ShouldNot(gomega.Succeed(), "Should not validate")
+	})
+
+	errMsg := fmt.Sprintf("package version %s:%s already exists and cannot be installed as a duplicate", av.addon.Spec.PkgName, av.addon.Spec.PkgVersion)
+
+	g.Expect(err).Should(gomega.HaveOccurred(), "Should not validate")
+	g.Expect(err).Should(gomega.MatchError(errMsg))
 }

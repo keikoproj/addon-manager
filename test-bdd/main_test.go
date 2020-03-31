@@ -40,7 +40,7 @@ var log = logrus.New()
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "InstanceGroup Type Suite", []Reporter{junitReporter})
+	RunSpecsWithDefaultAndCustomReporters(t, "Addon Type Suite", []Reporter{junitReporter})
 }
 
 var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
@@ -175,22 +175,6 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 		labels := deployment.ObjectMeta.Labels
 		for name, val := range commonLabels(addonObject) {
 			Expect(labels[name]).To(Equal(val))
-		}
-	})
-
-	It("should label the addon deployment pods with the provided role annotation", func() {
-		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		deploymentNamespace, found, _ := unstructured.NestedString(addonObject.UnstructuredContent(), "spec", "params", "namespace")
-		Expect(found).To(BeTrue())
-		installRole, found, _ := unstructured.NestedString(addonObject.UnstructuredContent(), "spec", "lifecycle", "install", "role")
-		Expect(found).To(BeTrue())
-		pods, err := kubeClient.CoreV1().Pods(deploymentNamespace).List(metav1.ListOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		for _, pod := range pods.Items {
-			annotations := pod.GetObjectMeta().GetAnnotations()
-			Expect(annotations["iam.amazonaws.com/role"]).To(Equal(installRole))
 		}
 	})
 

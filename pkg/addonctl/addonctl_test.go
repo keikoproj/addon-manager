@@ -14,21 +14,6 @@
 
 package addonctl
 
-import (
-	"testing"
-
-	"github.com/spf13/cobra"
-)
-
-func TestNoArgs(t *testing.T) {
-	c := &cobra.Command{Use: "addonctl", Args: cobra.NoArgs}
-
-	_, err := c.ExecuteC()
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-}
-
 // func TestAddonctlCreate(t *testing.T) { //dryrun
 // 	c := &cobra.Command{Use: "addonctl create"}
 // 	c.SetArgs([]string{"addon-test"})
