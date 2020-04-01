@@ -3,7 +3,7 @@
 [![PR](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)][GithubPrsUrl]
 [![slack](https://img.shields.io/badge/slack-join%20the%20conversation-ff69b4.svg)][SlackUrl]
 
-![version](https://img.shields.io/badge/version-0.1.0-blue.svg?cacheSeconds=2592000)
+![version](https://img.shields.io/badge/version-0.2.0-blue.svg?cacheSeconds=2592000)
 [![Build Status][BuildStatusImg]][BuildMasterUrl]
 [![codecov][CodecovImg]][CodecovUrl]
 [![Go Report Card][GoReportImg]][GoReportUrl]
@@ -13,7 +13,7 @@ DNS, Ingress, Metrics, Logging, etc. Addon Manager provides a CRD for lifecycle 
 Argo Workflows.
 
 ## Dependencies
-* kubernetes-1.11.1+
+* kubernetes-1.12+
 * kubectl-1.14+
 
 ## Installation
@@ -202,14 +202,6 @@ addonctl create my-addon -n my-addon-ns \
   --install ./install_resources.yaml \
   --dryrun
 ```
-
-## Release History
-* v0.1.0
-  * First Stable Release
-* v0.0.2
-  * Update api version to Keikoproj
-* v0.0.1
-  * Release alpha version of addon-manager
 
 ## ❤ Contributing ❤
 
