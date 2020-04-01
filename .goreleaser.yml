@@ -1,9 +1,9 @@
 builds:
-  - 
+  -
     id: 'manager'
-    main: ./cmd/manager/main.go
+    main: ./main.go
     binary: manager
-  
+
     ldflags:
       - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
       - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
@@ -12,33 +12,33 @@ builds:
     env:
       - CGO_ENABLED=0
       - GO111MODULE=on
-    
+
     goos:
-      - linux 
+      - linux
 
     goarch:
       - amd64
 
-  - 
+  -
     id: 'addonctl'
     binary: addonctl
     main: ./cmd/addonctl/main.go
-  
+
     ldflags:
-      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}} 
-      - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}} 
+      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
       - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Tag}}
 
     env:
       - CGO_ENABLED=0
       - GO111MODULE=on
-    
+
     goos:
-      - linux 
+      - linux
 
     goarch:
       - amd64
-    
+
 changelog:
   sort: asc
   filters:
