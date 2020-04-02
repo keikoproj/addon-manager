@@ -386,6 +386,11 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
 
+		// Verify activeDeadlineSeconds are kept
+		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(active).To(Equal(int64(600)))
+
 		// Verify workflow labels are kept
 		labels := wfv1.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
@@ -473,6 +478,11 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlSecondsAfterFinished")
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
+
+		// Verify activeDeadlineSeconds are kept
+		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(active).To(Equal(int64(600)))
 
 		// Verify workflow labels are kept
 		labels := wfv1.GetLabels()
