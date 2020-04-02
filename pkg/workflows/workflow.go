@@ -263,16 +263,6 @@ func (w *workflowLifecycle) parse(wt *addonmgrv1alpha1.WorkflowType, wf *unstruc
 		return fmt.Errorf("invalid workflow yaml spec passed. %v", err)
 	}
 
-	// Enforce this to be a workflow type
-	wf.SetGroupVersionKind(schema.GroupVersionKind{
-		Kind:    "Workflow",
-		Group:   "argoproj.io",
-		Version: "v1alpha1",
-	})
-
-	wf.SetNamespace(w.addon.GetNamespace())
-	wf.SetName(name)
-
 	// We need to marshal and unmarshal due to conversion issues.
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -282,6 +272,16 @@ func (w *workflowLifecycle) parse(wt *addonmgrv1alpha1.WorkflowType, wf *unstruc
 	if err != nil {
 		return errors.New("invalid workflow, unable to unmarshal to workflow")
 	}
+
+	// Enforce this to be a workflow type
+	wf.SetGroupVersionKind(schema.GroupVersionKind{
+		Kind:    "Workflow",
+		Group:   "argoproj.io",
+		Version: "v1alpha1",
+	})
+
+	wf.SetNamespace(w.addon.GetNamespace())
+	wf.SetName(name)
 
 	if _, foundSpec, err := unstructured.NestedFieldNoCopy(wf.Object, "spec"); err != nil || !foundSpec {
 		return errors.New("invalid workflow, missing spec")
