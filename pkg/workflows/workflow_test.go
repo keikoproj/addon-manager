@@ -41,6 +41,40 @@ var fclient = runtimefake.NewFakeClientWithScheme(sch)
 var dynClient = dynfake.NewSimpleDynamicClient(sch)
 var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.EventSource{Component: "addons"})
 
+var wfDeleteTemplatePanic = `
+        apiVersion: argoproj.io/v1alpha1
+        kind: Workflow
+        metadata:
+          labels:
+            workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+        spec:
+          activeDeadlineSeconds: 600
+          entrypoint: delete-wf
+          serviceAccountName: addon-manager-workflow-installer-sa
+
+          templates:
+            - name: delete-wf
+              steps:
+                - - name: delete-ns
+                    template: delete-ns
+              tolerations:
+              - key: node-role.kubernetes.io/system
+                effect: NoSchedule
+              nodeSelector:
+                node-role.kubernetes.io/system: ""
+
+            - name: delete-ns
+              tolerations:
+              - key: node-role.kubernetes.io/system
+                effect: NoSchedule
+              nodeSelector:
+                node-role.kubernetes.io/system: ""
+              container:
+                image: docker.artifactory.a.intuit.com/expert360/kubectl-awscli:v1.11.2
+                command: [sh, -c]
+                args: ["kubectl delete all -n {{workflow.parameters.namespace}} --all"]
+`
+
 var wfInvalidTemplate = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
@@ -663,4 +697,41 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 
 	// Now try to delete
 	g.Expect(wfl.Delete("addon-wf-test")).To(Not(HaveOccurred()))
+}
+
+func TestWorkflowLifecycle_Install_PanicWorkflowTemplate(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	a := &v1alpha1.Addon{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.AddonSpec{
+			PackageSpec: v1alpha1.PackageSpec{
+				PkgName:        "my-addon",
+				PkgVersion:     "1.0.0",
+				PkgType:        v1alpha1.HelmPkg,
+				PkgDescription: "",
+				PkgDeps:        map[string]string{"core/A": "*", "core/B": "v1.0.0"},
+			},
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "my-app",
+				},
+			},
+		},
+	}
+
+	wfl := NewWorkflowLifecycle(dynClient, a, rcdr, sch)
+
+	// Workflow missing "spec" should fail
+	wt := &v1alpha1.WorkflowType{
+		Template: wfDeleteTemplatePanic,
+	}
+
+	phase, err := wfl.Install(context.Background(), wt, "addon-wf-test")
+
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(phase).To(Equal(v1alpha1.Failed))
 }

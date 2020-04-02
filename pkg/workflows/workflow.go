@@ -16,6 +16,7 @@ package workflows
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -255,9 +256,10 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 }
 
 func (w *workflowLifecycle) parse(wt *addonmgrv1alpha1.WorkflowType, wf *unstructured.Unstructured, name string) error {
+	var data map[string]interface{}
 
 	// Load workflow spec into data obj
-	if err := yaml.Unmarshal([]byte(wt.Template), &wf.Object); err != nil {
+	if err := yaml.Unmarshal([]byte(wt.Template), &data); err != nil {
 		return fmt.Errorf("invalid workflow yaml spec passed. %v", err)
 	}
 
@@ -271,7 +273,17 @@ func (w *workflowLifecycle) parse(wt *addonmgrv1alpha1.WorkflowType, wf *unstruc
 	wf.SetNamespace(w.addon.GetNamespace())
 	wf.SetName(name)
 
-	if _, foundSpec, err := unstructured.NestedMap(wf.Object, "spec"); err != nil || !foundSpec {
+	// We need to marshal and unmarshal due to conversion issues.
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return errors.New("invalid workflow, unable to marshal data")
+	}
+	err = wf.UnmarshalJSON(raw)
+	if err != nil {
+		return errors.New("invalid workflow, unable to unmarshal to workflow")
+	}
+
+	if _, foundSpec, err := unstructured.NestedFieldNoCopy(wf.Object, "spec"); err != nil || !foundSpec {
 		return errors.New("invalid workflow, missing spec")
 	}
 
