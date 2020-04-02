@@ -79,6 +79,10 @@ func (w *workflowLifecycle) Install(ctx context.Context, wt *addonmgrv1alpha1.Wo
 		return addonmgrv1alpha1.Failed, err
 	}
 
+	if err := w.injectTTLs(wp); err != nil {
+		return addonmgrv1alpha1.Failed, err
+	}
+
 	return w.submit(ctx, wp)
 }
 
@@ -251,13 +255,13 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 }
 
 func (w *workflowLifecycle) parse(wt *addonmgrv1alpha1.WorkflowType, wf *unstructured.Unstructured, name string) error {
-	var data map[string]interface{}
 
 	// Load workflow spec into data obj
-	if err := yaml.Unmarshal([]byte(wt.Template), &data); err != nil {
+	if err := yaml.Unmarshal([]byte(wt.Template), &wf.Object); err != nil {
 		return fmt.Errorf("invalid workflow yaml spec passed. %v", err)
 	}
 
+	// Enforce this to be a workflow type
 	wf.SetGroupVersionKind(schema.GroupVersionKind{
 		Kind:    "Workflow",
 		Group:   "argoproj.io",
@@ -266,20 +270,10 @@ func (w *workflowLifecycle) parse(wt *addonmgrv1alpha1.WorkflowType, wf *unstruc
 
 	wf.SetNamespace(w.addon.GetNamespace())
 	wf.SetName(name)
-	content := wf.UnstructuredContent()
 
-	spec, ok := data["spec"]
-	if !ok {
+	if _, foundSpec, err := unstructured.NestedMap(wf.Object, "spec"); err != nil || !foundSpec {
 		return errors.New("invalid workflow, missing spec")
 	}
-
-	// Make sure workflows by default get cleaned up after 3 days
-	if ttlSecondAfterFinished := spec.(map[string]interface{})["ttlSecondsAfterFinished"]; ttlSecondAfterFinished == nil {
-		spec.(map[string]interface{})["ttlSecondsAfterFinished"] = int64(259200)
-	}
-
-	content["spec"] = spec
-	wf.SetUnstructuredContent(content)
 
 	return nil
 }
@@ -483,4 +477,23 @@ func (w *workflowLifecycle) deleteCollisionWorkflows(wfv1 *unstructured.Unstruct
 	}
 
 	return deleted, nil
+}
+
+func (w *workflowLifecycle) injectTTLs(wf *unstructured.Unstructured) error {
+	// Default ttl is to cleanup workflows after 3 days
+	var ttl, _ = time.ParseDuration("72h")
+	val, found, err := unstructured.NestedInt64(wf.UnstructuredContent(), "spec", "ttlSecondsAfterFinished")
+	if err != nil {
+		return err
+	}
+
+	// Make sure workflows by default get cleaned up after 3 days
+	if !found || val == 0 {
+		err = unstructured.SetNestedField(wf.Object, int64(ttl.Seconds()), "spec", "ttlSecondsAfterFinished")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

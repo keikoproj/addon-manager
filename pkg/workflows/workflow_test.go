@@ -44,6 +44,9 @@ var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.Even
 var wfSpecTemplate = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
+metadata:
+  labels:
+    workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
 spec:
   entrypoint: entry
   serviceAccountName: addon-manager-workflow-installer-sa
@@ -91,6 +94,9 @@ spec:
 var wfPrereqsTemplate = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
+metadata:
+  labels:
+    workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
 spec:
   entrypoint: entry
   serviceAccountName: addon-manager-workflow-installer-sa
@@ -151,6 +157,9 @@ spec:
 var wfArtifactsTemplate = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
+metadata:
+  labels:
+    workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
 spec:
   entrypoint: entry
   serviceAccountName: addon-manager-workflow-installer-sa
@@ -364,6 +373,15 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
 			Should(Succeed())
 
+		// Verify default ttl injected
+		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlSecondsAfterFinished")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
+
+		// Verify workflow labels are kept
+		labels := wfv1.GetLabels()
+		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
+
 		// Verify labels and annotations were added to resources
 		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
 		g.Expect(found).To(BeTrue())
@@ -442,6 +460,15 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
 		g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
 			Should(Succeed())
+
+		// Verify default ttl injected
+		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlSecondsAfterFinished")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
+
+		// Verify workflow labels are kept
+		labels := wfv1.GetLabels()
+		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
 
 		// Verify labels and annotations were added to resources
 		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
