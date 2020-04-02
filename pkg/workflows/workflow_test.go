@@ -41,6 +41,11 @@ var fclient = runtimefake.NewFakeClientWithScheme(sch)
 var dynClient = dynfake.NewSimpleDynamicClient(sch)
 var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.EventSource{Component: "addons"})
 
+var wfInvalidTemplate = `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+`
+
 var wfSpecTemplate = `
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
@@ -543,6 +548,44 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowType(t *testing.T) {
 
 	// Empty workflow type should fail
 	wt := &v1alpha1.WorkflowType{}
+
+	phase, err := wfl.Install(context.Background(), wt, "addon-wf-test")
+
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(phase).To(Equal(v1alpha1.Failed))
+}
+
+// Test that a workflow template missing spec will fail
+func TestWorkflowLifecycle_Install_InvalidWorkflowTemplate(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	a := &v1alpha1.Addon{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.AddonSpec{
+			PackageSpec: v1alpha1.PackageSpec{
+				PkgName:        "my-addon",
+				PkgVersion:     "1.0.0",
+				PkgType:        v1alpha1.HelmPkg,
+				PkgDescription: "",
+				PkgDeps:        map[string]string{"core/A": "*", "core/B": "v1.0.0"},
+			},
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "my-app",
+				},
+			},
+		},
+	}
+
+	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+
+	// Workflow missing "spec" should fail
+	wt := &v1alpha1.WorkflowType{
+		Template: wfInvalidTemplate,
+	}
 
 	phase, err := wfl.Install(context.Background(), wt, "addon-wf-test")
 
