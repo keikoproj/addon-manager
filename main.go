@@ -51,6 +51,8 @@ func init() {
 func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
+	setupLog.Info(version.ToString())
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
@@ -75,6 +77,4 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-
-	setupLog.Info(version.ToString())
 }

@@ -90,7 +90,7 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
 
 # Build the docker image
-docker-build: test
+docker-build: manager
 	docker build -t ${IMG} .
 	@echo "updating kustomize image patch file for manager resource"
 	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
@@ -98,6 +98,12 @@ docker-build: test
 # Push the docker image
 docker-push:
 	docker push ${IMG}
+
+release:
+	goreleaser release --rm-dist
+
+snapshot:
+	goreleaser release --rm-dist --snapshot
 
 # find or download controller-gen
 # download controller-gen if necessary
