@@ -1,3 +1,8 @@
+
+before:
+  hooks:
+    - go mod download
+
 builds:
   -
     id: 'manager'
@@ -7,7 +12,7 @@ builds:
     ldflags:
       - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
       - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Tag}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Version}}
 
     env:
       - CGO_ENABLED=0
@@ -27,7 +32,7 @@ builds:
     ldflags:
       - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
       - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Tag}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Version}}
 
     env:
       - CGO_ENABLED=0
@@ -48,4 +53,24 @@ changelog:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  name_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
+
+dockers:
+  - goos: linux
+    goarch: amd64
+    goarm: ''
+    binaries:
+      - manager
+    builds:
+      - manager
+    skip_push: true
+    image_templates:
+      - "keikoproj/addon-manager:{{ .Version }}"
+      - "keikoproj/addon-manager:latest"
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.name={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--build-arg=SOURCE_BINARY=manager"
