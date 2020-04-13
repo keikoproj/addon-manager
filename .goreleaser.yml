@@ -63,7 +63,7 @@ dockers:
       - manager
     builds:
       - manager
-    skip_push: true
+    skip_push: false
     image_templates:
       - "keikoproj/addon-manager:{{ .Version }}"
       - "keikoproj/addon-manager:latest"
