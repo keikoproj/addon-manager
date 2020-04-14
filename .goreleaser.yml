@@ -45,6 +45,7 @@ builds:
       - amd64
 
 changelog:
+  skip: true
   sort: asc
   filters:
     exclude:
