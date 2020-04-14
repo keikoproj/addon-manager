@@ -34,7 +34,7 @@ stages:
   - name: snapshot-release
     if: NOT (type = pull_request) AND (tag IS NOT present) AND (branch = master)
   - name: release
-    if: NOT (type = pull_request) AND ((tag =~ ^v) AND (branch = master))
+    if: NOT (type = pull_request) AND (tag IS present) AND (branch = master)
 
 jobs:
   include:
