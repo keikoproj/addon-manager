@@ -53,7 +53,7 @@ changelog:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
+  name_template: "v{{ .Major }}.{{ .Minor }}-snapshot-{{ .ShortCommit }}"
 
 dockers:
   - goos: linux
@@ -65,7 +65,7 @@ dockers:
       - manager
     skip_push: false
     image_templates:
-      - "keikoproj/addon-manager:{{ .Version }}"
+      - "keikoproj/addon-manager:v{{ .Version }}"
       - "keikoproj/addon-manager:latest"
     build_flag_templates:
       - "--pull"
