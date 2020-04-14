@@ -30,7 +30,7 @@ install: skip
 
 stages:
   - unit-test
-  - docker-build
+  - build
   - name: snapshot-release
     if: NOT (type = pull_request) AND (tag IS NOT present) AND (branch = master)
   - name: release
