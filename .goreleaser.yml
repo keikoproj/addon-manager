@@ -54,7 +54,7 @@ changelog:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "v{{ .Major }}.{{ .Minor }}-snapshot-{{ .ShortCommit }}"
+  name_template: "{{ .Major }}.{{ .Minor }}-snapshot-{{ .ShortCommit }}"
 
 dockers:
   - goos: linux
