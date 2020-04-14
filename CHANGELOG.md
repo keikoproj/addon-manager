@@ -1,6 +1,12 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.2.1"></a>
+## [v0.2.1] - 2020-04-13
+### Fixed
+- Patch the master CI build (#48) (#56) (#58)
+- Preserve labels in Workflow templates (#49)
+
 <a name="v0.2.0"></a>
 ## [v0.2.0] - 2020-03-31
 ### Changed
@@ -28,7 +34,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.2.1...HEAD
+[v0.2.1]: https://github.com/keikoproj/addon-manager/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/keikoproj/addon-manager/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/keikoproj/addon-manager/compare/v0.1.0...v0.0.2
 [v0.0.2]: https://github.com/keikoproj/addon-manager/compare/v0.0.1...v0.0.2
