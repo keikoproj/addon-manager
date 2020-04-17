@@ -17,6 +17,7 @@ package addon
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -412,48 +413,59 @@ func Test_addonValidator_Validate_NoDeps(t *testing.T) {
 
 func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 	// Pre-cache installed dependencies
-	var cache = NewAddonVersionCacheClient()
-	var versionA = Version{
-		PackageSpec: addonmgrv1alpha1.PackageSpec{
-			PkgName:    "core/A",
-			PkgVersion: "v1.0.0",
-			PkgDeps: map[string]string{
-				"core/C": "v1.2.0",
+	var (
+		cache    = NewAddonVersionCacheClient()
+		versionA = Version{
+			PackageSpec: addonmgrv1alpha1.PackageSpec{
+				PkgName:    "core/A",
+				PkgVersion: "v1.0.0",
+				PkgDeps: map[string]string{
+					"core/C": "v1.2.0",
+				},
 			},
-		},
-		PkgPhase: addonmgrv1alpha1.Succeeded,
-	}
-	var versionB = Version{
-		PackageSpec: addonmgrv1alpha1.PackageSpec{
-			PkgName:    "core/B",
-			PkgVersion: "v1.0.0",
-			PkgDeps: map[string]string{
-				"core/C": "v1.2.0",
+			PkgPhase: addonmgrv1alpha1.Succeeded,
+		}
+		versionB = Version{
+			PackageSpec: addonmgrv1alpha1.PackageSpec{
+				PkgName:    "core/B",
+				PkgVersion: "v1.0.0",
+				PkgDeps: map[string]string{
+					"core/C": "v1.2.0",
+				},
 			},
-		},
-		PkgPhase: addonmgrv1alpha1.Succeeded,
-	}
-	var versionC = Version{
-		PackageSpec: addonmgrv1alpha1.PackageSpec{
-			PkgName:    "core/C",
-			PkgVersion: "1.2.0",
-		},
-		PkgPhase: addonmgrv1alpha1.Succeeded,
-	}
+			PkgPhase: addonmgrv1alpha1.Succeeded,
+		}
+		versionC = Version{
+			PackageSpec: addonmgrv1alpha1.PackageSpec{
+				PkgName:    "core/C",
+				PkgVersion: "1.2.0",
+			},
+			PkgPhase: addonmgrv1alpha1.Succeeded,
+		}
+		versionD = Version{
+			PackageSpec: addonmgrv1alpha1.PackageSpec{
+				PkgName:    "core/D",
+				PkgVersion: "1.3.0",
+			},
+			PkgPhase: addonmgrv1alpha1.Pending,
+		}
+	)
+
 	cache.AddVersion(versionA)
 	cache.AddVersion(versionB)
 	cache.AddVersion(versionC)
+	cache.AddVersion(versionD)
 
 	type fields struct {
 		addon *addonmgrv1alpha1.Addon
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		want    bool
-		wantErr bool
+		name          string
+		fields        fields
+		want          bool
+		wantErr       bool
+		errStartsWith string
 	}{
-		// TODO: Add test cases.
 		{name: "addon-validates-dependencies", fields: fields{addon: &addonmgrv1alpha1.Addon{
 			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
 			Spec: addonmgrv1alpha1.AddonSpec{
@@ -486,8 +498,26 @@ func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 					Namespace: "addon-test-ns",
 				},
 			},
-		}}, want: false, wantErr: true},
-	}
+		}}, want: false, wantErr: true, errStartsWith: "unable to resolve required dependency"},
+		{name: "addon-throws-error-for-dependencies-in-pending-state", fields: fields{addon: &addonmgrv1alpha1.Addon{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
+			Spec: addonmgrv1alpha1.AddonSpec{
+				PackageSpec: addonmgrv1alpha1.PackageSpec{
+					PkgType:    addonmgrv1alpha1.CompositePkg,
+					PkgName:    "test/addon-1",
+					PkgVersion: "1.0.0",
+					PkgDeps: map[string]string{
+						"core/A": "*",
+						"core/D": "v1.3.0",
+					},
+				},
+				Params: addonmgrv1alpha1.AddonParams{
+					Namespace: "addon-test-ns",
+				},
+			},
+		}}, want: false, wantErr: true, errStartsWith: ErrDepPending,
+		}}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			av := &addonValidator{
@@ -496,12 +526,18 @@ func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 				dynClient: dynClient,
 			}
 			got, err := av.Validate()
+
 			if (err != nil) != tt.wantErr {
-				t.Errorf("addonValidator.Validate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("addonValidator.Validate() error = %q, wantErr = %v", err, tt.wantErr)
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("addonValidator.Validate() = %v, want %v", got, tt.want)
+			}
+
+			if tt.wantErr && !strings.HasPrefix(err.Error(), tt.errStartsWith) {
+				t.Errorf("addonValidator.Validate() error = %q, wantErr = %v, errStartsWith = %q", err, tt.wantErr, tt.errStartsWith)
 			}
 		})
 	}
