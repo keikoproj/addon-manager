@@ -39,6 +39,11 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
+const (
+	WfInstanceIdLabelKey = "workflows.argoproj.io/controller-instanceid"
+	WfInstanceId         = "addon-manager-workflow-controller"
+)
+
 // AddonLifecycle represents the following workflows
 type AddonLifecycle interface {
 	Install(context.Context, *addonmgrv1alpha1.WorkflowType, string) (addonmgrv1alpha1.ApplicationAssemblyPhase, error)
@@ -83,6 +88,8 @@ func (w *workflowLifecycle) Install(ctx context.Context, wt *addonmgrv1alpha1.Wo
 	if err := w.injectTTLs(wp); err != nil {
 		return addonmgrv1alpha1.Failed, err
 	}
+
+	w.injectInstanceId(wp)
 
 	return w.submit(ctx, wp)
 }
@@ -508,4 +515,16 @@ func (w *workflowLifecycle) injectTTLs(wf *unstructured.Unstructured) error {
 	}
 
 	return nil
+}
+
+func (w *workflowLifecycle) injectInstanceId(wp *unstructured.Unstructured) {
+	// Add instanceId labels to all workflows
+	labels := wp.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	labels[WfInstanceIdLabelKey] = WfInstanceId
+
+	wp.SetLabels(labels)
 }

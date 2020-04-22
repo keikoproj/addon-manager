@@ -51,7 +51,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   labels:
-    workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+    app.kubernetes.io/component: workflow-test
 spec:
   activeDeadlineSeconds: 600
   entrypoint: entry
@@ -102,7 +102,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   labels:
-    workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+    app.kubernetes.io/component: workflow-test
 spec:
   activeDeadlineSeconds: 600
   entrypoint: entry
@@ -166,7 +166,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   labels:
-    workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+    app.kubernetes.io/component: workflow-test
 spec:
   activeDeadlineSeconds: 600
   entrypoint: entry
@@ -394,6 +394,7 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		// Verify workflow labels are kept
 		labels := wfv1.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
+		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/component", "workflow-test"))
 
 		// Verify labels and annotations were added to resources
 		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
@@ -487,6 +488,7 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		// Verify workflow labels are kept
 		labels := wfv1.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
+		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/component", "workflow-test"))
 
 		// Verify labels and annotations were added to resources
 		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
