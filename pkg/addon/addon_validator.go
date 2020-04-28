@@ -200,10 +200,16 @@ func (av *addonValidator) validateDependencies() error {
 		} else {
 			// Check for specific version
 			v := av.cache.GetVersion(pkgName, pkgVersion)
-			if v != nil && v.PkgPhase == addonmgrv1alpha1.Pending {
-				return fmt.Errorf(ErrDepPending+": %q:%q", pkgName, pkgVersion)
+			if v == nil {
+				return fmt.Errorf(ErrDepNotInstalled+": %q:%q", pkgName, pkgVersion)
 			}
-			if v == nil || v.PkgPhase != addonmgrv1alpha1.Succeeded {
+
+			switch v.PkgPhase {
+			case addonmgrv1alpha1.Succeeded:
+				return nil
+			case addonmgrv1alpha1.Pending:
+				return fmt.Errorf(ErrDepPending+": %q:%q", pkgName, pkgVersion)
+			default:
 				return fmt.Errorf(ErrDepNotInstalled+": %q:%q", pkgName, pkgVersion)
 			}
 		}

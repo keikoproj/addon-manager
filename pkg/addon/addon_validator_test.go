@@ -438,16 +438,32 @@ func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 		versionC = Version{
 			PackageSpec: addonmgrv1alpha1.PackageSpec{
 				PkgName:    "core/C",
-				PkgVersion: "1.2.0",
+				PkgVersion: "v1.2.0",
 			},
 			PkgPhase: addonmgrv1alpha1.Succeeded,
 		}
 		versionD = Version{
 			PackageSpec: addonmgrv1alpha1.PackageSpec{
 				PkgName:    "core/D",
-				PkgVersion: "1.3.0",
+				PkgVersion: "v1.3.0",
 			},
 			PkgPhase: addonmgrv1alpha1.Pending,
+		}
+		versionE = Version{
+			PackageSpec: addonmgrv1alpha1.PackageSpec{
+				PkgName:    "core/E",
+				PkgVersion: "v1.2.0",
+			},
+			PkgPhase: addonmgrv1alpha1.Failed,
+		}
+		versionF = Version{
+			PackageSpec: addonmgrv1alpha1.PackageSpec{
+				PkgName:    "core/F",
+				PkgVersion: "v1.2.0",
+				PkgDeps: map[string]string{
+					"core/E": "v1.2.0",
+				},
+			},
 		}
 	)
 
@@ -455,6 +471,8 @@ func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 	cache.AddVersion(versionB)
 	cache.AddVersion(versionC)
 	cache.AddVersion(versionD)
+	cache.AddVersion(versionE)
+	cache.AddVersion(versionF)
 
 	type fields struct {
 		addon *addonmgrv1alpha1.Addon
@@ -515,8 +533,24 @@ func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 					Namespace: "addon-test-ns",
 				},
 			},
-		}}, want: false, wantErr: true, errStartsWith: ErrDepPending,
-		}}
+		}}, want: false, wantErr: true, errStartsWith: ErrDepPending},
+		{name: "addon-fails-with-failed-dependencies", fields: fields{addon: &addonmgrv1alpha1.Addon{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
+			Spec: addonmgrv1alpha1.AddonSpec{
+				PackageSpec: addonmgrv1alpha1.PackageSpec{
+					PkgType:    addonmgrv1alpha1.CompositePkg,
+					PkgName:    "test/addon-1",
+					PkgVersion: "1.0.0",
+					PkgDeps: map[string]string{
+						"core/F": "v1.2.0",
+					},
+				},
+				Params: addonmgrv1alpha1.AddonParams{
+					Namespace: "addon-test-ns",
+				},
+			},
+		}}, want: false, wantErr: true, errStartsWith: ErrDepNotInstalled},
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -527,17 +561,18 @@ func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 			}
 			got, err := av.Validate()
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("addonValidator.Validate() error = %q, wantErr = %v", err, tt.wantErr)
-				return
+			if tt.wantErr && err == nil {
+				t.Errorf("addonValidator.Validate() Errors want = %t, got = nil", tt.wantErr)
+			}
+
+			if tt.wantErr && err != nil {
+				if !strings.HasPrefix(err.Error(), tt.errStartsWith) {
+					t.Errorf("addonValidator.Validate() Error Message want = %q, got = %q", tt.errStartsWith, err)
+				}
 			}
 
 			if got != tt.want {
-				t.Errorf("addonValidator.Validate() = %v, want %v", got, tt.want)
-			}
-
-			if tt.wantErr && !strings.HasPrefix(err.Error(), tt.errStartsWith) {
-				t.Errorf("addonValidator.Validate() error = %q, wantErr = %v, errStartsWith = %q", err, tt.wantErr, tt.errStartsWith)
+				t.Errorf("addonValidator.Validate() Output want = %v, got = %v", tt.want, got)
 			}
 		})
 	}
