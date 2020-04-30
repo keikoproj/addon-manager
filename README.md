@@ -3,7 +3,7 @@
 [![PR](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)][GithubPrsUrl]
 [![slack](https://img.shields.io/badge/slack-join%20the%20conversation-ff69b4.svg)][SlackUrl]
 
-![version](https://img.shields.io/badge/version-0.2.1-blue.svg?cacheSeconds=2592000)
+![version](https://img.shields.io/badge/api-v1alpha1-blue.svg?cacheSeconds=2592000)
 [![Build Status][BuildStatusImg]][BuildMasterUrl]
 [![codecov][CodecovImg]][CodecovUrl]
 [![Go Report Card][GoReportImg]][GoReportUrl]
@@ -11,6 +11,12 @@
 Addons are critical components within a Kubernetes cluster that provide critical services needed by applications like 
 DNS, Ingress, Metrics, Logging, etc. Addon Manager provides a CRD for lifecycle management of such addons using 
 Argo Workflows.
+
+## Important!
+This is Alpha state software, anything can change at any time. Our deprecation and removal policy during Alpha is very aggressive, see below:
+* Any changes to the api types will result in an iterative version bump e.g., `v1alpha1` -> `v1alpha2`
+* API versions will **NOT** be backward compatible, all new api versions will immediately replace the older version
+* All api kinds within the group `addonmgr.keikoproj.io` will be versioned the same e.g., `v1alphaX` 
 
 ## Dependencies
 * kubernetes-1.12+
