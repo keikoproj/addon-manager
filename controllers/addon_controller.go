@@ -213,7 +213,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Resources list
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
-	//set ttl starttime if it is 0
+	// Set ttl starttime if it is 0
 	if instance.Status.StartTime == 0 {
 		instance.Status.StartTime = common.GetCurretTimestamp()
 	}
@@ -228,7 +228,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	//check if addon installation expired.
+	// Check if addon installation expired.
 	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL) {
 		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
@@ -269,12 +269,31 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 	// Validate Addon
 	if ok, err := addon.NewAddonValidator(instance, r.versionCache, r.dynClient).Validate(); !ok {
+		// if an addons dependency is in a Pending state then make the parent addon Pending
+		if strings.HasPrefix(err.Error(), addon.ErrDepPending) {
+			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be out of Pending state.", instance.Namespace, instance.Name)
+			// Record an event if addon is not valid
+			r.recorder.Event(instance, "Normal", "Pending", reason)
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Pending
+			instance.Status.StartTime = 0
+			instance.Status.Reason = reason
+
+			log.Info("Addon %s/%s is waiting on dependencies to be out of Pending state.", instance.Namespace, instance.Name)
+
+			// requeue after 10 seconds
+			return reconcile.Result{
+				Requeue:      true,
+				RequeueAfter: 10 * time.Second,
+			}, nil
+		}
+
 		reason := fmt.Sprintf("Addon %s/%s is not valid. %v", instance.Namespace, instance.Name, err)
 		// Record an event if addon is not valid
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.StartTime = 0
 		instance.Status.Reason = reason
+
 		log.Error(err, "Failed to validate addon.")
 
 		return reconcile.Result{}, err

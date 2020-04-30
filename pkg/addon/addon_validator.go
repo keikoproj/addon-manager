@@ -28,6 +28,11 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
+const (
+	ErrDepNotInstalled = "required dependency is not installed"
+	ErrDepPending      = "required dependency is in pending state"
+)
+
 type addonValidator struct {
 	cache     VersionCacheClient
 	addon     *addonmgrv1alpha1.Addon
@@ -195,8 +200,17 @@ func (av *addonValidator) validateDependencies() error {
 		} else {
 			// Check for specific version
 			v := av.cache.GetVersion(pkgName, pkgVersion)
-			if v == nil || v.PkgPhase != addonmgrv1alpha1.Succeeded {
-				return fmt.Errorf("required dependency %s:%s is not installed", pkgName, pkgVersion)
+			if v == nil {
+				return fmt.Errorf(ErrDepNotInstalled+": %q:%q", pkgName, pkgVersion)
+			}
+
+			switch v.PkgPhase {
+			case addonmgrv1alpha1.Succeeded:
+				return nil
+			case addonmgrv1alpha1.Pending:
+				return fmt.Errorf(ErrDepPending+": %q:%q", pkgName, pkgVersion)
+			default:
+				return fmt.Errorf(ErrDepNotInstalled+": %q:%q", pkgName, pkgVersion)
 			}
 		}
 	}
