@@ -1,0 +1,2289 @@
+apiVersion: addonmgr.keikoproj.io/v1alpha1
+kind: Addon
+metadata:
+  name: addon-bad
+  namespace: addon-manager-system
+spec:
+  lifecycle:
+    delete:
+      template: |
+        apiVersion: argoproj.io/v1alpha1
+        kind: Workflow
+        metadata:
+          labels:
+            workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+        spec:
+          activeDeadlineSeconds: 600
+          entrypoint: delete-wf
+          serviceAccountName: addon-manager-workflow-installer-sa
+          templates:
+            - name: delete-wf
+              steps:
+                - - name: delete-ns
+                    template: delete-ns
+
+            - name: delete-ns
+              container:
+                image: docker.artifactory.a.intuit.com/expert360/kubectl-awscli:v1.11.2
+                command: [sh, -c]
+                args: ["
+                  kubectl delete all -l app.kubernetes.io/name=prometheus -n {{workflow.parameters.namespace}};
+                  kubectl delete apiservice v1beta1.custom.metrics.k8s.io -n {{workflow.parameters.namespace}};
+                  kubectl delete instancegroup metrics -n {{workflow.parameters.namespace}}
+                "]
+    install:
+      template: |
+        apiVersion: argoproj.io/v1alpha1
+        kind: Workflow
+        metadata:
+          labels:
+            workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+        spec:
+          activeDeadlineSeconds: 600
+          entrypoint: entry
+          serviceAccountName: addon-manager-workflow-installer-sa
+          templates:
+          - name: entry
+            steps:
+            - - name: get-crd-prefix
+                template: prefix
+            - - name: install-prometheus
+                template: submit
+                arguments:
+                  artifacts:
+                  - name: doc
+                    path: /tmp/doc
+                    raw:
+                      data: |
+                        apiVersion: v1
+                        kind: ServiceAccount
+                        metadata:
+                          name: prometheus
+                          namespace: "{{workflow.parameters.namespace}}"
+                        ---
+                        apiVersion: rbac.authorization.k8s.io/v1beta1
+                        kind: ClusterRole
+                        metadata:
+                          name: prometheus
+                        rules:
+                        -
+                          apiGroups:
+                          - ""
+                          resources:
+                          - nodes
+                          - nodes/metrics
+                          - services
+                          - endpoints
+                          - pods
+                          - ingresses
+                          - ingresses/status
+                          verbs:
+                          - get
+                          - list
+                          - watch
+                        -
+                          apiGroups:
+                          - ""
+                          resources:
+                          - configmaps
+                          verbs:
+                          - get
+                        -
+                          nonResourceURLs:
+                          - /metrics
+                          - /metrics/*
+                          verbs:
+                          - get
+                        ---
+                        apiVersion: rbac.authorization.k8s.io/v1beta1
+                        kind: ClusterRoleBinding
+                        metadata:
+                          name: prometheus
+                        roleRef:
+                          apiGroup: rbac.authorization.k8s.io
+                          kind: ClusterRole
+                          name: prometheus
+                        subjects:
+                        -
+                          kind: ServiceAccount
+                          name: prometheus
+                          namespace: "{{workflow.parameters.namespace}}"
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: Prometheus
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                          name: k8s-prometheus
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          tolerations:
+                          - key: ig/metrics
+                            effect: NoSchedule
+                          - key: ig/metrics
+                            effect: NoExecute
+                          nodeSelector:
+                            eks.k8s.io/instancegroup: "metrics"
+
+                          affinity:
+                            podAntiAffinity:
+                              preferredDuringSchedulingIgnoredDuringExecution:
+                              -
+                                podAffinityTerm:
+                                  labelSelector:
+                                    matchExpressions:
+                                    -
+                                      key: prometheus
+                                      operator: In
+                                      values:
+                                      - k8s-prometheus
+                                  topologyKey: failure-domain.beta.kubernetes.io/zone
+                                weight: 100
+                              requiredDuringSchedulingIgnoredDuringExecution:
+                              -
+                                labelSelector:
+                                  matchExpressions:
+                                  -
+                                    key: prometheus
+                                    operator: In
+                                    values:
+                                    - k8s-prometheus
+                                topologyKey: kubernetes.io/hostname
+                          alerting:
+                            alertmanagers:
+                            -
+                              name: alertmanager-main
+                              namespace: "{{workflow.parameters.namespace}}"
+                              port: web
+                          baseImage: docker.intuit.com/prometheus/prometheus
+                          containers:
+                          -
+                            args:
+                            - "-proxy={{workflow.parameters.wavefront_proxy_url}}"
+                            - "-proxy-port=12878"
+                            - "-listen=9095"
+                            - "-prefix=iks"
+                            - "-tags={{workflow.parameters.wavefront_tags}}"
+                            image: "docker.intuit.com/dev/patterns/kubernetes/addons/prometheus/wavefront-adapter:1.0.6"
+                            imagePullPolicy: IfNotPresent
+                            name: prometheus-wavefront-storage-adapter
+                            resources:
+                              limits:
+                                memory: 256Mi
+                              requests:
+                                cpu: "100m"
+                                memory: 128Mi
+                          logLevel: info
+                          remoteWrite:
+                          -
+                            queueConfig:
+                              capacity: 10000
+                              minShards: 10
+                              maxShards: 100
+                              maxSamplesPerSend: 1000
+                              batchSendDeadline: 10s
+                              minBackoff: 30ms
+                              maxBackoff: 100ms
+                            url: "http://localhost:9095/receive"
+                            writeRelabelConfigs:
+                            -
+                              action: keep
+                              regex: prometheus-k8s-prometheus-0
+                              sourceLabels:
+                              - prometheus_replica
+                            -
+                              action: keep
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: replace
+                              regex: ;(.*)
+                              replacement: $1
+                              sourceLabels:
+                              - instance
+                              - pod
+                              targetLabel: instance
+                            -
+                              action: replace
+                              regex: ;(.*)
+                              replacement: $1
+                              sourceLabels:
+                              - instance
+                              - namespace
+                              targetLabel: instance
+                          replicas: 2
+                          resources:
+                            limits:
+                              memory: "{{workflow.parameters.prometheus_memory_limit}}"
+                            requests:
+                              memory: "{{workflow.parameters.prometheus_memory_request}}"
+                          retention: 7d
+                          ruleNamespaceSelector:
+                            matchLabels: {}
+                          ruleSelector:
+                            matchLabels:
+                              prometheus: k8s-prometheus
+                              role: alert-rules
+                          securityContext:
+                            fsGroup: 2000
+                            runAsNonRoot: true
+                            runAsUser: 1000
+                          serviceAccountName: prometheus
+                          serviceMonitorNamespaceSelector:
+                            matchLabels:
+                              prometheus: k8s-prometheus
+                          serviceMonitorSelector:
+                            matchLabels:
+                              prometheus: k8s-prometheus
+                              role: service-monitors
+                          storage:
+                            volumeClaimTemplate:
+                              metadata:
+                                labels:
+                                  app: prometheus
+                                name: k8s-prometheus
+                                namespace: "{{workflow.parameters.namespace}}"
+                              spec:
+                                accessModes:
+                                - ReadWriteOnce
+                                resources:
+                                  limits:
+                                    storage: "{{workflow.parameters.prometheus_storage_size}}"
+                                  requests:
+                                    storage: "{{workflow.parameters.prometheus_storage_size}}"
+                          version: v2.15.2
+                        ---
+                        apiVersion: v1
+                        kind: Service
+                        metadata:
+                          labels:
+                            kubernetes.io/cluster-service: "true"
+                            kubernetes.io/name: IKS-Prometheus
+                            prometheus: k8s-prometheus
+                          name: prometheus
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          ports:
+                          -
+                            name: web
+                            port: 9090
+                            protocol: TCP
+                            targetPort: web
+                          selector:
+                            prometheus: k8s-prometheus
+                          type: NodePort
+
+
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: Alertmanager
+                        metadata:
+                          labels:
+                            alertmanager: main
+                          name: main
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          affinity:
+                            podAntiAffinity:
+                              preferredDuringSchedulingIgnoredDuringExecution:
+                              -
+                                podAffinityTerm:
+                                  labelSelector:
+                                    matchExpressions:
+                                    -
+                                      key: alertmanager
+                                      operator: In
+                                      values:
+                                      - main
+                                  topologyKey: failure-domain.beta.kubernetes.io/zone
+                                weight: 100
+                              requiredDuringSchedulingIgnoredDuringExecution:
+                              -
+                                labelSelector:
+                                  matchExpressions:
+                                  -
+                                    key: alertmanager
+                                    operator: In
+                                    values:
+                                    - main
+                                topologyKey: kubernetes.io/hostname
+                          baseImage: docker.intuit.com/prometheus/alertmanager
+                          replicas: 0
+                          securityContext:
+                            fsGroup: 2000
+                            runAsNonRoot: true
+                            runAsUser: 1000
+                          serviceAccountName: alertmanager-main
+                          tolerations:
+                          - key: ig/metrics
+                            effect: NoSchedule
+                          - key: ig/metrics
+                            effect: NoExecute
+                          nodeSelector:
+                            eks.k8s.io/instancegroup: "metrics"
+                          storage:
+                            volumeClaimTemplate:
+                              metadata:
+                                labels:
+                                  app: prometheus
+                                name: alertmanager-main
+                                namespace: "{{workflow.parameters.namespace}}"
+                              spec:
+                                accessModes:
+                                - ReadWriteOnce
+                                resources:
+                                  requests:
+                                    storage: 2Gi
+                          version: v0.15.3
+                        ---
+                        apiVersion: v1
+                        kind: Service
+                        metadata:
+                          labels:
+                            alertmanager: main
+                          name: alertmanager-main
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          ports:
+                          -
+                            name: web
+                            port: 9093
+                            targetPort: web
+                          selector:
+                            alertmanager: main
+                            app: alertmanager
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: prometheus
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: k8s-prometheus
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            port: web
+                          selector:
+                            matchLabels:
+                              prometheus: k8s-prometheus
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: custom-metrics-apiserver
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: custom-metrics-apiserver
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+                            interval: 30s
+                            port: https
+                            scheme: https
+                            tlsConfig:
+                              caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                              insecureSkipVerify: true
+                          jobLabel: k8s-app
+                          selector:
+                            matchLabels:
+                              k8s-app: custom-metrics-apiserver
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: prometheus-pushgateway
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: prometheus-pushgateway
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            port: http
+                            scheme: http
+                            honorLabels: true
+                          jobLabel: k8s-app
+                          selector:
+                            matchLabels:
+                              k8s-app: prometheus-pushgateway
+                        ---
+                        # Service Monitor for scraping kube_pod_labels from kube-state-metrics
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            app: kube-state-metrics
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: kube-state-metrics
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          - honorLabels: true
+                            interval: 30s
+                            port: http-metrics
+                            scheme: http
+                            scrapeTimeout: 30s
+                            metricRelabelings:
+                            - action: keep
+                              sourceLabels:
+                              - __name__
+                              regex: ^kube_pod_labels$|^kube_pod_container_resource_requests(.*)$|^kube_pod_status_ready$|^kube_pod_container_resource_limits(.*)$
+                          jobLabel: kube-state-metrics
+                          selector:
+                            matchLabels:
+                              app: kube-state-metrics
+                          namespaceSelector:
+                            matchNames:
+                            - kube-system
+                            - addon-metricset-ns
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            metricRelabelings:
+                            -
+                              action: drop
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: labeldrop
+                              regex: (exported_app)
+                            -
+                              action: labeldrop
+                              regex: (exported_assetId)
+                            -
+                              action: labeldrop
+                              regex: (exported_env)
+                            -
+                              action: labeldrop
+                              regex: (exported_l1)
+                            -
+                              action: labeldrop
+                              regex: (exported_l2)
+                            path: /metrics
+                            port: iks-metric
+                            scheme: https
+                            tlsConfig:
+                              insecureSkipVerify: true
+                          namespaceSelector:
+                            any: true
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          selector:
+                            matchLabels:
+                              iks-metric: prometheus
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor-wavefront
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor-wavefront
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            metricRelabelings:
+                            -
+                              action: keep
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: labeldrop
+                              regex: (exported_app)
+                            -
+                              action: labeldrop
+                              regex: (exported_assetId)
+                            -
+                              action: labeldrop
+                              regex: (exported_env)
+                            -
+                              action: labeldrop
+                              regex: (exported_l1)
+                            -
+                              action: labeldrop
+                              regex: (exported_l2)
+                            path: /metrics
+                            port: iks-metric
+                            scheme: https
+                            tlsConfig:
+                              insecureSkipVerify: true
+                          namespaceSelector:
+                            any: true
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          selector:
+                            matchLabels:
+                              iks-metric: prometheus
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor-actuator
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor-actuator
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            metricRelabelings:
+                            -
+                              action: drop
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: labeldrop
+                              regex: (exported_app)
+                            -
+                              action: labeldrop
+                              regex: (exported_assetId)
+                            -
+                              action: labeldrop
+                              regex: (exported_env)
+                            -
+                              action: labeldrop
+                              regex: (exported_l1)
+                            -
+                              action: labeldrop
+                              regex: (exported_l2)
+                            path: /actuator/prometheus
+                            port: iks-metric
+                            scheme: https
+                            tlsConfig:
+                              insecureSkipVerify: true
+                          namespaceSelector:
+                            any: true
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          selector:
+                            matchLabels:
+                              iks-metric: actuator-prometheus
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor-wavefront-actuator
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor-wavefront-actuator
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            metricRelabelings:
+                            -
+                              action: keep
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: labeldrop
+                              regex: (exported_app)
+                            -
+                              action: labeldrop
+                              regex: (exported_assetId)
+                            -
+                              action: labeldrop
+                              regex: (exported_env)
+                            -
+                              action: labeldrop
+                              regex: (exported_l1)
+                            -
+                              action: labeldrop
+                              regex: (exported_l2)
+                            path: /actuator/prometheus
+                            port: iks-metric
+                            scheme: https
+                            tlsConfig:
+                              insecureSkipVerify: true
+                          namespaceSelector:
+                            any: true
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          selector:
+                            matchLabels:
+                              iks-metric: actuator-prometheus
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor-manage
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor-manage
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            metricRelabelings:
+                            -
+                              action: drop
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: labeldrop
+                              regex: (exported_app)
+                            -
+                              action: labeldrop
+                              regex: (exported_assetId)
+                            -
+                              action: labeldrop
+                              regex: (exported_env)
+                            -
+                              action: labeldrop
+                              regex: (exported_l1)
+                            -
+                              action: labeldrop
+                              regex: (exported_l2)
+                            path: /manage/prometheus
+                            port: iks-metric
+                            scheme: https
+                            tlsConfig:
+                              insecureSkipVerify: true
+                          namespaceSelector:
+                            any: true
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          selector:
+                            matchLabels:
+                              iks-metric: manage-prometheus
+
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor-wavefront-manage
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor-wavefront-manage
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            metricRelabelings:
+                            -
+                              action: keep
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: labeldrop
+                              regex: (exported_app)
+                            -
+                              action: labeldrop
+                              regex: (exported_assetId)
+                            -
+                              action: labeldrop
+                              regex: (exported_env)
+                            -
+                              action: labeldrop
+                              regex: (exported_l1)
+                            -
+                              action: labeldrop
+                              regex: (exported_l2)
+                            path: /manage/prometheus
+                            port: iks-metric
+                            scheme: https
+                            tlsConfig:
+                              insecureSkipVerify: true
+                          namespaceSelector:
+                            any: true
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          selector:
+                            matchLabels:
+                              iks-metric: manage-prometheus
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor-http
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          -
+                            interval: 30s
+                            metricRelabelings:
+                            -
+                              action: drop
+                              regex: true;.*|;intuit_alert_.*
+                              sourceLabels:
+                              - intuit_alert
+                              - __name__
+                            -
+                              action: labeldrop
+                              regex: (exported_app)
+                            -
+                              action: labeldrop
+                              regex: (exported_assetId)
+                            -
+                              action: labeldrop
+                              regex: (exported_env)
+                            -
+                              action: labeldrop
+                              regex: (exported_l1)
+                            -
+                              action: labeldrop
+                              regex: (exported_l2)
+                            path: /metrics
+                            port: iks-metric
+                            scheme: http
+                            tlsConfig:
+                              insecureSkipVerify: true
+                          namespaceSelector:
+                            any: true
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          selector:
+                            matchLabels:
+                              iks-metric: http-metrics
+                        ---
+                        # Service Monitor for http /metrics and wavefront alert
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: iks-appmonitor
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: iks-appmonitor-http-wavefront
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                            - interval: 30s
+                              port: iks-metric
+                              path: /metrics
+                              scheme: http
+                              tlsConfig:
+                                insecureSkipVerify: true
+                              metricRelabelings:
+                                - action: keep
+                                  sourceLabels:
+                                  - intuit_alert
+                                  - __name__
+                                  regex: true;.*|;intuit_alert_.*
+                                  # Remove duplicated tags from metrics scraped from /actuator/prometheus, will remove the tags from starter in the future
+                                - regex: (exported_app)
+                                  action: labeldrop
+                                - regex: (exported_assetId)
+                                  action: labeldrop
+                                - regex: (exported_env)
+                                  action: labeldrop
+                                - regex: (exported_l1)
+                                  action: labeldrop
+                                - regex: (exported_l2)
+                                  action: labeldrop
+                          podTargetLabels:
+                          - app
+                          - assetId
+                          - l1
+                          - l2
+                          - env
+                          - pod-template-hash
+                          - rollouts-pod-template-hash
+                          sampleLimit: 250
+                          namespaceSelector:
+                            any: true
+                          selector:
+                            matchLabels:
+                              iks-metric: http-metrics
+                        ---
+                        # Scrape CPU and memory
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: ServiceMonitor
+                        metadata:
+                          labels:
+                            k8s-app: kubelet
+                            prometheus: k8s-prometheus
+                            role: service-monitors
+                          name: kubelet
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          endpoints:
+                          - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+                            honorLabels: true
+                            interval: 30s
+                            port: https-metrics
+                            scheme: https
+                            tlsConfig:
+                              caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                              insecureSkipVerify: true
+                            metricRelabelings:
+                            - action: keep
+                              sourceLabels:
+                              - __name__
+                              regex: ^container_cpu_usage_seconds_total$|^container_memory_usage_bytes$
+                          - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+                            honorLabels: true
+                            interval: 30s
+                            path: /metrics/cadvisor
+                            port: https-metrics
+                            scheme: https
+                            tlsConfig:
+                              caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                              insecureSkipVerify: true
+                            metricRelabelings:
+                            - action: keep
+                              sourceLabels:
+                              - __name__
+                              regex: ^container_cpu_usage_seconds_total$|^container_memory_usage_bytes$
+                          jobLabel: k8s-app
+                          namespaceSelector:
+                            matchNames:
+                            - kube-system
+                          selector:
+                            matchLabels:
+                              k8s-app: kubelet
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: PrometheusRule
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                            role: alert-rules
+                          name: core-metrics
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          groups:
+                          - name: spring.boot.metrics.rules
+                            rules:
+                            - record: namespace_pod_http_server_requests_errors_4xx
+                              expr: sum(rate(http_server_requests_seconds_count{status=~"4[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_http_server_requests_errors_5xx
+                              expr: sum(rate(http_server_requests_seconds_count{status=~"5[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_http_server_requests_errors
+                              expr: sum(rate(http_server_requests_seconds_count{status=~"[4-5][0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_http_server_requests_latency
+                              expr: avg(rate(http_server_requests_seconds_sum{status="200"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash) / avg(rate(http_server_requests_seconds_count{status="200"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_http_server_requests_latency_quantiles
+                              expr: avg(rate(http_server_requests_seconds{status="200"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, quantile, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_http_server_requests_2xx
+                              expr: sum(rate(http_server_requests_seconds_count{status=~"2[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_http_server_requests_count
+                              expr: sum(rate(http_server_requests_seconds_count[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            # JVM Metrics
+                            - record: namespace_pod_jvm_memory_heap_utilization
+                              expr: sum(jvm_memory_used_bytes{area="heap"}) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash) * 100 / sum(jvm_memory_max_bytes{area="heap"}) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_process_files_open_percentage
+                              expr: sum(process_files_open * 100 / process_files_max) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_jvm_threads_live
+                              expr: sum(jvm_threads_live) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_jvm_threads_live
+                              expr: sum(jvm_threads_live_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_jvm_gc_live_data_size_bytes
+                              expr: sum(jvm_gc_live_data_size_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_jvm_gc_pause_seconds_count
+                              expr: sum(rate(jvm_gc_pause_seconds_count[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_jvm_gc_pause_seconds_avg
+                              expr: sum(rate(jvm_gc_pause_seconds_sum[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash) / sum(rate(jvm_gc_pause_seconds_count[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            # tomcat metrics
+                            - record: namespace_pod_tomcat_threads_busy_percentage
+                              expr: sum(tomcat_threads_busy*100/tomcat_threads_config_max) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_tomcat_threads_busy_percentage
+                              expr: sum(tomcat_threads_busy_threads*100/tomcat_threads_config_max_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                          - name: prometheus.metrics.rules
+                            rules:
+                            # Metrics for prometheus monitoring
+                            # Prometheus errors
+                            # Total number of scrapes that hit the sample limit and were rejected.
+                            - record: prometheus_errors_sample_limit_exceeded_scrapes
+                              expr: sum(rate(prometheus_target_scrapes_exceeded_sample_limit_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Total number of samples which were dropped due to the queue being full.
+                            - record: prometheus_errors_sample_limit_dropped_number
+                              expr: sum(rate(prometheus_remote_storage_dropped_samples_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Total number of samples which failed while sending to remote storage S3.
+                            - record: prometheus_remote_storage_failed_samples_total
+                              expr: sum(rate(prometheus_remote_storage_failed_samples_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                              # Total number of samples in pending state while sending to remote storage S3.
+                            - record: prometheus_remote_storage_pending_samples
+                              expr: sum(rate(prometheus_remote_storage_pending_samples[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Total number of samples rejected due to duplicate timestamps but different values
+                            - record: prometheus_errors_sample_duplicate_timestamp
+                              expr: sum(rate(prometheus_target_scrapes_sample_duplicate_timestamp_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Total number of samples rejected due to not being out of the expected order
+                            - record: prometheus_errors_sample_out_of_order
+                              expr: sum(rate(prometheus_target_scrapes_sample_out_of_order_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Total number of samples rejected due to timestamp falling outside of the time bounds
+                            - record: prometheus_errors_sample_out_of_bounds
+                              expr: sum(rate(prometheus_target_scrapes_sample_out_of_bounds_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus has issues compacting sample blocks
+                            - record: prometheus_errors_tsdb_compactions_failed
+                              expr: sum(rate(prometheus_tsdb_compactions_failed_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus TSDB has issues reloading failures
+                            - record: prometheus_errors_tsdb_reloads_failures
+                              expr: sum(rate(prometheus_tsdb_reloads_failures_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus TSDB has head series not found issues
+                            - record: prometheus_errors_tsdb_head_series_not_found
+                              expr: sum(rate(prometheus_tsdb_head_series_not_found_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus rule evaluation failures
+                            - record: prometheus_errors_rule_evaluation_failures
+                              expr: sum(rate(prometheus_rule_evaluation_failures_total[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus rule evaluation duration seconds
+                            - record: prometheus_rule_evaluation_duration_seconds_sum
+                              expr: sum(rate(prometheus_rule_evaluation_duration_seconds_sum[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus rule to check which targets have the most samples
+                            - record: prometheus_scrape_samples_scraped
+                              expr: scrape_samples_scraped{namespace=~".*us.*"}
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus scrape duration seconds, If this increases it indicates the degradation of prometheus performance.
+                            - record: prometheus_scrape_duration_seconds
+                              expr: sum(rate(scrape_duration_seconds[5m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus uptime metric by pod
+                            - record: prometheus_pod_up
+                              expr: sum(up{job="prometheus"}) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus TSDB head series count
+                            - record: prometheus_pod_tsdb_head_series
+                              expr: sum(prometheus_tsdb_head_series) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus TSDB head series count in Total in disk
+                            - record: prometheus_pod_tsdb_head_series_created_total
+                              expr: sum(prometheus_tsdb_head_series_created_total) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus TSDB head memory chunks count
+                            - record: prometheus_pod_tsdb_head_chunks
+                              expr: sum(prometheus_tsdb_head_chunks) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                            # Prometheus GC rate
+                            - record: prometheus_pod_gc_rate
+                              expr: sum(rate(go_gc_duration_seconds_sum{job="prometheus"}[2m])) by (namespace, pod)
+                              labels:
+                                intuit_alert: "true"
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: PrometheusRule
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                            role: alert-rules
+                          name: core-nodejs-metrics
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          groups:
+                            #   nodejs monitoring rules
+                            - name: nodejs.metrics.rules
+                              rules:
+                                # HELP http_request_duration_ms Duration of HTTP requests in ms
+                                # TYPE http_request_duration_ms histogram
+                                # http requests 4xx
+                                - record: namespace_pod_http_server_requests_errors_4xx
+                                  expr: sum(rate(http_request_duration_ms_count{code=~"4[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # http requests 5xx
+                                - record: namespace_pod_http_server_requests_errors_5xx
+                                  expr: sum(rate(http_request_duration_ms_count{code=~"5[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # http requests errors
+                                - record: namespace_pod_http_server_requests_errors
+                                  expr: sum(rate(http_request_duration_ms_count{code=~"[4-5][0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # http requests latency
+                                - record: namespace_pod_http_server_requests_latency
+                                  expr: avg(rate(http_request_duration_ms_sum{code=~"2[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash) / avg(rate(http_request_duration_ms_count{code="200"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP http_request_duration_ms Duration of HTTP requests in ms
+                                # TYPE http_request_duration_ms histogram
+                                - record: namespace_pod_http_server_requests_latency_quantiles
+                                  expr: avg(rate(http_request_duration_ms_bucket{code=~"2[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, le, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # http requests 2xx
+                                - record: namespace_pod_http_server_requests_2xx
+                                  expr: sum(rate(http_request_duration_ms_count{code=~"2[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # http requests count
+                                - record: namespace_pod_http_server_requests_count
+                                  expr: sum(rate(http_request_duration_ms_count[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP nodejs_eventloop_lag_seconds Lag of event loop in seconds.
+                                # TYPE nodejs_eventloop_lag_seconds gauge
+                                - record: namespace_pod_eventloop_lag_seconds
+                                  expr: sum(rate(nodejs_eventloop_lag_seconds[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP nodejs_active_handles_total Total number of active handles.
+                                # TYPE nodejs_active_handles_total gauge
+                                - record: namespace_pod_total_handles
+                                  expr: sum(rate(nodejs_active_handles_total[1m])) by (type, namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP nodejs_active_requests_total Total number of active requests.
+                                # TYPE nodejs_active_requests_total gauge
+                                - record: namespace_pod_active_requests_total
+                                  expr: sum(rate(nodejs_active_requests_total[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP nodejs_heap_size_used_bytes Process heap size used from node.js in bytes.
+                                # TYPE nodejs_heap_size_used_bytes gauge
+                                - record: namespace_pod_jvm_memory_heap_utilization
+                                  expr: sum(nodejs_heap_size_used_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash) * 100 / sum(nodejs_heap_size_total_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP nodejs_gc_pause_seconds_total Time spent in GC Pause in seconds.
+                                # TYPE nodejs_gc_pause_seconds_total counter
+                                - record: namespace_pod_jvm_gc_pause_seconds_count
+                                  expr: sum(rate(nodejs_gc_pause_seconds_total[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP process_open_fds Number of open file descriptors.
+                                - record: namespace_pod_process_files_open_percentage
+                                  expr: sum(process_open_fds * 100 / process_max_fds) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                                  labels:
+                                    intuit_alert: "true"
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: PrometheusRule
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                            role: alert-rules
+                          name: active-monitor-metrics
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          groups:
+                            # active-monitor aggregation metrics rules
+                            - name: active-monitor.metrics.rules
+                              rules:
+                                # Metrics for active-monitor monitoring
+                                # HELP healthcheck_error_count The total number of errored healthcheck resources
+                                # TYPE healthcheck_error_count counter
+                                - record: healthcheck_error_count_by_monitor_name
+                                  expr: sum(healthcheck_error_count) by (pod, healthcheck_name)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP healthcheck_runtime_seconds Time taken for the workflow to complete.
+                                # TYPE healthcheck_runtime_seconds gauge
+                                - record: healthcheck_runtime_seconds_by_monitor_name
+                                  expr: sum(healthcheck_runtime_seconds) by (pod, healthcheck_name)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP healthcheck_success_count The total number of successful healthcheck resources
+                                # TYPE healthcheck_success_count counter
+                                - record: healthcheck_success_count_by_monitor_name
+                                  expr: sum(healthcheck_success_count) by (pod, healthcheck_name)
+                                  labels:
+                                    intuit_alert: "true"
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: PrometheusRule
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                            role: alert-rules
+                          name: kube-kiam-metrics
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          groups:
+                            # kube-dns aggregation metrics rules
+                            - name: kube-kiam.metrics.rules
+                              rules:
+                                # Metrics for kube-kiam monitoring
+                                # HELP kiam_k8s_dropped_pods_total Number of dropped pods because of full buffer
+                                # TYPE kiam_k8s_dropped_pods_total counter
+                                - record: kiam_dropped_pods_total
+                                  expr: sum(rate(kiam_k8s_dropped_pods_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                #kiam_metadata_credential_fetch_errors_total - Number of errors fetching the credentials for a pod
+                                - record: kiam_credential_fetch_errors_total
+                                  expr: sum(rate(kiam_metadata_credential_fetch_errors_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # Number of errors encoding credentials for a pod
+                                - record: kiam_credential_encode_errors_total
+                                  expr: sum(rate(kiam_metadata_credential_encode_errors_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # Number of errors finding the role for a pod
+                                - record: kiam_find_role_errors_total
+                                  expr: sum(rate(kiam_metadata_find_role_errors_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # Number of empty roles returned
+                                - record: kiam_empty_role_total
+                                  expr: sum(rate(kiam_metadata_empty_role_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_metadata_handler_latency_seconds Bucketed histogram of handler timings
+                                # TYPE kiam_metadata_handler_latency_seconds histogram
+                                - record: kiam_handler_latency_seconds_bucket
+                                  expr: sum(rate(kiam_metadata_handler_latency_seconds_bucket[1m])) by (pod, handler, le)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_metadata_proxy_requests_blocked_total Number of access requests to the proxy handler that were blocked by the regexp
+                                # TYPE kiam_metadata_proxy_requests_blocked_total counter
+                                - record: kiam_proxy_requests_blocked_total
+                                  expr: sum(rate(kiam_metadata_proxy_requests_blocked_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_sts_assumerole_current Number of assume role calls currently executing
+                                # TYPE kiam_sts_assumerole_current gauge
+                                - record: kiam_stsassumerole_current
+                                  expr: sum(rate(kiam_sts_assumerole_current[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_metadata_responses_total Responses from mocked out metadata handlers
+                                # TYPE kiam_metadata_responses_total counter
+                                - record: kiam_responses_total
+                                  expr: sum(rate(kiam_metadata_responses_total[1m])) by (code, pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_metadata_success_total Number of successful responses from a handler
+                                # TYPE kiam_metadata_success_total counter
+                                - record: kiam_success_total
+                                  expr: sum(rate(kiam_metadata_success_total[1m])) by (handler, pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_sts_assumerole_timing_seconds Bucketed histogram of assumeRole timings
+                                # TYPE kiam_sts_assumerole_timing_seconds histogram
+                                - record: kiam_stsassumerole_timing_seconds_bucket
+                                  expr: sum(rate(kiam_sts_assumerole_timing_seconds_bucket[1m])) by (pod, le)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_sts_cache_hit_total Number of cache hits to the metadata cache
+                                # TYPE kiam_sts_cache_hit_total counter
+                                - record: kiam_stscache_hit_total
+                                  expr: sum(rate(kiam_sts_cache_hit_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_sts_cache_miss_total Number of cache misses to the metadata cache
+                                # TYPE kiam_sts_cache_miss_total counter
+                                - record: kiam_stscache_miss_total
+                                  expr: sum(rate(kiam_sts_cache_miss_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                                # HELP kiam_sts_cache_miss_total Number of cache misses to the metadata cache
+                                # TYPE kiam_sts_cache_miss_total counter
+                                - record: kiam_stsissuing_errors_total
+                                  expr: sum(rate(kiam_sts_issuing_errors_total[1m])) by (pod)
+                                  labels:
+                                    intuit_alert: "true"
+                        ---
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: PrometheusRule
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                            role: alert-rules
+                          name: hpa-metrics
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          groups:
+                          - name: hpa.core.metrics.rules
+                            rules:
+                            # Aggregated by namespace + pod
+                            - record: namespace_pod_container_cpu_usage_seconds_total
+                              expr: |
+                                sum by (namespace, pod, container) (
+                                    label_replace(label_replace(irate(container_cpu_usage_seconds_total{job="kubelet", image!="", container_name!=""}[3m]), "pod", "$1", "pod_name", "(.*)"), "container", "$1", "container_name", "(.*)")
+                                )
+                            - record: namespace_pod_cpu_usage_seconds_total
+                              expr: sum by (namespace, pod) (namespace_pod_container_cpu_usage_seconds_total)
+                            - record: namespace_pod_memory_usage_bytes
+                              expr: sum by (namespace, pod) (label_replace(sum(container_memory_usage_bytes{job="kubelet", image!="", container_name!=""}) by (namespace, pod_name), "pod", "$1", "pod_name", "(.*)"))
+
+                            # Total requested resource per pod
+                            - record: namespace_pod_cpu_resource_requests
+                              expr:  sum(kube_pod_container_resource_requests{resource="cpu"}) by (namespace, pod)
+                            - record: namespace_pod_memory_resource_requests
+                              expr:  sum(kube_pod_container_resource_requests{resource="memory"}) by (namespace, pod)
+
+                            # Total limit resource per pod
+                            - record: namespace_pod_cpu_resource_limits
+                              expr:  sum(kube_pod_container_resource_limits{resource="cpu"} or kube_pod_container_resource_requests{resource="cpu"}) by (namespace, pod)
+
+                            - record: namespace_pod_memory_resource_limits
+                              expr:  sum(kube_pod_container_resource_limits{resource="memory"} or kube_pod_container_resource_requests{resource="memory"}) by (namespace, pod)
+
+                            # Aggregated by namespace + app
+                            - record: namespace_app_cpu_usage_seconds_total
+                              expr: |
+                                label_join(sum by (namespace, app) (
+                                sum(irate(container_cpu_usage_seconds_total{job="kubelet", image!="", container_name!=""}[3m])) by (namespace, pod_name) * on (namespace, pod_name) group_left(app, apps_deployment)
+                                label_replace(label_replace(kube_pod_labels{job="kube-state-metrics"}, "pod_name", "$1", "pod", "(.*)"), "app", "$1", "label_app","(.*)")
+                                ), "apps_deployment", "", "app")
+                            - record: namespace_app_memory_usage_bytes
+                              expr: |
+                                label_join(sum by (namespace, app) (
+                                    sum(container_memory_usage_bytes{job="kubelet", image!="", container_name!=""}) by (namespace, pod_name)
+                                * on (namespace, pod_name) group_left(app)
+                                 label_replace(label_replace(kube_pod_labels{job="kube-state-metrics"}, "pod_name", "$1", "pod", "(.*)"), "app", "$1", "label_app","(.*)")
+                                ), "apps_deployment", "", "app")
+
+                              # CPU and Memory utilization per pod
+                            - record: namespace_pod_cpu_utilization
+                              expr:  namespace_pod_cpu_usage_seconds_total * 100 / namespace_pod_cpu_resource_limits
+                              labels:
+                                intuit_alert: "true"
+                            - record: namespace_pod_memory_utilization
+                              expr:  namespace_pod_memory_usage_bytes * 100 / namespace_pod_memory_resource_limits
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_app_cpu_resource_requests
+                              expr: |
+                                label_join(sum by (namespace, app) (
+                                        sum(kube_pod_container_resource_requests{resource="cpu"}) by (namespace, pod) * on (namespace, pod) group_left(app, apps_deployment)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "app", "$1", "label_app","(.*)")
+                                        ), "apps_deployment", "", "app")
+                            - record: namespace_app_memory_resource_requests
+                              expr: |
+                                label_join(sum by (namespace, app) (
+                                        sum(kube_pod_container_resource_requests{resource="memory"}) by (namespace, pod) * on (namespace, pod) group_left(app, apps_deployment)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "app", "$1", "label_app","(.*)")
+                                        ), "apps_deployment", "", "app")
+
+                            - record: namespace_app_cpu_resource_limits
+                              expr: |
+                                label_join(sum by (namespace, app) (
+                                        sum(kube_pod_container_resource_limits{resource="cpu"} or kube_pod_container_resource_requests{resource="cpu"}) by (namespace, pod) * on (namespace, pod) group_left(app, apps_deployment)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "app", "$1", "label_app","(.*)")
+                                        ), "apps_deployment", "", "app")
+                            - record: namespace_app_memory_resource_limits
+                              expr: |
+                                label_join(sum by (namespace, app) (
+                                        sum(kube_pod_container_resource_limits{resource="memory"} or kube_pod_container_resource_requests{resource="memory"}) by (namespace, pod) * on (namespace, pod) group_left(app, apps_deployment)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "app", "$1", "label_app","(.*)")
+                                        ), "apps_deployment", "", "app")
+
+                            # Aggregated by namespace + app and average by pod
+                            # pod count only includes the pod on ready condtion
+                            - record: namespace_app_pod_count
+                              expr: label_join((sum(label_replace(
+                                (kube_pod_status_ready{condition="true"} * on (namespace, pod) group_left(label_app) kube_pod_labels{job="kube-state-metrics"}), "app", "$1", "label_app","(.*)")) by (namespace, app)), "apps_deployment", "", "app")
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_app_pod_count_no_alert
+                              expr: sum(namespace_app_pod_count) by (namespace, app, apps_deployment)
+
+                            - record: namespace_app_pod_cpu_usage_seconds_total
+                              expr: namespace_app_cpu_usage_seconds_total / namespace_app_pod_count_no_alert
+                            - record: namespace_app_pod_memory_usage_bytes
+                              expr: namespace_app_memory_usage_bytes / namespace_app_pod_count_no_alert
+
+                            # Resource utilization aggregated by namespace + app and average by pod
+                            - record: namespace_app_pod_cpu_utilization
+                              expr: namespace_app_cpu_usage_seconds_total * 100 / namespace_app_cpu_resource_limits
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_app_pod_memory_utilization
+                              expr: namespace_app_memory_usage_bytes * 100 / namespace_app_memory_resource_limits
+                              labels:
+                                intuit_alert: "true"
+
+                          - name: spring.boot.service.metrics.rules
+                            rules:
+                            # Aggregated by namespace + app and per_pod
+                            - record: namespace_app_pod_http_server_requests_errors_4xx
+                              expr: label_join((sum(rate(http_server_requests_seconds_count{status=~"4[0-9]+"}[1m])) by (namespace, app)), "apps_deployment", "", "app") / namespace_app_pod_count_no_alert
+                            - record: namespace_app_pod_http_server_requests_errors_5xx
+                              expr: label_join((sum(rate(http_server_requests_seconds_count{status=~"5[0-9]+"}[1m])) by (namespace, app)), "apps_deployment", "", "app") / namespace_app_pod_count_no_alert
+                            - record: namespace_app_pod_http_server_requests_errors
+                              expr: label_join((sum(rate(http_server_requests_seconds_count{status=~"[4-5][0-9]+"}[1m])) by (namespace, app)), "apps_deployment", "", "app") / namespace_app_pod_count_no_alert
+                            - record: namespace_app_pod_http_server_requests_latency
+                              expr: label_join((sum(rate(http_server_requests_seconds_sum{status="200"}[1m])) by (namespace, app) / sum(rate(http_server_requests_seconds_count{status="200"}[1m])) by (namespace, app)), "apps_deployment", "", "app")
+                            - record: namespace_app_pod_http_server_requests_2xx
+                              expr: label_join((sum(rate(http_server_requests_seconds_count{status=~"2[0-9]+"}[1m])) by (namespace, app)), "apps_deployment", "", "app") / namespace_app_pod_count_no_alert
+                            - record: namespace_app_pod_http_server_requests_count
+                              expr: label_join((sum(rate(http_server_requests_seconds_count[1m])) by (namespace, app)), "apps_deployment", "", "app") / namespace_app_pod_count_no_alert
+
+                            # Aggregated java application metrics for HPA
+                            - record: namespace_app_pod_jvm_memory_heap_utilization
+                              expr: label_join(((sum(jvm_memory_used_bytes{area="heap"}) by (namespace, app) * 100 / sum(jvm_memory_max_bytes{area="heap"}) by (namespace, app))), "apps_deployment", "", "app")
+
+                            - record: namespace_app_pod_jvm_gc_pause_seconds_avg
+                              expr: label_join((sum(rate(jvm_gc_pause_seconds_sum[1m])) by (namespace, app) / sum(rate(jvm_gc_pause_seconds_count[1m])) by (namespace, app)), "apps_deployment", "", "app")
+
+                            - record: namespace_app_pod_tomcat_threads_busy_percentage
+                              expr: label_join((sum(tomcat_threads_busy*100/tomcat_threads_config_max) by (namespace, app)), "apps_deployment", "", "app")
+
+                          - name: assert.alias.metrics.rules
+                            rules:
+                            # pod number by asset Alias
+                            - record: namespace_asset_pod_count
+                              expr: sum(label_replace((kube_pod_status_ready{condition="true"} * on (namespace, pod) group_left(label_assetAlias) kube_pod_labels{job="kube-state-metrics"}), "assetAlias", "$1", "label_assetAlias","(.*)")) by (namespace, assetAlias)
+                              labels:
+                                intuit_alert: "true"
+
+                            # Aggregated by namespace + assetAlias
+                            # Aggregated by namespace + app
+                            - record: namespace_asset_cpu_usage_seconds_total
+                              expr: |
+                                sum by (namespace, assetAlias) (
+                                sum(rate(container_cpu_usage_seconds_total{job="kubelet", image!="", container_name!=""}[5m])) by (namespace, pod_name) * on (namespace, pod_name) group_left(assetAlias)
+                                label_replace(label_replace(kube_pod_labels{job="kube-state-metrics"}, "pod_name", "$1", "pod", "(.*)"), "assetAlias", "$1", "label_assetAlias","(.*)")
+                                )
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_asset_memory_usage_bytes
+                              expr: |
+                                sum by (namespace, assetAlias) (
+                                    sum(container_memory_usage_bytes{job="kubelet", image!="", container_name!=""}) by (namespace, pod_name)
+                                * on (namespace, pod_name) group_left(assetAlias)
+                                 label_replace(label_replace(kube_pod_labels{job="kube-state-metrics"}, "pod_name", "$1", "pod", "(.*)"), "assetAlias", "$1", "label_assetAlias","(.*)")
+                                )
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_asset_cpu_resource_requests
+                              expr: |
+                                sum by (namespace, assetAlias) (
+                                        sum(kube_pod_container_resource_requests{resource="cpu"}) by (namespace, pod) * on (namespace, pod) group_left(assetAlias)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "assetAlias", "$1", "label_assetAlias","(.*)")
+                                        )
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_asset_memory_resource_requests
+                              expr: |
+                                sum by (namespace, assetAlias) (
+                                        sum(kube_pod_container_resource_requests{resource="memory"}) by (namespace, pod) * on (namespace, pod) group_left(assetAlias)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "assetAlias", "$1", "label_assetAlias","(.*)")
+                                        )
+                              labels:
+                                intuit_alert: "true"
+                            # Average resources by assetAlias
+                            - record: namespace_asset_pod_cpu_usage_seconds_total
+                              expr: namespace_asset_cpu_usage_seconds_total / namespace_asset_pod_count
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_asset_pod_memory_usage_bytes
+                              expr: namespace_asset_memory_usage_bytes / namespace_asset_pod_count
+                              labels:
+                                intuit_alert: "true"
+
+                            # Resource utilization aggregated by namespace + app and average by pod
+                            - record: namespace_asset_pod_cpu_utilization
+                              expr: namespace_asset_cpu_usage_seconds_total * 100 / namespace_asset_cpu_resource_requests
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_asset_pod_memory_utilization
+                              expr: namespace_asset_memory_usage_bytes * 100 / namespace_asset_memory_resource_requests
+                              labels:
+                                intuit_alert: "true"
+
+                          # Core metrics aggregation rules
+                          - name: hpa.pods.metrics.rules
+                            rules:
+                            - record: namespace_app_pod_each_cpu_resource_limits
+                              expr: |
+                                sum by (namespace, app, pod) (
+                                        sum(ube_pod_container_resource_limits{resource="cpu"} or kube_pod_container_resource_requests{resource="cpu"}) by (namespace, pod) * on (namespace, pod) group_left(app, apps_deployment)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "app", "$1", "label_app","(.*)")
+                                        )
+
+                            - record: namespace_app_pod_each_cpu_usage_seconds_total
+                              expr: |
+                                sum by (namespace, app, pod) (
+                                label_replace(sum(rate(container_cpu_usage_seconds_total{job="kubelet", image!="", container_name!=""}[5m])) by (namespace, pod_name), "pod", "$1", "pod_name", "(.*)") * on (namespace, pod) group_left(app)
+                                label_replace(kube_pod_labels{job="kube-state-metrics"}, "app", "$1", "label_app","(.*)"))
+
+                            - record: namespace_app_pod_p90_cpu_utilization
+                              expr: label_join((quantile(0.9, namespace_app_pod_each_cpu_usage_seconds_total * 100 / namespace_app_pod_each_cpu_resource_limits)  by (namespace, app)), "apps_deployment", "", "app")
+                              labels:
+                                intuit_alert: "true"
+
+                          # HPA containers rules
+                          - name: hpa.containers.metrics.rules
+                            rules:
+                            # namespace + app + container CPU utilization
+                            - record: namespace_app_container_cpu_resource_limits
+                              expr: |
+                                label_join(sum by (namespace, app, container) (
+                                        sum(kube_pod_container_resource_limits{resource="cpu"} or kube_pod_container_resource_requests{resource="cpu"} ) by (namespace, pod, container) * on (namespace, pod) group_left(app, apps_deployment)
+                                        label_replace(kube_pod_labels{job="kube-state-metrics"}, "app", "$1", "label_app","(.*)")
+                                        ), "apps_deployment", "", "app")
+
+                            - record: namespace_app_container_cpu_usage_seconds_total
+                              expr: |
+                                label_join(sum by (namespace, app, container) (
+                                        sum(irate(container_cpu_usage_seconds_total{job="kubelet", image!="", container_name!=""}[3m])) by (namespace, pod_name, container) * on (namespace, pod_name) group_left(app, apps_deployment)
+                                        label_replace(label_replace(kube_pod_labels{job="kube-state-metrics"}, "pod_name", "$1", "pod", "(.*)"), "app", "$1", "label_app","(.*)")
+                                        ), "apps_deployment", "", "app")
+
+                            - record: namespace_app_container_cpu_utilization
+                              expr: namespace_app_container_cpu_usage_seconds_total * 100 / namespace_app_container_cpu_resource_limits
+                              labels:
+                                intuit_alert: "true"
+            - - name: install-prometheus-core-metrics-http-uri
+                template: submit-uri-rule
+                when: "{{workflow.parameters.prometheus_enable_uri_aggregation}} == true"
+                arguments:
+                  artifacts:
+                  - name: doc-uri-rule
+                    path: /tmp/doc-uri-rule
+                    raw:
+                      data: |
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: PrometheusRule
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                            role: alert-rules
+                          name: core-metrics-http-uri
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          groups:
+                            # Spring boot request and latency aggregation metrics rules
+                            - name: spring.boot.http.uri.metrics.rules
+                              rules:
+                              # Aggregated by namespace + pod + uri + method
+                              - record: namespace_pod_uri_http_server_requests_errors_4xx
+                                expr: sum(rate(http_server_requests_seconds_count{status=~"4[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_errors_5xx
+                                expr: sum(rate(http_server_requests_seconds_count{status=~"5[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_errors
+                                expr: sum(rate(http_server_requests_seconds_count{status=~"[4-5][0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_latency
+                                expr: avg(rate(http_server_requests_seconds_sum{status="200"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash) / avg(rate(http_server_requests_seconds_count{status="200"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_2xx
+                                expr: sum(rate(http_server_requests_seconds_count{status=~"2[0-9]+"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_count
+                                expr: sum(rate(http_server_requests_seconds_count[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_latency_quantiles
+                                expr: avg(rate(http_server_requests_seconds{status="200"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, quantile, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_latency_2xx
+                                expr: avg(rate(http_server_requests_seconds_sum{status="2[0-9]{2}"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash) / avg(rate(http_server_requests_seconds_count{status="2[0-9]{2}"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_latency_3xx
+                                expr: avg(rate(http_server_requests_seconds_sum{status="3[0-9]{2}"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash) / avg(rate(http_server_requests_seconds_count{status="3[0-9]{2}"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_latency_4xx
+                                expr: avg(rate(http_server_requests_seconds_sum{status="4[0-9]{2}"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash) / avg(rate(http_server_requests_seconds_count{status="4[0-9]{2}"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_redirects_3xx
+                                expr: sum(rate(http_server_requests_seconds_count{status=~"3[0-9]{2}"}[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+                              - record: namespace_pod_uri_http_server_requests_latency_global
+                                expr: avg(rate(http_server_requests_seconds_sum[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash) / avg(rate(http_server_requests_seconds_count[1m])) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, method, uri, pod_template_hash, rollouts_pod_template_hash)
+                                labels:
+                                  intuit_alert: "true"
+            - - name: delete-uri
+                template: delete-uri-rule
+                when: "{{workflow.parameters.prometheus_enable_uri_aggregation}} == false"
+            - - name: install-prometheus-adv-tomcat-jvm-metrics
+                template: submit-tomcat-jvm-rule
+                when: "{{workflow.parameters.prometheus_enable_adv_tomcat_jvm_metrics}} == true"
+                arguments:
+                  artifacts:
+                  - name: doc-tomcat-jvm-rule
+                    path: /tmp/doc-tomcat-jvm-rule
+                    raw:
+                      data: |
+                        apiVersion: monitoring.coreos.com/v1
+                        kind: PrometheusRule
+                        metadata:
+                          labels:
+                            prometheus: k8s-prometheus
+                            role: alert-rules
+                          name: advanced-tomcat-jvm-metrics
+                          namespace: "{{workflow.parameters.namespace}}"
+                        spec:
+                          groups:
+                          # Spring boot request and latency aggregation metrics rules
+                          - name: spring.boot.advanced.tomcat.jvm.rules
+                            rules:
+                            # JVM Metrics
+                            # HELP jvm_memory_used_bytes The amount of used memory
+                            # TYPE jvm_memory_used_bytes gauge
+                            - record: namespace_pod_jvm_memory_used_bytes
+                              expr: sum(jvm_memory_used_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_memory_max_bytes The maximum amount of memory in bytes that can be used for memory management
+                            # TYPE jvm_memory_max_bytes gauge
+                            - record: namespace_pod_jvm_memory_max_bytes
+                              expr: sum(jvm_memory_max_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+                            # HELP jvm_memory_committed_bytes The amount of memory in bytes that is committed for the Java virtual machine to use
+                            # TYPE jvm_memory_committed_bytes gauge
+                            - record: namespace_pod_jvm_memory_comitted_bytes
+                              expr: sum(jvm_memory_committed_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            - record: namespace_pod_process_files_open
+                              expr: sum(process_files_open_files) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP process_files_max_files The maximum file descriptor count
+                            # TYPE process_files_max_files gauge
+                            - record: namespace_pod_process_files_max_files
+                              expr: max(process_files_max_files) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_threads_daemon_threads The current number of live threads daemon
+                            # TYPE jvm_threads_daemon_threads gauge
+                            - record: namespace_pod_jvm_threads_daemon_threads
+                              expr: sum(jvm_threads_daemon_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_threads_peak_threads The peak live thread count since the Java virtual machine started or peak was reset
+                            # TYPE jvm_threads_peak_threads gauge
+                            - record: namespace_pod_jvm_threads_peak_threads
+                              expr: sum(jvm_threads_peak_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_threads_states_threads The current number of threads having NEW state
+                            # TYPE jvm_threads_states_threads gauge
+                            - record: namespace_pod_jvm_threads_states_threads
+                              expr: sum(jvm_threads_states_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+
+                            # HELP jvm_buffer_memory_used_bytes An estimate of the memory that the Java virtual machine is using for this buffer pool
+                            # TYPE jvm_buffer_memory_used_bytes gauge
+                            - record: namespace_pod_jvm_buffer_memory_used_bytes
+                              expr: sum(jvm_buffer_memory_used_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_buffer_total_capacity_bytes An estimate of the total capacity of the buffers in this pool
+                            # TYPE jvm_buffer_total_capacity_bytes gauge
+                            - record: namespace_pod_jvm_buffer_total_capacity_bytes
+                              expr: sum(jvm_buffer_total_capacity_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_gc_memory_allocated_bytes_total Incremented for an increase in the size of the young generation memory pool after one GC to before the next
+                            # TYPE jvm_gc_memory_allocated_bytes_total counter
+                            - record: namespace_pod_jvm_gc_memory_allocated_bytes_total
+                              expr: sum(jvm_gc_memory_allocated_bytes_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_gc_max_data_size_bytes Max size of old generation memory pool
+                            # TYPE jvm_gc_max_data_size_bytes gauge
+                            - record: namespace_pod_jvm_gc_max_data_size_bytes
+                              expr: max(jvm_gc_max_data_size_bytes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_gc_pause_seconds_max Time spent in GC pause
+                            # TYPE jvm_gc_pause_seconds_max gauge
+                            - record: namespace_pod_jvm_gc_pause_seconds_max
+                              expr: max(jvm_gc_pause_seconds_max) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_classes_loaded_classes The number of classes that are currently loaded in the Java virtual machine
+                            # TYPE jvm_classes_loaded_classes gauge
+                            - record: namespace_pod_jvm_classes_loaded_classes
+                              expr: sum(jvm_classes_loaded_classes) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_classes_unloaded_classes_total The total number of classes unloaded since the Java virtual machine has started execution
+                            # TYPE jvm_classes_unloaded_classes_total counter
+                            - record: namespace_pod_jvm_classes_unloaded_classes_total
+                              expr: sum(jvm_classes_unloaded_classes_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP jvm_buffer_count_buffers An estimate of the number of buffers in the pool
+                            # TYPE jvm_buffer_count_buffers gauge
+                            - record: namespace_pod_jvm_buffer_count_buffers
+                              expr: sum(jvm_buffer_count_buffers) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP logback_events_total Number of error level events that made it to the logs
+                            # TYPE logback_events_total counter
+                            - record: namespace_pod_logback_events_total
+                              expr: sum(logback_events_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # Tomcat metrics
+                            # HELP tomcat_threads_busy_threads Number of threads that are in use.
+                            # TYPE tomcat_threads_busy_threads gauge
+                            - record: namespace_pod_tomcat_threads_busy_threads
+                              expr: sum(tomcat_threads_busy_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_threads_config_max_threads Maximum number of threads allowed in the pool.
+                            # TYPE tomcat_threads_config_max_threads gauge
+                            - record: namespace_pod_tomcat_threads_config_max_threads
+                              expr: max(tomcat_threads_config_max_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_threads_current_threads Number of threads in the pool.
+                            # TYPE tomcat_threads_current_threads gauge
+                            - record: namespace_pod_tomcat_threads_current_threads
+                              expr: sum(tomcat_threads_current_threads) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_sessions_created_sessions_total Sets the total number of sessions created by this manager.
+                            # TYPE tomcat_sessions_created_sessions_total counter
+                            - record: namespace_pod_tomcat_sessions_created_sessions_total
+                              expr: sum(tomcat_sessions_created_sessions_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_sessions_rejected_sessions_total Gets the number of sessions that were not created because the maximum number of active sessions was reached.
+                            # TYPE tomcat_sessions_rejected_sessions_total counter
+                            - record: namespace_pod_tomcat_sessions_rejected_sessions_total
+                              expr: sum(tomcat_sessions_rejected_sessions_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_sessions_expired_sessions_total Gets the number of sessions that have expired.
+                            # TYPE tomcat_sessions_expired_sessions_total counter
+                            - record: namespace_pod_tomcat_sessions_expired_sessions_total
+                              expr: sum(tomcat_sessions_expired_sessions_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_sessions_active_current_sessions Gets the number of currently active sessions.
+                            # TYPE tomcat_sessions_active_current_sessions gauge
+                            - record: namespace_pod_tomcat_sessions_active_current_sessions
+                              expr: sum(tomcat_sessions_active_current_sessions) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_sessions_active_max_sessions Gets the maximum number of sessions that have been active at the same time.
+                            # TYPE tomcat_sessions_active_max_sessions gauge
+                            - record: namespace_pod_tomcat_sessions_active_max_sessions
+                              expr: max(tomcat_sessions_active_max_sessions) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_sessions_alive_max_seconds Gets the longest time (in seconds) that an expired session had been alive.
+                            # TYPE tomcat_sessions_alive_max_seconds gauge
+                            - record: namespace_pod_tomcat_sessions_alive_max_seconds
+                              expr: max(tomcat_sessions_alive_max_seconds) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_global_request_seconds
+                            # TYPE tomcat_global_request_seconds gauge
+                            - record: namespace_pod_tomcat_global_request_seconds
+                              expr: max(tomcat_global_request_seconds) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_global_request_max_seconds
+                            # TYPE tomcat_global_request_max_seconds gauge
+                            - record: namespace_pod_tomcat_global_request_max_seconds
+                              expr: sum(tomcat_global_request_max_seconds) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_global_received_bytes_total
+                            # TYPE tomcat_global_received_bytes_total counter
+                            - record: namespace_pod_tomcat_global_received_bytes_total
+                              expr: sum(tomcat_global_received_bytes_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_global_sent_bytes_total
+                            # TYPE tomcat_global_sent_bytes_total counter
+                            - record: namespace_pod_tomcat_global_sent_bytes_total
+                              expr: sum(tomcat_global_sent_bytes_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+
+                            # HELP tomcat_global_error_total
+                            # TYPE tomcat_global_error_total counter
+                            - record: namespace_pod_tomcat_global_error_total
+                              expr: sum(tomcat_global_error_total) by (namespace, service, app, assetId, l1, l2, env, pod, assetAlias, pod_template_hash, rollouts_pod_template_hash)
+                              labels:
+                                intuit_alert: "true"
+            - - name: delete-tomcat-jvm
+                template: delete-tomcat-jvm-rule
+                when: "{{workflow.parameters.prometheus_enable_adv_tomcat_jvm_metrics}} == false"
+          - name: prefix
+            script:
+                image: docker.artifactory.a.intuit.com/python:3
+                command: [python]
+                source: |
+                  import subprocess
+                  from time import sleep
+                  MAX_TRIES = 30
+                  for i in range(MAX_TRIES):
+                    crd_names = ['Alertmanager', 'PrometheusRule', 'Prometheus']
+                    for resource in crd_names:
+                      command = "kubectl --context={} get {}".format("{{workflow.parameters.clusterName}}", resource)
+                      proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                      (stdout, stderr) = proc.communicate()
+                      if stderr:
+                        print("sleep ",resource)
+                        sleep(0.1)
+
+          - name: submit
+            inputs:
+              artifacts:
+                - name: doc
+                  path: /tmp/doc
+            container:
+              image: docker.artifactory.a.intuit.com/expert360/kubectl-awscli:v1.11.2
+              command: [sh, -c]
+              args: ["kubectl apply -f /tmp/doc"]
+
+          - name: submit-uri-rule
+            inputs:
+              artifacts:
+                - name: doc-uri-rule
+                  path: /tmp/doc-uri-rule
+            container:
+              image: docker.artifactory.a.intuit.com/expert360/kubectl-awscli:v1.11.2
+              command: [sh, -c]
+              args: ["kubectl apply -f /tmp/doc-uri-rule"]
+
+          - name: delete-uri-rule
+            container:
+              image: docker.artifactory.a.intuit.com/expert360/kubectl-awscli:v1.11.2
+              command: [sh, -c]
+              args: ["kubectl delete prometheusrule core-metrics-http-uri -n {{workflow.parameters.namespace}} --ignore-not-found=true"]
+
+          - name: submit-tomcat-jvm-rule
+            inputs:
+              artifacts:
+                - name: doc-tomcat-jvm-rule
+                  path: /tmp/doc-tomcat-jvm-rule
+            container:
+              image: docker.artifactory.a.intuit.com/expert360/kubectl-awscli:v1.11.2
+              command: [sh, -c]
+              args: ["kubectl apply -f /tmp/doc-tomcat-jvm-rule"]
+
+          - name: delete-tomcat-jvm-rule
+            container:
+              image: docker.artifactory.a.intuit.com/expert360/kubectl-awscli:v1.11.2
+              command: [sh, -c]
+              args: ["kubectl delete prometheusrule advanced-tomcat-jvm-metrics -n {{workflow.parameters.namespace}} --ignore-not-found=true"]
+    prereqs:
+      template: "apiVersion: argoproj.io/v1alpha1\nkind: Workflow\nmetadata:\n  labels:\n
+        \   workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller\nspec:\n
+        \ activeDeadlineSeconds: 600\n  entrypoint: entry\n  serviceAccountName: addon-manager-workflow-installer-sa\n
+        \ templates:\n  - name: entry\n    steps:\n    - - name: prereq-resources\n
+        \       template: submit\n        arguments:\n          artifacts:\n          -
+        name: doc\n            path: /tmp/doc\n            raw:\n              data:
+        |\n                apiVersion: v1\n                kind: Namespace\n                metadata:\n
+        \                 name: \"{{workflow.parameters.namespace}}\"\n                  labels:\n
+        \                   prometheus: k8s-prometheus\n                  annotations:\n
+        \                   iks.intuit.com/managed: \"false\"\n                    iks.intuit.com/allowed-igs:
+        \"metrics\"\n                ---\n                apiVersion: v1\n                kind:
+        Secret\n                metadata:\n                  name: alertmanager-main\n
+        \                 namespace: \"{{workflow.parameters.namespace}}\"\n                type:
+        Opaque\n                data:\n                  alertmanager.yaml: IyBleHRlcm5hbCBhbGVydG1hbmFnZXIgeWFtbApnbG9iYWw6CiAgcmVzb2x2ZV90aW1lb3V0OiAxMG0Kcm91dGU6CiAgZ3JvdXBfYnk6IFsnam9iJ10KICBncm91cF93YWl0OiAzMHMKICBncm91cF9pbnRlcnZhbDogNW0KICByZXBlYXRfaW50ZXJ2YWw6IDEyaAogIHJlY2VpdmVyOiBkZWZhdWx0LXJlY2VpdmVyCiAgcm91dGVzOgogIC0gbWF0Y2g6CiAgICAgIGFsZXJ0bmFtZTogRGVhZE1hbnNTd2l0Y2gKICAgIHJlY2VpdmVyOiBkZWZhdWx0LXJlY2VpdmVyCnJlY2VpdmVyczoKLSBuYW1lOiBkZWZhdWx0LXJlY2VpdmVyCg==\n
+        \               ---\n                apiVersion: v1\n                kind:
+        Secret\n                metadata:\n                  name: cm-adapter-serving-certs\n
+        \                 namespace: \"{{workflow.parameters.namespace}}\"\n                type:
+        kubernetes.io/tls\n                data:\n                  tls.crt: \"{{workflow.parameters.prometheus_tls_crt}}\"\n
+        \                 tls.key: \"{{workflow.parameters.prometheus_tls_key}}\"\n\n
+        \               ---\n                apiVersion: v1\n                kind:
+        ServiceAccount\n                metadata:\n                  labels:\n                    k8s-app:
+        prometheus-operator\n                  name: prometheus-operator\n                  namespace:
+        \"{{workflow.parameters.namespace}}\"\n                ---\n                apiVersion:
+        rbac.authorization.k8s.io/v1\n                kind: ClusterRole\n                metadata:\n
+        \                 labels:\n                    k8s-app: prometheus-operator\n
+        \                 name: prometheus-operator\n                rules:\n                -
+        apiGroups:\n                  - apiextensions.k8s.io\n                  resources:\n
+        \                 - customresourcedefinitions\n                  verbs:\n
+        \                 - '*'\n                - apiGroups:\n                  -
+        monitoring.coreos.com\n                  resources:\n                  - alertmanagers\n
+        \                 - prometheuses\n                  - prometheuses/finalizers\n
+        \                 - alertmanagers/finalizers\n                  - servicemonitors\n
+        \                 - prometheusrules\n                  - podmonitors\n                  verbs:\n
+        \                 - '*'\n                - apiGroups:\n                  -
+        apps\n                  resources:\n                  - statefulsets\n                  verbs:\n
+        \                 - '*'\n                - apiGroups:\n                  -
+        \"\"\n                  resources:\n                  - configmaps\n                  -
+        secrets\n                  verbs:\n                  - '*'\n                -
+        apiGroups:\n                  - \"\"\n                  resources:\n                  -
+        pods\n                  verbs:\n                  - list\n                  -
+        delete\n                - apiGroups:\n                  - \"\"\n                  resources:\n
+        \                 - services\n                  - endpoints\n                  verbs:\n
+        \                 - get\n                  - create\n                  - update\n
+        \               - apiGroups:\n                  - \"\"\n                  resources:\n
+        \                 - nodes\n                  verbs:\n                  - list\n
+        \                 - watch\n                - apiGroups:\n                  -
+        \"\"\n                  resources:\n                  - namespaces\n                  verbs:\n
+        \                 - get\n                  - list\n                  - watch\n
+        \               ---\n                apiVersion: rbac.authorization.k8s.io/v1\n
+        \               kind: ClusterRoleBinding\n                metadata:\n                  labels:\n
+        \                   k8s-app: prometheus-operator\n                  name:
+        prometheus-operator\n                roleRef:\n                  apiGroup:
+        rbac.authorization.k8s.io\n                  kind: ClusterRole\n                  name:
+        prometheus-operator\n                subjects:\n                  -\n                    kind:
+        ServiceAccount\n                    name: prometheus-operator\n                    namespace:
+        \"{{workflow.parameters.namespace}}\"\n                ---\n                apiVersion:
+        apps/v1\n                kind: Deployment\n                metadata:\n                  labels:\n
+        \                   k8s-app: prometheus-operator\n                  name:
+        prometheus-operator\n                  namespace: \"{{workflow.parameters.namespace}}\"\n
+        \               spec:\n                  replicas: 1\n                  selector:\n
+        \                   matchLabels:\n                      k8s-app: prometheus-operator\n
+        \                 template:\n                    metadata:\n                      labels:\n
+        \                       k8s-app: prometheus-operator\n                    spec:\n
+        \                     affinity:\n                        podAntiAffinity:\n
+        \                         preferredDuringSchedulingIgnoredDuringExecution:\n
+        \                           -\n                              podAffinityTerm:\n
+        \                               labelSelector:\n                                  matchExpressions:\n
+        \                                   -\n                                      key:
+        k8s-app\n                                      operator: In\n                                      values:\n
+        \                                       - prometheus-operator\n                                topologyKey:
+        failure-domain.beta.kubernetes.io/zone\n                              weight:
+        100\n                          requiredDuringSchedulingIgnoredDuringExecution:\n
+        \                           -\n                              labelSelector:\n
+        \                               matchExpressions:\n                                  -\n
+        \                                   key: k8s-app\n                                    operator:
+        In\n                                    values:\n                                      -
+        prometheus-operator\n                              topologyKey: kubernetes.io/hostname\n
+        \                     containers:\n                        -\n                          args:\n
+        \                           - \"--kubelet-service=kube-system/kubelet\"\n
+        \                           - \"--logtostderr=true\"\n                            -
+        \"--config-reloader-image=docker.intuit.com/jimmidyson/configmap-reload:v0.2.2\"\n
+        \                           - \"--prometheus-config-reloader=docker.intuit.com/coreos/prometheus-config-reloader:v0.29.0\"\n
+        \                           - \"--log-level=info\"\n                            -
+        \"--alertmanager-default-base-image=docker.intuit.com/prometheus/alertmanager\"\n
+        \                           - \"--prometheus-default-base-image=docker.intuit.com/prometheus/prometheus\"\n
+        \                           - \"--thanos-default-base-image=docker.intuit.com/improbable/thanos\"\n
+        \                         image: \"docker.intuit.com/coreos/prometheus-operator:v0.36.0\"\n
+        \                         imagePullPolicy: IfNotPresent\n                          name:
+        prometheus-operator\n                          ports:\n                            -\n
+        \                             containerPort: 8080\n                              name:
+        http\n                          resources:\n                            limits:\n
+        \                             cpu: 500m\n                              memory:
+        2000Mi\n                            requests:\n                              cpu:
+        100m\n                              memory: 100Mi\n                          securityContext:\n
+        \                           allowPrivilegeEscalation: false\n                            readOnlyRootFilesystem:
+        true\n                      tolerations:\n                      - key: ig/metrics\n
+        \                       effect: NoSchedule\n                      - key: ig/metrics\n
+        \                       effect: NoExecute\n                      nodeSelector:\n
+        \                       eks.k8s.io/instancegroup: \"metrics\"\n                      securityContext:\n
+        \                       runAsNonRoot: true\n                        runAsUser:
+        65534\n                      serviceAccountName: prometheus-operator\n\n                ---\n
+        \               apiVersion: rbac.authorization.k8s.io/v1\n                kind:
+        ClusterRoleBinding\n                metadata:\n                  name: \"custom-metrics:system:auth-delegator\"\n
+        \               roleRef:\n                  apiGroup: rbac.authorization.k8s.io\n
+        \                 kind: ClusterRole\n                  name: \"system:auth-delegator\"\n
+        \               subjects:\n                  -\n                    kind:
+        ServiceAccount\n                    name: custom-metrics-apiserver\n                    namespace:
+        \"{{workflow.parameters.namespace}}\"\n                ---\n                apiVersion:
+        rbac.authorization.k8s.io/v1\n                kind: RoleBinding\n                metadata:\n
+        \                 name: custom-metrics-auth-reader\n                  namespace:
+        kube-system\n                roleRef:\n                  apiGroup: rbac.authorization.k8s.io\n
+        \                 kind: Role\n                  name: extension-apiserver-authentication-reader\n
+        \               subjects:\n                - kind: ServiceAccount\n                  name:
+        custom-metrics-apiserver\n                  namespace: \"{{workflow.parameters.namespace}}\"\n
+        \               ---\n                apiVersion: apps/v1\n                kind:
+        Deployment\n                metadata:\n                  labels:\n                    k8s-app:
+        custom-metrics-apiserver\n                  name: custom-metrics-apiserver\n
+        \                 namespace: \"{{workflow.parameters.namespace}}\"\n                spec:\n
+        \                 replicas: 2\n                  selector:\n                    matchLabels:\n
+        \                     k8s-app: custom-metrics-apiserver\n                  template:\n
+        \                   metadata:\n                      labels:\n                        k8s-app:
+        custom-metrics-apiserver\n                      name: custom-metrics-apiserver\n
+        \                   spec:\n                      serviceAccountName: custom-metrics-apiserver\n
+        \                     affinity:\n                        podAntiAffinity:\n
+        \                         requiredDuringSchedulingIgnoredDuringExecution:\n
+        \                         - labelSelector:\n                              matchExpressions:\n
+        \                             - key: k8s-app\n                                operator:
+        In\n                                values:\n                                -
+        custom-metrics-apiserver\n                            topologyKey: kubernetes.io/hostname\n
+        \                         preferredDuringSchedulingIgnoredDuringExecution:\n
+        \                         - weight: 100\n                            podAffinityTerm:\n
+        \                             labelSelector:\n                                matchExpressions:\n
+        \                               - key: k8s-app\n                                  operator:
+        In\n                                  values:\n                                  -
+        custom-metrics-apiserver\n                              topologyKey: failure-domain.beta.kubernetes.io/zone\n
+        \                     containers:\n                      - name: custom-metrics-apiserver\n
+        \                       image: docker.intuit.com/dev/patterns/kubernetes/addons/k8s-prometheus-adapter:v0.2.2\n
+        \                       args:\n                        - --secure-port=6443\n
+        \                       - --tls-cert-file=/var/run/serving-cert/tls.crt\n
+        \                       - --tls-private-key-file=/var/run/serving-cert/tls.key\n
+        \                       - --logtostderr=true\n                        - --prometheus-url=http://prometheus.{{workflow.parameters.namespace}}.svc.cluster.local:9090\n
+        \                       - --metrics-relist-interval=1m\n                        -
+        --v=4\n                        - --config=/etc/adapter/config.yaml\n                        ports:\n
+        \                       - containerPort: 6443\n                        volumeMounts:\n
+        \                       - mountPath: /var/run/serving-cert\n                          name:
+        volume-serving-cert\n                          readOnly: true\n                        -
+        mountPath: /etc/adapter/\n                          name: config\n                          readOnly:
+        true\n                        - mountPath: /tmp\n                          name:
+        tmp-vol\n                        resources:\n                          requests:\n
+        \                           cpu: \"50m\"\n                            memory:
+        \"300Mi\"\n                      tolerations:\n                      - key:
+        ig/metrics\n                        effect: NoSchedule\n                      -
+        key: ig/metrics\n                        effect: NoExecute\n                      nodeSelector:\n
+        \                       eks.k8s.io/instancegroup: \"metrics\"\n                      volumes:\n
+        \                     - name: volume-serving-cert\n                        secret:\n
+        \                         secretName: cm-adapter-serving-certs\n                      -
+        name: config\n                        configMap:\n                          name:
+        adapter-config\n                      - name: tmp-vol\n                        emptyDir:
+        {}\n                ---\n                apiVersion: rbac.authorization.k8s.io/v1\n
+        \               kind: ClusterRoleBinding\n                metadata:\n                  name:
+        custom-metrics-resource-reader\n                roleRef:\n                  apiGroup:
+        rbac.authorization.k8s.io\n                  kind: ClusterRole\n                  name:
+        custom-metrics-resource-reader\n                subjects:\n                -
+        kind: ServiceAccount\n                  name: custom-metrics-apiserver\n                  namespace:
+        \"{{workflow.parameters.namespace}}\"\n                ---\n                kind:
+        ServiceAccount\n                apiVersion: v1\n                metadata:\n
+        \                 name: custom-metrics-apiserver\n                  namespace:
+        \"{{workflow.parameters.namespace}}\"\n                ---\n                apiVersion:
+        v1\n                kind: Service\n                metadata:\n                  labels:\n
+        \                   k8s-app: custom-metrics-apiserver\n                  name:
+        custom-metrics-apiserver\n                  namespace: \"{{workflow.parameters.namespace}}\"\n
+        \               spec:\n                  ports:\n                  - name:
+        https\n                    port: 443\n                    targetPort: 6443\n
+        \                 selector:\n                    k8s-app: custom-metrics-apiserver\n
+        \               ---\n                apiVersion: apiregistration.k8s.io/v1beta1\n
+        \               kind: APIService\n                metadata:\n                  name:
+        v1beta1.custom.metrics.k8s.io\n                spec:\n                  service:\n
+        \                   name: custom-metrics-apiserver\n                    namespace:
+        \"{{workflow.parameters.namespace}}\"\n                  group: custom.metrics.k8s.io\n
+        \                 version: v1beta1\n                  insecureSkipTLSVerify:
+        true\n                  groupPriorityMinimum: 100\n                  versionPriority:
+        100\n                ---\n                apiVersion: rbac.authorization.k8s.io/v1\n
+        \               kind: ClusterRole\n                metadata:\n                  name:
+        custom-metrics-server-resources\n                rules:\n                -
+        apiGroups:\n                  - custom.metrics.k8s.io\n                  resources:
+        [\"*\"]\n                  verbs: [\"*\"]\n                ---\n                apiVersion:
+        v1\n                kind: ConfigMap\n                metadata:\n                  name:
+        adapter-config\n                  namespace: \"{{workflow.parameters.namespace}}\"\n
+        \               data:\n                  config.yaml: |\n                    rules:\n
+        \                   - seriesQuery: '{__name__=~\"^namespace_app.*\",namespace!=\"\",apps_deployment!=\"\"}'\n
+        \                     seriesFilters: []\n                      resources:\n
+        \                       template: \"<<.Group>>_<<.Resource>>\"\n                        overrides:\n
+        \                         namespace:\n                            resource:
+        namespace\n                      metricsQuery: sum(<<.Series>>{<<.LabelMatchers>>})
+        by (<<.GroupBy>>)\n                    - seriesQuery: '{pod!=\"\",namespace!=\"\"}'\n
+        \                     resources:\n                        overrides:\n                          pod:\n
+        \                           resource: pod\n                          namespace:\n
+        \                           resource: namespace\n                      name:\n
+        \                       matches: \".*\"\n                      metricsQuery:
+        sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)\n                ---\n
+        \               apiVersion: rbac.authorization.k8s.io/v1\n                kind:
+        ClusterRole\n                metadata:\n                  name: custom-metrics-resource-reader\n
+        \               rules:\n                - apiGroups:\n                  -
+        \"\"\n                  resources:\n                  - namespaces\n                  -
+        pods\n                  - services\n                  - nodes\n                  verbs:\n
+        \                 - get\n                  - list\n                  - watch\n
+        \               ---\n                apiVersion: rbac.authorization.k8s.io/v1\n
+        \               kind: ClusterRoleBinding\n                metadata:\n                  name:
+        hpa-controller-custom-metrics\n                roleRef:\n                  apiGroup:
+        rbac.authorization.k8s.io\n                  kind: ClusterRole\n                  name:
+        custom-metrics-server-resources\n                subjects:\n                -
+        kind: ServiceAccount\n                  name: horizontal-pod-autoscaler\n
+        \                 namespace: \"{{workflow.parameters.namespace}}\"\n                ---\n
+        \               apiVersion: apps/v1\n                kind: Deployment\n                metadata:\n
+        \                 labels:\n                    k8s-app: prometheus-pushgateway\n
+        \                   prometheus: k8s-prometheus\n                    component:
+        \"pushgateway\"\n                  name: prometheus-pushgateway\n                  namespace:
+        \"{{workflow.parameters.namespace}}\"\n                spec:\n                  replicas:
+        1\n                  selector:\n                    matchLabels:\n                      k8s-app:
+        prometheus-pushgateway\n                  template:\n                    metadata:\n
+        \                     labels:\n                        k8s-app: prometheus-pushgateway\n
+        \                   spec:\n                      serviceAccountName: prometheus\n
+        \                     affinity:\n                        podAntiAffinity:\n
+        \                         requiredDuringSchedulingIgnoredDuringExecution:\n
+        \                         - labelSelector:\n                              matchExpressions:\n
+        \                             - key: k8s-app\n                                operator:
+        In\n                                values:\n                                -
+        prometheus-pushgateway\n                            topologyKey: kubernetes.io/hostname\n
+        \                         preferredDuringSchedulingIgnoredDuringExecution:\n
+        \                         - weight: 100\n                            podAffinityTerm:\n
+        \                             labelSelector:\n                                matchExpressions:\n
+        \                               - key: k8s-app\n                                  operator:
+        In\n                                  values:\n                                  -
+        prometheus-pushgateway\n                              topologyKey: failure-domain.beta.kubernetes.io/zone\n
+        \                     containers:\n                        - name: prometheus-pushgateway\n
+        \                         image: \"docker.intuit.com/prom/pushgateway:v0.7.0\"\n
+        \                         imagePullPolicy: \"IfNotPresent\"\n                          args:\n
+        \                         ports:\n                            - containerPort:
+        9091\n                          readinessProbe:\n                            httpGet:\n
+        \                             path: /#/status\n                              port:
+        9091\n                            initialDelaySeconds: 10\n                            timeoutSeconds:
+        10\n                          resources:\n                            requests:\n
+        \                             cpu: \"100m\"\n                              memory:
+        100Mi\n                      tolerations:\n                      - key: ig/metrics\n
+        \                       effect: NoSchedule\n                      - key: ig/metrics\n
+        \                       effect: NoExecute\n                      nodeSelector:\n
+        \                       eks.k8s.io/instancegroup: \"metrics\"\n                ---\n
+        \               apiVersion: v1\n                kind: Service\n                metadata:\n
+        \                 labels:\n                    k8s-app: prometheus-pushgateway\n
+        \                   prometheus: k8s-prometheus\n                    component:
+        \"pushgateway\"\n                  name: prometheus-pushgateway\n                  namespace:
+        \"{{workflow.parameters.namespace}}\"\n                spec:\n                  ports:\n
+        \                   - name: http\n                      port: 9091\n                      protocol:
+        TCP\n                      targetPort: 9091\n                  selector:\n
+        \                   k8s-app: prometheus-pushgateway\n                  type:
+        \"ClusterIP\"\n                ---\n                apiVersion: policy/v1beta1\n
+        \               kind: PodDisruptionBudget\n                metadata:\n                  name:
+        k8s-prometheus-pdb\n                  namespace: \"{{workflow.parameters.namespace}}\"\n
+        \               spec:\n                  maxUnavailable: 1\n                  selector:\n
+        \                   matchLabels:\n                      prometheus: k8s-prometheus\n
+        \               ---\n                apiVersion: v1\n                kind:
+        ServiceAccount\n                metadata:\n                  name: alertmanager-main\n
+        \                 namespace: \"{{workflow.parameters.namespace}}\"\n                ---\n
+        \               apiVersion: instancemgr.keikoproj.io/v1alpha1\n                kind:
+        InstanceGroup\n                metadata:\n                  name: metrics\n
+        \                 namespace: \"{{workflow.parameters.namespace}}\"\n                spec:\n
+        \                 provisioner: eks-cf\n                  strategy:\n                    type:
+        rollingUpdate\n                  eks-cf:\n                    minSize: 6\n
+        \                   maxSize: 9\n                    configuration:\n                      volSize:
+        128\n                      bootstrapArguments: '--eviction-hard=memory.available<300Mi,nodefs.available<5%,nodefs.inodesFree<3%,imagefs.available<5%,imagefs.inodesFree<3%
+        --eviction-max-pod-grace-period=-1 --eviction-soft=memory.available<500Mi,nodefs.available<10%,nodefs.inodesFree<5%,imagefs.available<10%,imagefs.inodesFree<5%
+        --eviction-soft-grace-period=memory.available=30s,nodefs.available=30s,nodefs.inodesFree=30s,imagefs.available=30s,imagefs.inodesFree=30s
+        --node-labels=kubernetes.io/role=node --resolv-conf= --system-reserved=memory=1.5Gi
+        \ \n                        --node-labels=kubernetes.io/role=node,eks.k8s.io/instancegroup=metrics\n
+        \                       --register-with-taints=ig/metrics=:NoSchedule,ig/metrics=:NoExecute''\n
+        \                       --docker-config-json ''{\"bridge\": \"none\",\"log-driver\":
+        \"json-file\",\"log-opts\": {\"max-file\": \"5\",\"max-size\": \"50m\"},\"registry-mirrors\":
+        [\"https://docker.intuit.com\"],\"storage-driver\": \"overlay2\",\"storage-opts\":
+        [\"overlay2.override_kernel_check=true\"],\"live-restore\": true,\"max-concurrent-downloads\":
+        10}'\n                      clusterName: \"{{workflow.parameters.clusterName}}\"\n
+        \                     image: ami-0f406f467543d0460\n                      instanceProfileName:
+        arn:aws:iam::233444812205:instance-profile/iks-eks-k8s-ppd-nodes-role-NodeInstanceProfile-RBR414AVOUVK\n
+        \                     instanceType: \"{{workflow.parameters.ig_metrics_system_type}}\"\n
+        \                     keyPairName: eks-k8s-ppd-keypair\n                      metricsCollection:\n
+        \                     - all\n                      roleName: arn:aws:iam::233444812205:role/iks-eks-k8s-ppd-nodes-role-NodeInstanceRole-1GT6ZA4LA5Q65\n
+        \                     securityGroups:\n                      - sg-00912d5c5954c0e76\n
+        \                     subnets:\n                      - subnet-08ffd021e28cca08a\n
+        \                     - subnet-0c351a0cf7f24543d\n                      -
+        subnet-0136363800b07cf37\n                      tags:\n                      -
+        key: k8s.io/cluster-autoscaler/enabled\n                        value: \"true\"\n
+        \                     - key: kubernetes.io/cluster/eks-k8s-ppd\n                        value:
+        owned\n                      - key: eks.k8s.io/instancegroup\n                        value:
+        metrics\n                      - key: Namespace\n                        value:
+        \"{{workflow.parameters.namespace}}\"\n\n    - - name: wait-ig\n        template:
+        wait-ig\n\n    - - name: wait-prometheus-operator\n        template: wait-prometheus-operator\n\n
+        \   - - name: wait-crd\n        template: wait-crd\n\n  - name: submit\n    inputs:\n
+        \     artifacts:\n        - name: doc\n          path: /tmp/doc\n    container:\n
+        \     image: docker.intuit.com/dev/patterns/kubernetes/dev/kubectl-awscli:v1.15.11\n
+        \     command: [sh, -c]\n      args: [\"kubectl apply -f /tmp/doc\"]\n\n  -
+        name: wait-ig\n    successCondition: status.currentState == Ready\n    failureCondition:
+        status.currentState == Error\n    retryStrategy:\n      limit: 5\n      backoff:\n
+        \       duration: 30\n        factor: 2\n        maxDuration: \"16m\"\n    resource:\n
+        \    action: get\n     manifest: |\n      apiVersion: instancemgr.keikoproj.io/v1alpha1\n
+        \     kind: InstanceGroup\n      metadata:\n        name: metrics\n        namespace:
+        \"{{workflow.parameters.namespace}}\"\n\n  - name: wait-prometheus-operator\n
+        \   successCondition: status.updatedReplicas >= 1 && status.availableReplicas
+        >= 1\n    retryStrategy:\n      limit: 7\n      backoff:\n        duration:
+        10\n        factor: 2\n        maxDuration: \"10m\"\n    resource:\n     action:
+        get\n     manifest: |\n       apiVersion: apps/v1\n       kind: Deployment\n
+        \      metadata:\n         name: prometheus-operator\n         namespace:
+        \"{{workflow.parameters.namespace}}\"\n\n  - name: wait-crd\n    retryStrategy:\n
+        \     limit: 5\n      backoff:\n        duration: 20\n        factor: 2\n
+        \       maxDuration: \"5m\"\n    resource:\n     action: get\n     manifest:
+        |\n       apiVersion: apiextensions.k8s.io/v1beta1\n       kind: CustomResourceDefinition\n
+        \      metadata:\n         name: prometheuses.monitoring.coreos.com\n"
+  params:
+    context:
+      clusterName: eks-k8s-ppd
+      clusterRegion: us-west-2
+    data:
+      ig_metrics_system_type: m5.2xlarge
+      prometheus_enable_adv_tomcat_jvm_metrics: "false"
+      prometheus_enable_uri_aggregation: "false"
+      prometheus_memory_limit: 16Gi
+      prometheus_memory_request: 8Gi
+      prometheus_storage_size: 80Gi
+      prometheus_tls_crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUVDekNDQXZPZ0F3SUJBZ0lDQStnd0RRWUpLb1pJaHZjTkFRRUxCUUF3YnpFTE1Ba0dBMVVFQmhNQ1ZWTXgKRXpBUkJnTlZCQWdUQ2tOaGJHbG1iM0p1YVdFeEZqQVVCZ05WQkFjVERVMXZkVzUwWVdsdUlGWnBaWGN4RHpBTgpCZ05WQkFvVEJrbHVkSFZwZERFT01Bd0dBMVVFQ3hNRlUwSlRSVWN4RWpBUUJnTlZCQU1UQ1cxbGRISnBZM05sCmREQWVGdzB5TURBME1qa3dNVFU0TXpGYUZ3MHlNVEEwTWprd01UVTRNekZhTUhneEN6QUpCZ05WQkFZVEFsVlQKTVJNd0VRWURWUVFJRXdwRFlXeHBabTl5Ym1saE1SWXdGQVlEVlFRSEV3MU5iM1Z1ZEdGcGJpQldhV1YzTVE4dwpEUVlEVlFRS0V3WkpiblIxYVhReERqQU1CZ05WQkFzVEJWTkNVMFZITVJzd0dRWURWUVFERXhKd2NtOXRaWFJvClpYVnpMV0ZrWVhCMFpYSXdnZ0VpTUEwR0NTcUdTSWIzRFFFQkFRVUFBNElCRHdBd2dnRUtBb0lCQVFERWxjK3gKWjB0czRpVWUzcEptdkJCYXhSSEp1U0dDa1AxdFJUaEJiT0JzYUNhQ0hOS09HejlkVEFHTFZ6a0dPOWdseC85TgozQTE4NEhvbGFuZHBueEVTSnZBbHBHc1ZhV0ZTRUQ4aGh0c0dhTUhOemtReEM4enpad0ZoT3M0Y2wwSG1QSkxFCkx4KzdaVnpHWnQ5aUw0MmxseEtBMHN1STRoOG1yWjRYemdxMlp2d3RwSTg5ek1RWlMxVzIwbEhFQ0xyclRyd0kKeTZXakQwS2JCbk1qQlVIWGRtc1FsRkpCa3UrMFQwdVhlRDhmay8wRUdjQTVhRWM4U3BySlRyV0plcUlVMTFlZgpyNWtjVUlzSjJoMDRSQUtib3QxYmt5c2FRMzhvd0pUaW9GaGNBVi9hMmp2c0ZMK3lndE85T0VTcE5TWHU4bXo4CjlOb2kxYWx6NTZKOTF1U0pBZ01CQUFHamdhY3dnYVF3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVcKTUJRR0NDc0dBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUdVR0ExVWRFUVJlTUZ5QwpLaTFFVGxNNmNISnZiV1YwYUdWMWN5MWhaR0Z3ZEdWeUxtRmtaRzl1TFcxbGRISnBZM05sZEMxdWM0SXVMVVJPClV6cHdjbTl0WlhSb1pYVnpMV0ZrWVhCMFpYSXVZV1JrYjI0dGJXVjBjbWxqYzJWMExXNXpMbk4yWXpBTkJna3EKaGtpRzl3MEJBUXNGQUFPQ0FRRUFRRlVpN1czRERhbVR6QmRHdEpjdmRIRDdnQ253WVVKLzY5Z1FTbmlZbVpSTQpqdG0ySTFFME5QSFp4cGgzWFk2cnZlQnU1M3lQckJud0JVd2o1aWlNZWdjVGNPejNLeWJ5dXdoY01ERC9mUERjCmhwRUQwVWd6YVFqWTIzNStUQm5nVnFELzR0L2VtSEtmcEc1Qnp2cEhIb3g5a01na0Z6L2xGODV5V1ZwWWJ4V2gKMkxNNy9seE5DYWdMUkpNWkZwVmJJSGlHMis0eXoxdkxJbzExTVI3MWlFRG12OWE3enZGQnNOR2F3SDJQamFabwphRlZsS2xwSmpWT3Q4NkhNY0Q0dkNvRTNhQUJoL2xDNmt4TjAvT1dXbjY3cG8vTUVSMktYazcvZWN5bGMzRHRiCmFHVGtSVndOcFNpYWpmRnM1UGgrblc4YXc2RGo0cENxWUYwdVQ1M2V6QT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+      prometheus_tls_key: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcFFJQkFBS0NBUUVBeEpYUHNXZExiT0lsSHQ2U1pyd1FXc1VSeWJraGdwRDliVVU0UVd6Z2JHZ21naHpTCmpocy9YVXdCaTFjNUJqdllKY2YvVGR3TmZPQjZKV3AzYVo4UkVpYndKYVJyRldsaFVoQS9JWWJiQm1qQnpjNUUKTVF2TTgyY0JZVHJPSEpkQjVqeVN4QzhmdTJWY3htYmZZaStOcFpjU2dOTExpT0lmSnEyZUY4NEt0bWI4TGFTUApQY3pFR1V0VnR0SlJ4QWk2NjA2OENNdWxvdzlDbXdaekl3VkIxM1pyRUpSU1FaTHZ0RTlMbDNnL0g1UDlCQm5BCk9XaEhQRXFheVU2MWlYcWlGTmRYbjYrWkhGQ0xDZG9kT0VRQ202TGRXNU1yR2tOL0tNQ1U0cUJZWEFGZjJ0bzcKN0JTL3NvTFR2VGhFcVRVbDd2SnMvUFRhSXRXcGMrZWlmZGJraVFJREFRQUJBb0lCQVFDa3hMUktDenZxelRregp3SFdRNmp3QytINUtSNE5RdmxuTGhtTDZZMWxQUTVSVEpmbE01b1dibXlNSU9Wa3dZbVJ1ZGswRVkxWml2bnRpCmRQUVZjUitMeVZzckViNDNPaFk2QkNnRjM5UWdjUmxQZUgwclpxcW5zRVExekdZSkRMWk5WYVBtRDJGWFhrUCsKZnlib1V0YzBYWVZDdUd1a0ZYTHFwa2FGeVVxdFNmZVJ5Z0dOZkZxa2dlVVFRa2YyVjM4UlJsSlEwNjBZUTdrNwprNzFjZ0hCbDNDcjAzOTBiWHBXUEpPYUlFY01hWHdmS0gzS3ByZVMvQm9ockRyRkFSNVFsVXBNTHdWMU9PSWRSClBEYjBjbGF2QUZOKzJYemk0aXZFRk5Xbjh1TVFKZzhRNWZxSHR0N0lpOEcxZERtVk9YUWV6c2hKVXI0dnJleFYKcjNDZ1Q0NXBBb0dCQU5QTE9PRnptK0FzQkI3TlYrRytBbFFtTXpVRjM1aFN0M2xQRTNjckZUclRSZEdBcmQ2bQpzeXdDcnJmZ3NSOUFxcmhGQjRpdGJCbXRacm1HcGVlVzJrcm5XL1VJVG1uSFZ0QmF4aE04TVhhdndEYnZsYVMwCmE0NWtZM3dtYUxpYzdMN2RldFN3Y09uOGdyUzdCTUpva29oa3JvaTBadVB0Vi9RQ0NzWWYyVGZ2QW9HQkFPMmQKOGpyYkFhUk9yZjFGUVdSdlI1MFVYYytEaGZnakRIQWxIM005QWI0S2phelMyNjA0cTRHLzF1M1REbVY0UFlLMAo2alV4VTY1Y01tU1YwTllucldXdnFoVFZtcm8rZWJvS3R2cExYbjBKOS92Q1RwNVhkTlBvZjRuczNGMzkxN2hYCjlVbHZjSGIzVm56bStab3B6YW1nenZJcGJWVFZVNFdtRkd2cm1uTUhBb0dCQUtwUXZIY2dudk1Rc21lS3ZlYzkKQTJaa0tiMno4WER1NDdoYnpNMkNDZHA2VjZUNEU5bit1QXJtUlZaOURES1RzRFhxM1BvZWE5WGlTYjliOWtKYwpYMExvOWx2L3gvN3NYSFhFNlpCQ1VZeWVITGFReUFmaFJyVUZLYk9HdDZQdUhid0hJMld5VmJyMFlxK3Z6VTRCCkJnVkU0YzN4Tk9TSjByYlloWTE1d3habEFvR0JBTndqTkVMcW16N0oxYytLMWVaaVlncFkwQUJzYlRWUjR6Z1MKYkd5cTNHNWdBSmxZVUVUTzk3V2hNVkhyOHE1M0V5V0F6bXF4WkVGcEVSYTI1VjlDS3hiR0ErQ0JkSE9QWmQ3QwpCbnNrVUVtdmJwdERqT3FOUTZML0J3bVU4eVB4QkdXNHQzcHRUOWdubFd6cDM5eS9WZFlOTVN5UXpNV0hUWFhJClE2c24vMU1KQW9HQWZPMVV1NmxGSWg4RTBaRHltekYzc0J0UnhDTnJOZkJvalExbjJWZHEzV2loRy95eWhnZ0sKekVZSmhaa2pOT3g0VGtXalNsVG9GVVIwS0NRSzlwOG9uMjhKamtoMWNjYkJ2UnFqakl2cmFjbHAvZWFEK09TQgp4aGpnVGN2TEg4OHVLakJmWlcrVjF0QW1Gakp3Ti9BSlVvY1lQZG9hVDhsNkZIRWJ2YTI3ajJFPQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+      wavefront_proxy_url: wavefront-s3-adapter.addon-wavefront-s3-adapter-ns.svc
+      wavefront_tags: cluster=eks-k8s-ppd,bu=sbg,env=sbx
+    namespace: addon-metricset-ns
+  pkgDescription: Prometheus
+  pkgName: prometheus
+  pkgType: composite
+  pkgVersion: v0.2
