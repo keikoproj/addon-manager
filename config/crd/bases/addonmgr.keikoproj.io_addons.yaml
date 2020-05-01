@@ -5,7 +5,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.2.2
-  creationTimestamp: null
   name: addons.addonmgr.keikoproj.io
 spec:
   additionalPrinterColumns:

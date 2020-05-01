@@ -47,7 +47,7 @@ metadata:
   name: workflow-installer-sa
   namespace: system
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: addon-workflow-cr
@@ -65,7 +65,7 @@ rules:
     resources: ["*"]
     verbs: ["*"]
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: addon-workflow-crb

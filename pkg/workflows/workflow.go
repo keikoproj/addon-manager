@@ -39,6 +39,11 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
+const (
+	WfInstanceIdLabelKey = "workflows.argoproj.io/controller-instanceid"
+	WfInstanceId         = "addon-manager-workflow-controller"
+)
+
 // AddonLifecycle represents the following workflows
 type AddonLifecycle interface {
 	Install(context.Context, *addonmgrv1alpha1.WorkflowType, string) (addonmgrv1alpha1.ApplicationAssemblyPhase, error)
@@ -83,6 +88,8 @@ func (w *workflowLifecycle) Install(ctx context.Context, wt *addonmgrv1alpha1.Wo
 	if err := w.injectTTLs(wp); err != nil {
 		return addonmgrv1alpha1.Failed, err
 	}
+
+	w.injectInstanceId(wp)
 
 	return w.submit(ctx, wp)
 }
@@ -182,9 +189,10 @@ func (w *workflowLifecycle) findWorkflowByName(ctx context.Context, name types.N
 
 func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstructured) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
 	var wfv1 *unstructured.Unstructured
+	var err error
 
 	// Check if the Workflow already exists
-	wfv1, err := w.findWorkflowByName(ctx, types.NamespacedName{Name: wp.GetName(), Namespace: wp.GetNamespace()})
+	wfv1, err = w.findWorkflowByName(ctx, types.NamespacedName{Name: wp.GetName(), Namespace: wp.GetNamespace()})
 	if err != nil {
 		return addonmgrv1alpha1.Failed, err
 	}
@@ -202,7 +210,7 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 
 	if wfv1 == nil {
 		// Create the Workflow
-		wfv1 := &unstructured.Unstructured{}
+		wfv1 = &unstructured.Unstructured{}
 
 		// Convert proxy to workflow object
 		err = w.scheme.Convert(wp, wfv1, 0)
@@ -508,4 +516,16 @@ func (w *workflowLifecycle) injectTTLs(wf *unstructured.Unstructured) error {
 	}
 
 	return nil
+}
+
+func (w *workflowLifecycle) injectInstanceId(wp *unstructured.Unstructured) {
+	// Add instanceId labels to all workflows
+	labels := wp.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	labels[WfInstanceIdLabelKey] = WfInstanceId
+
+	wp.SetLabels(labels)
 }
