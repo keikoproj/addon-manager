@@ -189,9 +189,10 @@ func (w *workflowLifecycle) findWorkflowByName(ctx context.Context, name types.N
 
 func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstructured) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
 	var wfv1 *unstructured.Unstructured
+	var err error
 
 	// Check if the Workflow already exists
-	wfv1, err := w.findWorkflowByName(ctx, types.NamespacedName{Name: wp.GetName(), Namespace: wp.GetNamespace()})
+	wfv1, err = w.findWorkflowByName(ctx, types.NamespacedName{Name: wp.GetName(), Namespace: wp.GetNamespace()})
 	if err != nil {
 		return addonmgrv1alpha1.Failed, err
 	}
@@ -209,7 +210,7 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 
 	if wfv1 == nil {
 		// Create the Workflow
-		wfv1 := &unstructured.Unstructured{}
+		wfv1 = &unstructured.Unstructured{}
 
 		// Convert proxy to workflow object
 		err = w.scheme.Convert(wp, wfv1, 0)
