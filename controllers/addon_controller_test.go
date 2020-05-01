@@ -19,7 +19,7 @@ import (
 
 var (
 	addonNamespace = "addon-manager-system"
-	addonName      = "addon-bad"
+	addonName      = "cluster-autoscaler"
 	addonKey       = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
 )
 
@@ -31,7 +31,7 @@ var _ = Describe("AddonController", func() {
 		var instance *v1alpha1.Addon
 
 		It("instance should be parsable", func() {
-			addonYaml, err := ioutil.ReadFile("../hack/tests/addon-bad.yaml")
+			addonYaml, err := ioutil.ReadFile("../docs/examples/clusterautoscaler.yaml")
 			Expect(err).ToNot(HaveOccurred())
 
 			instance, err = parseAddonYaml(addonYaml)
