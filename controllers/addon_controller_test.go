@@ -55,14 +55,17 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance.Status.Checksum == "" {
-					return fmt.Errorf("checksum was empty")
+				if len(instance.ObjectMeta.Finalizers) > 0 {
+					return nil
 				}
-				return nil
+				return fmt.Errorf("addon is not valid")
 			}, timeout).Should(Succeed())
 
 			By("Verify addon has been reconciled by checking for checksum status")
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
+
+			By("Verify addon has finalizers added which means it's valid")
+			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
 		})
 	})
 })
