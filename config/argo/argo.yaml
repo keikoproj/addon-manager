@@ -7,176 +7,179 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: argo-ui
+  name: argo-server
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-role
   namespace: system
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/exec
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - persistentvolumeclaims
+    verbs:
+      - create
+      - delete
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - workflows
+      - workflows/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+      - create
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - workflowtemplates
+      - workflowtemplates/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - cronworkflows
+      - cronworkflows/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - create
+      - get
+      - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  labels:
-    rbac.authorization.k8s.io/aggregate-to-admin: "true"
-  name: argo-aggregate-to-admin
+  name: argo-server-role
 rules:
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflows
-  - workflows/finalizers
-  - workflowtemplates
-  - workflowtemplates/finalizers
-  verbs:
-  - create
-  - delete
-  - deletecollection
-  - get
-  - list
-  - patch
-  - update
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    rbac.authorization.k8s.io/aggregate-to-edit: "true"
-  name: argo-aggregate-to-edit
-rules:
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflows
-  - workflows/finalizers
-  - workflowtemplates
-  - workflowtemplates/finalizers
-  verbs:
-  - create
-  - delete
-  - deletecollection
-  - get
-  - list
-  - patch
-  - update
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    rbac.authorization.k8s.io/aggregate-to-view: "true"
-  name: argo-aggregate-to-view
-rules:
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflows
-  - workflows/finalizers
-  - workflowtemplates
-  - workflowtemplates/finalizers
-  verbs:
-  - get
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: argo-cluster-role
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/exec
-  verbs:
-  - create
-  - get
-  - list
-  - watch
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - watch
-  - list
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims
-  verbs:
-  - create
-  - delete
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflows
-  - workflows/finalizers
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflowtemplates
-  - workflowtemplates/finalizers
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - get
-  - list
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/exec
+      - pods/log
+    verbs:
+      - get
+      - list
+      - watch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - workflows
+      - workflowtemplates
+      - cronworkflows
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: argo-binding
+  namespace: system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: argo-role
 subjects:
-- kind: ServiceAccount
-  name: argo
-  namespace: system
+  - kind: ServiceAccount
+    name: argo
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: argo-binding
+  name: argo-server-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: argo-cluster-role
+  kind: Role
+  name: argo-server-role
 subjects:
-- kind: ServiceAccount
-  name: argo
-  namespace: system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: argo-ui-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: argo-ui-cluster-role
-subjects:
-- kind: ServiceAccount
-  name: argo-ui
-  namespace: system
+  - kind: ServiceAccount
+    name: argo-server
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -186,6 +189,69 @@ metadata:
 data:
   config: |
     namespace: addon-manager-system
+    instanceID: addon-manager-workflow-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: argo-server
+  namespace: system
+spec:
+  ports:
+    - name: web
+      port: 2746
+      targetPort: 2746
+  selector:
+    app: argo-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workflow-controller-metrics
+  namespace: system
+  labels:
+    app.kubernetes.io/component: workflow-controller
+spec:
+  ports:
+    - name: metrics
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+  selector:
+    app: workflow-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argo-server
+spec:
+  selector:
+    matchLabels:
+      app: argo-server
+  template:
+    metadata:
+      labels:
+        app: argo-server
+    spec:
+      containers:
+        - args:
+            - server
+            - --namespaced
+            - --configmap
+            - addon-manager-workflow-controller-configmap
+          image: argoproj/argocli:v2.7.5
+          name: argo-server
+          ports:
+            - containerPort: 2746
+              name: web
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 2746
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      serviceAccountName: argo-server
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -197,10 +263,12 @@ metadata:
 spec:
   selector:
     matchLabels:
+      app: workflow-controller
       app.kubernetes.io/component: workflow-controller
   template:
     metadata:
       labels:
+        app: workflow-controller
         app.kubernetes.io/component: workflow-controller
     spec:
       containers:
@@ -208,10 +276,11 @@ spec:
             - --configmap
             - addon-manager-workflow-controller-configmap
             - --executor-image
-            - argoproj/argoexec:v2.4.3
+            - argoproj/argoexec:v2.7.5
+            - --namespaced
           command:
             - workflow-controller
-          image: argoproj/workflow-controller:v2.4.3
+          image: argoproj/workflow-controller:v2.7.5
           name: workflow-controller
       serviceAccountName: argo
 ---
@@ -222,11 +291,11 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v2.4.3
+  pkgVersion: v2.7.5
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:
-    namespace: addon-manager-system # the suffix is usually added through kustomize but it doesn't reach this scope
+    namespace: addon-manager-system
   selector:
     matchLabels:
       app.kubernetes.io/name: addon-manager-argo-addon

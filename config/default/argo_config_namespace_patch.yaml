@@ -6,3 +6,4 @@ metadata:
 data:
   config: |
     namespace: addon-manager-system
+    instanceID: addon-manager-workflow-controller
