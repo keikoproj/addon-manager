@@ -15,6 +15,7 @@
 package addonctl
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -230,15 +231,16 @@ func newRootCommand() *cobra.Command {
 				return
 			}
 
+			ctx := context.TODO()
 			addon := unstructured.Unstructured{}
 			addon.SetUnstructuredContent(addonMap)
-			addonObject, err := kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Get(addonName, metav1.GetOptions{})
+			addonObject, err := kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Get(ctx, addonName, metav1.GetOptions{})
 
 			if err == nil {
 				fmt.Printf("Updating addon %s...\n", addonName)
 				resourceVersion := addonObject.GetResourceVersion()
 				addon.SetResourceVersion(resourceVersion)
-				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Update(&addon, metav1.UpdateOptions{})
+				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Update(ctx, &addon, metav1.UpdateOptions{})
 				if err != nil {
 					fmt.Println(err)
 					return
@@ -246,7 +248,7 @@ func newRootCommand() *cobra.Command {
 
 			} else {
 				fmt.Printf("Creating addon %s...\n", addonName)
-				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Create(&addon, metav1.CreateOptions{})
+				_, err = kubeClient.Resource(common.AddonGVR()).Namespace(addonMgrSystemNamespace).Create(ctx, &addon, metav1.CreateOptions{})
 				if err != nil {
 					fmt.Println(err)
 					return

@@ -40,6 +40,7 @@ var sch = runtime.NewScheme()
 var fclient = runtimefake.NewFakeClientWithScheme(sch)
 var dynClient = dynfake.NewSimpleDynamicClient(sch)
 var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.EventSource{Component: "addons"})
+var ctx = context.TODO()
 
 var wfInvalidTemplate = `
 apiVersion: argoproj.io/v1alpha1
@@ -634,7 +635,7 @@ func TestWorkflowLifecycle_Delete_NotExists(t *testing.T) {
 
 	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
 
-	g.Expect(wfl.Delete("addon-wf-test")).To(HaveOccurred())
+	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(HaveOccurred())
 }
 
 func TestNewWorkflowLifecycle_Delete(t *testing.T) {
@@ -673,9 +674,9 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 	wf.SetNamespace("default")
 	wf.SetName("addon-wf-test")
 
-	_, err := dynClient.Resource(common.WorkflowGVR()).Namespace("default").Create(wf, metav1.CreateOptions{})
+	_, err := dynClient.Resource(common.WorkflowGVR()).Namespace("default").Create(ctx, wf, metav1.CreateOptions{})
 	g.Expect(err).To(Not(HaveOccurred()))
 
 	// Now try to delete
-	g.Expect(wfl.Delete("addon-wf-test")).To(Not(HaveOccurred()))
+	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(Not(HaveOccurred()))
 }

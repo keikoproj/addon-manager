@@ -346,7 +346,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 	// Validate secrets are in the addon deployment namespace, this is here and not in validator b/c namespace must be used to validate.
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
-		if err := r.validateSecrets(instance); err != nil {
+		if err := r.validateSecrets(ctx, instance); err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon could not validate secrets.")
@@ -425,8 +425,8 @@ func (r *AddonReconciler) runWorkflow(lifecycleStep addonmgrv1alpha1.LifecycleSt
 	return phase, nil
 }
 
-func (r *AddonReconciler) validateSecrets(addon *addonmgrv1alpha1.Addon) error {
-	foundSecrets, err := r.dynClient.Resource(common.SecretGVR()).Namespace(addon.Spec.Params.Namespace).List(metav1.ListOptions{})
+func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1alpha1.Addon) error {
+	foundSecrets, err := r.dynClient.Resource(common.SecretGVR()).Namespace(addon.Spec.Params.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

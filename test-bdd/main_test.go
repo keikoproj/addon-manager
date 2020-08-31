@@ -15,6 +15,7 @@
 package main_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"testing"
@@ -36,6 +37,7 @@ import (
 )
 
 var log = logrus.New()
+var ctx = context.TODO()
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -88,14 +90,14 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 		addonName = addon.GetName()
 		addonNamespace = addon.GetNamespace()
 		Eventually(func() map[string]interface{} {
-			a, _ := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
+			a, _ := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 			return a.UnstructuredContent()
 		}, 20).Should(HaveKey("status"))
 	})
 
 	It("addon workflows should succeed and addon lifecycle should be updated", func() {
 		Eventually(func() addonmgrv1alpha1.ApplicationAssemblyPhase {
-			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
+			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			statusMap := addonObject.UnstructuredContent()["status"].(map[string]interface{})
@@ -105,7 +107,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 		}, 30).Should(Equal(addonmgrv1alpha1.Succeeded))
 
 		Eventually(func() addonmgrv1alpha1.ApplicationAssemblyPhase {
-			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
+			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			statusMap := addonObject.UnstructuredContent()["status"].(map[string]interface{})
@@ -117,7 +119,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 
 	It("should copy addon.spec.params to workflow.spec.arguments.parameters", func() {
 		for _, workflowLifecycleStep := range []string{"prereqs", "install"} {
-			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
+			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			addonNamespaceParam, found, _ := unstructured.NestedString(addonObject.UnstructuredContent(), "spec", "params", "namespace")
 			Expect(found).To(BeTrue())
@@ -135,7 +137,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 			}
 			workflowIdentifierName := fmt.Sprintf("%s-%s-%s-wf", prefix, workflowLifecycleStep, addonChecksum)
 
-			workflow, err := dynClient.Resource(workflowGroupSchema).Namespace(addonNamespace).Get(workflowIdentifierName, metav1.GetOptions{})
+			workflow, err := dynClient.Resource(workflowGroupSchema).Namespace(addonNamespace).Get(ctx, workflowIdentifierName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			workflowParameters, found, _ := unstructured.NestedSlice(workflow.UnstructuredContent(), "spec", "arguments", "parameters")
 			Expect(found).To(BeTrue())
@@ -165,11 +167,11 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 	})
 
 	It("should label the deployment with the default labels", func() {
-		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
+		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		deploymentNamespace, found, _ := unstructured.NestedString(addonObject.UnstructuredContent(), "spec", "params", "namespace")
 		Expect(found).To(BeTrue())
-		deployment, err := kubeClient.AppsV1().Deployments(deploymentNamespace).Get(addonName, metav1.GetOptions{})
+		deployment, err := kubeClient.AppsV1().Deployments(deploymentNamespace).Get(ctx, addonName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		labels := deployment.ObjectMeta.Labels
@@ -180,7 +182,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 
 	It("should list argo as an addon with watched resources", func() {
 		argoAddonName := "addon-manager-argo-addon"
-		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(argoAddonName, metav1.GetOptions{})
+		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, argoAddonName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		objs, found, err := unstructured.NestedSlice(addonObject.UnstructuredContent(), "status", "resources")
@@ -196,11 +198,11 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 		addonName = addon.GetName()
 		addonNamespace = addon.GetNamespace()
 		Eventually(func() map[string]interface{} {
-			a, _ := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
+			a, _ := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 			return a.UnstructuredContent()
 		}, 20).Should(HaveKey("status"))
 
-		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(addonName, metav1.GetOptions{})
+		addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		status, found, err := unstructured.NestedString(addonObject.UnstructuredContent(), "status", "lifecycle", "installed")
