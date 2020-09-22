@@ -42,6 +42,7 @@ import (
 const (
 	WfInstanceIdLabelKey = "workflows.argoproj.io/controller-instanceid"
 	WfInstanceId         = "addon-manager-workflow-controller"
+	WfDefaultActiveDeadlineSeconds = 300
 )
 
 // AddonLifecycle represents the following workflows
@@ -86,6 +87,10 @@ func (w *workflowLifecycle) Install(ctx context.Context, wt *addonmgrv1alpha1.Wo
 	}
 
 	if err := w.injectTTLs(wp); err != nil {
+		return addonmgrv1alpha1.Failed, err
+	}
+
+	if err := w.injectActiveDeadlineSeconds(wp); err != nil {
 		return addonmgrv1alpha1.Failed, err
 	}
 
@@ -528,4 +533,20 @@ func (w *workflowLifecycle) injectInstanceId(wp *unstructured.Unstructured) {
 	labels[WfInstanceIdLabelKey] = WfInstanceId
 
 	wp.SetLabels(labels)
+}
+
+func (w *workflowLifecycle) injectActiveDeadlineSeconds(wf *unstructured.Unstructured) error {
+	val, found, err := unstructured.NestedInt64(wf.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+	if err != nil {
+		return err
+	}
+
+	if !found || val == 0 {
+		err = unstructured.SetNestedField(wf.Object, int64(WfDefaultActiveDeadlineSeconds), "spec", "activeDeadlineSeconds")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

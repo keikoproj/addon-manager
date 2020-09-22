@@ -105,7 +105,6 @@ metadata:
   labels:
     app.kubernetes.io/component: workflow-test
 spec:
-  activeDeadlineSeconds: 600
   entrypoint: entry
   serviceAccountName: addon-manager-workflow-installer-sa
   templates:
@@ -387,10 +386,14 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
 
-		// Verify activeDeadlineSeconds are kept
+		// Verify activeDeadlineSeconds are kept or injected
 		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(active).To(Equal(int64(600)))
+		if lifecycle == v1alpha1.Install {
+			g.Expect(active).To(Equal(int64(600)))
+		} else {
+			g.Expect(active).To(Equal(int64(WfDefaultActiveDeadlineSeconds)))
+		}
 
 		// Verify workflow labels are kept
 		labels := wfv1.GetLabels()
