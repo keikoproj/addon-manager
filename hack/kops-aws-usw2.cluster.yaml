@@ -43,7 +43,7 @@ spec:
   - 65.204.229.0/24
   - 207.207.160.0/19
   - 67.207.111.40/30
-  kubernetesVersion: 1.12.9
+  kubernetesVersion: 1.18.9
   masterPublicName: api.kops-aws-usw2.cluster.k8s.local
   networkCIDR: 172.20.0.0/16
   networking:
