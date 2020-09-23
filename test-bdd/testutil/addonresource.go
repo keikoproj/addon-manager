@@ -16,6 +16,7 @@ package testutil
 
 import (
 	"bytes"
+	"context"
 	"io"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +32,7 @@ var addonGroupSchema = common.AddonGVR()
 
 // CreateAddon parses the raw data from the path into an Unstructured object (Addon) and submits and returns that object
 func CreateAddon(kubeClient dynamic.Interface, relativePath string, nameSuffix string) (*unstructured.Unstructured, error) {
+	ctx := context.TODO()
 	addon, err := parseAddonYaml(relativePath)
 	if err != nil {
 		return addon, err
@@ -45,18 +47,18 @@ func CreateAddon(kubeClient dynamic.Interface, relativePath string, nameSuffix s
 	}
 
 	// make sure the addonGroupScheme is valid if failing
-	addonObject, err := kubeClient.Resource(addonGroupSchema).Namespace(namespace).Get(name, metav1.GetOptions{})
+	addonObject, err := kubeClient.Resource(addonGroupSchema).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 
 	if err == nil {
 		resourceVersion := addonObject.GetResourceVersion()
 		addon.SetResourceVersion(resourceVersion)
-		_, err = kubeClient.Resource(addonGroupSchema).Namespace(namespace).Update(addon, metav1.UpdateOptions{})
+		_, err = kubeClient.Resource(addonGroupSchema).Namespace(namespace).Update(ctx, addon, metav1.UpdateOptions{})
 		if err != nil {
 			return addon, err
 		}
 
 	} else {
-		_, err = kubeClient.Resource(addonGroupSchema).Namespace(namespace).Create(addon, metav1.CreateOptions{})
+		_, err = kubeClient.Resource(addonGroupSchema).Namespace(namespace).Create(ctx, addon, metav1.CreateOptions{})
 		if err != nil {
 			return addon, err
 		}
@@ -66,6 +68,7 @@ func CreateAddon(kubeClient dynamic.Interface, relativePath string, nameSuffix s
 
 // DeleteAddon deletes the Addon using the name and namespace parsed from the raw data at the given path
 func DeleteAddon(kubeClient dynamic.Interface, relativePath string) (*unstructured.Unstructured, error) {
+	ctx := context.TODO()
 	addon, err := parseAddonYaml(relativePath)
 	if err != nil {
 		return addon, err
@@ -73,7 +76,7 @@ func DeleteAddon(kubeClient dynamic.Interface, relativePath string) (*unstructur
 	name := addon.GetName()
 	namespace := addon.GetNamespace()
 
-	if err := kubeClient.Resource(addonGroupSchema).Namespace(namespace).Delete(name, &metav1.DeleteOptions{}); err != nil {
+	if err := kubeClient.Resource(addonGroupSchema).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 		return addon, err
 	}
 

@@ -4,11 +4,6 @@ metadata:
   name: argo
   namespace: system
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: argo-server
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -106,57 +101,6 @@ rules:
       - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: argo-server-role
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - configmaps
-    verbs:
-      - get
-      - watch
-      - list
-  - apiGroups:
-      - ""
-    resources:
-      - secrets
-    verbs:
-      - get
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-      - pods/exec
-      - pods/log
-    verbs:
-      - get
-      - list
-      - watch
-      - delete
-  - apiGroups:
-      - ""
-    resources:
-      - secrets
-    verbs:
-      - get
-  - apiGroups:
-      - argoproj.io
-    resources:
-      - workflows
-      - workflowtemplates
-      - cronworkflows
-    verbs:
-      - create
-      - get
-      - list
-      - watch
-      - update
-      - patch
-      - delete
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: argo-binding
@@ -169,18 +113,6 @@ subjects:
   - kind: ServiceAccount
     name: argo
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: argo-server-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: argo-server-role
-subjects:
-  - kind: ServiceAccount
-    name: argo-server
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -190,19 +122,6 @@ data:
   config: |
     namespace: addon-manager-system
     instanceID: addon-manager-workflow-controller
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: argo-server
-  namespace: system
-spec:
-  ports:
-    - name: web
-      port: 2746
-      targetPort: 2746
-  selector:
-    app: argo-server
 ---
 apiVersion: v1
 kind: Service
@@ -219,39 +138,7 @@ spec:
       targetPort: 9090
   selector:
     app: workflow-controller
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: argo-server
-spec:
-  selector:
-    matchLabels:
-      app: argo-server
-  template:
-    metadata:
-      labels:
-        app: argo-server
-    spec:
-      containers:
-        - args:
-            - server
-            - --namespaced
-            - --configmap
-            - addon-manager-workflow-controller-configmap
-          image: argoproj/argocli:v2.7.5
-          name: argo-server
-          ports:
-            - containerPort: 2746
-              name: web
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 2746
-              scheme: HTTP
-            initialDelaySeconds: 10
-            periodSeconds: 20
-      serviceAccountName: argo-server
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -276,11 +163,11 @@ spec:
             - --configmap
             - addon-manager-workflow-controller-configmap
             - --executor-image
-            - argoproj/argoexec:v2.7.5
+            - argoproj/argoexec:v2.11.0
             - --namespaced
           command:
             - workflow-controller
-          image: argoproj/workflow-controller:v2.7.5
+          image: argoproj/workflow-controller:v2.11.0
           name: workflow-controller
       serviceAccountName: argo
 ---
@@ -291,7 +178,7 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v2.7.5
+  pkgVersion: v2.11.0
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:

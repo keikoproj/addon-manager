@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	addonNamespace = "addon-manager-system"
+	addonNamespace = "default"
 	addonName      = "cluster-autoscaler"
 	addonKey       = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
 )

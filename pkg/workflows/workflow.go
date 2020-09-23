@@ -40,14 +40,15 @@ import (
 )
 
 const (
-	WfInstanceIdLabelKey = "workflows.argoproj.io/controller-instanceid"
-	WfInstanceId         = "addon-manager-workflow-controller"
+	WfInstanceIdLabelKey           = "workflows.argoproj.io/controller-instanceid"
+	WfInstanceId                   = "addon-manager-workflow-controller"
+	WfDefaultActiveDeadlineSeconds = 300
 )
 
 // AddonLifecycle represents the following workflows
 type AddonLifecycle interface {
 	Install(context.Context, *addonmgrv1alpha1.WorkflowType, string) (addonmgrv1alpha1.ApplicationAssemblyPhase, error)
-	Delete(string) error
+	Delete(context.Context, string) error
 }
 
 type workflowLifecycle struct {
@@ -89,6 +90,10 @@ func (w *workflowLifecycle) Install(ctx context.Context, wt *addonmgrv1alpha1.Wo
 		return addonmgrv1alpha1.Failed, err
 	}
 
+	if err := w.injectActiveDeadlineSeconds(wp); err != nil {
+		return addonmgrv1alpha1.Failed, err
+	}
+
 	w.injectInstanceId(wp)
 
 	return w.submit(ctx, wp)
@@ -116,12 +121,28 @@ func (w *workflowLifecycle) configureGlobalWFParameters(addon *addonmgrv1alpha1.
 	namespaceParam := addon.Spec.Params.Namespace
 	contextParams := addon.Spec.Params.Context
 	dataParams := addon.Spec.Params.Data
+	pkgParams := addon.Spec.PackageSpec
 
 	namespaceMap := make(map[string]interface{})
 	namespaceMap["name"] = "namespace"
 	namespaceMap["value"] = namespaceParam
 
 	wfParams = append(wfParams, namespaceMap)
+
+	// Copy pkgParams into global workflow variables
+	refPkg := reflect.ValueOf(pkgParams)
+	for i := 0; i < refPkg.Type().NumField(); i++ {
+		pkgParamMap := make(map[string]interface{})
+		kind := refPkg.Field(i).Kind()
+		if kind == reflect.String {
+			tag := refPkg.Type().Field(i).Tag
+			jsonTag := strings.Split(tag.Get("json"), ",")[0]
+			value := refPkg.Field(i).String()
+			pkgParamMap["name"] = jsonTag
+			pkgParamMap["value"] = value
+			wfParams = append(wfParams, pkgParamMap)
+		}
+	}
 
 	// Copy general Context string params to global workflow variables (clusterName and clusterRegion currently)
 	cp := reflect.ValueOf(contextParams)
@@ -162,8 +183,8 @@ func (w *workflowLifecycle) configureGlobalWFParameters(addon *addonmgrv1alpha1.
 	return true
 }
 
-func (w *workflowLifecycle) Delete(name string) error {
-	err := w.dynClient.Resource(common.WorkflowGVR()).Namespace(w.addon.Namespace).Delete(name, &metav1.DeleteOptions{})
+func (w *workflowLifecycle) Delete(ctx context.Context, name string) error {
+	err := w.dynClient.Resource(common.WorkflowGVR()).Namespace(w.addon.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return err
 	}
@@ -199,7 +220,7 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 
 	// Check if the same Addon spec was submitted and completed previously
 	if wfv1 != nil {
-		deleted, err := w.deleteCollisionWorkflows(wfv1)
+		deleted, err := w.deleteCollisionWorkflows(ctx)
 		if err != nil {
 			return addonmgrv1alpha1.Failed, err
 		}
@@ -246,7 +267,7 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 		return addonmgrv1alpha1.Pending, nil
 	}
 
-	workflow, err := w.dynClient.Resource(common.WorkflowGVR()).Namespace(wfv1.GetNamespace()).Get(wfv1.GetName(), metav1.GetOptions{})
+	workflow, err := w.dynClient.Resource(common.WorkflowGVR()).Namespace(wfv1.GetNamespace()).Get(ctx, wfv1.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return addonmgrv1alpha1.Failed, fmt.Errorf("could not find workflow %s/%s. %v", wfv1.GetNamespace(), wfv1.GetName(), err)
 	}
@@ -453,12 +474,12 @@ func (w *workflowLifecycle) addRoleAnnotationToResource(resource *unstructured.U
 	resource.SetAnnotations(annotations)
 }
 
-func (w *workflowLifecycle) deleteCollisionWorkflows(wfv1 *unstructured.Unstructured) (bool, error) {
+func (w *workflowLifecycle) deleteCollisionWorkflows(ctx context.Context) (bool, error) {
 	var mostRecentWorkflowTime time.Time
 	var mostRecentWorkflow unstructured.Unstructured
 	var deleted = false
 
-	workflows, err := w.dynClient.Resource(common.WorkflowGVR()).Namespace(w.addon.GetNamespace()).List(metav1.ListOptions{})
+	workflows, err := w.dynClient.Resource(common.WorkflowGVR()).Namespace(w.addon.GetNamespace()).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return false, fmt.Errorf("failed to list workflows. %v", err)
 	}
@@ -490,7 +511,7 @@ func (w *workflowLifecycle) deleteCollisionWorkflows(wfv1 *unstructured.Unstruct
 		for _, workflow := range workflows.Items {
 			phase := workflow.UnstructuredContent()["status"].(map[string]interface{})["phase"].(string)
 			if strings.Contains(workflow.GetName(), w.addon.Status.Checksum) && phase != "Pending" {
-				_ = w.Delete(workflow.GetName())
+				_ = w.Delete(ctx, workflow.GetName())
 				deleted = true
 			}
 		}
@@ -528,4 +549,20 @@ func (w *workflowLifecycle) injectInstanceId(wp *unstructured.Unstructured) {
 	labels[WfInstanceIdLabelKey] = WfInstanceId
 
 	wp.SetLabels(labels)
+}
+
+func (w *workflowLifecycle) injectActiveDeadlineSeconds(wf *unstructured.Unstructured) error {
+	val, found, err := unstructured.NestedInt64(wf.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+	if err != nil {
+		return err
+	}
+
+	if !found || val == 0 {
+		err = unstructured.SetNestedField(wf.Object, int64(WfDefaultActiveDeadlineSeconds), "spec", "activeDeadlineSeconds")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

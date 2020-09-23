@@ -40,6 +40,7 @@ var sch = runtime.NewScheme()
 var fclient = runtimefake.NewFakeClientWithScheme(sch)
 var dynClient = dynfake.NewSimpleDynamicClient(sch)
 var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.EventSource{Component: "addons"})
+var ctx = context.TODO()
 
 var wfInvalidTemplate = `
 apiVersion: argoproj.io/v1alpha1
@@ -104,7 +105,6 @@ metadata:
   labels:
     app.kubernetes.io/component: workflow-test
 spec:
-  activeDeadlineSeconds: 600
   entrypoint: entry
   serviceAccountName: addon-manager-workflow-installer-sa
   templates:
@@ -335,6 +335,22 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.AddonSpec{
+			Params: v1alpha1.AddonParams{
+				Namespace: "my-addon-ns",
+				Context: v1alpha1.ClusterContext{
+					ClusterName:   "test-cluster",
+					ClusterRegion: "us-west-2",
+					AdditionalConfigs: map[string]v1alpha1.FlexString{
+						"my-config-1": "value-1",
+						"my-config-2": "value-2",
+					},
+				},
+				Data: map[string]v1alpha1.FlexString{
+					"var1": "val1",
+					"var2": "val2",
+					"var3": "val3",
+				},
+			},
 			PackageSpec: v1alpha1.PackageSpec{
 				PkgName:        "my-addon",
 				PkgVersion:     "1.0.0",
@@ -386,10 +402,59 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
 
-		// Verify activeDeadlineSeconds are kept
+		// Verify activeDeadlineSeconds are kept or injected
 		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(active).To(Equal(int64(600)))
+		if lifecycle == v1alpha1.Install {
+			g.Expect(active).To(Equal(int64(600)))
+		} else {
+			g.Expect(active).To(Equal(int64(WfDefaultActiveDeadlineSeconds)))
+		}
+
+		// Verify workflow variables are injected from addon params
+		wfParams, found, err := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "arguments", "parameters")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(found).To(BeTrue())
+		g.Expect(wfParams).To(ContainElements(map[string]interface{}{
+			"name":  "namespace",
+			"value": "my-addon-ns",
+		}, map[string]interface{}{
+			"name":  "clusterName",
+			"value": "test-cluster",
+		}, map[string]interface{}{
+			"name":  "clusterRegion",
+			"value": "us-west-2",
+		}, map[string]interface{}{
+			"name":  "my-config-1",
+			"value": "value-1",
+		}, map[string]interface{}{
+			"name":  "my-config-2",
+			"value": "value-2",
+		}, map[string]interface{}{
+			"name":  "var1",
+			"value": "val1",
+		}, map[string]interface{}{
+			"name":  "var2",
+			"value": "val2",
+		}, map[string]interface{}{
+			"name":  "var3",
+			"value": "val3",
+		}, map[string]interface{}{
+			"name":  "pkgName",
+			"value": "my-addon",
+		}, map[string]interface{}{
+			"name":  "pkgVersion",
+			"value": "1.0.0",
+		}, map[string]interface{}{
+			"name":  "pkgType",
+			"value": "helm",
+		}, map[string]interface{}{
+			"name":  "pkgDescription",
+			"value": "",
+		}, map[string]interface{}{
+			"name":  "pkgChannel",
+			"value": "",
+		}))
 
 		// Verify workflow labels are kept
 		labels := wfv1.GetLabels()
@@ -634,7 +699,7 @@ func TestWorkflowLifecycle_Delete_NotExists(t *testing.T) {
 
 	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
 
-	g.Expect(wfl.Delete("addon-wf-test")).To(HaveOccurred())
+	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(HaveOccurred())
 }
 
 func TestNewWorkflowLifecycle_Delete(t *testing.T) {
@@ -673,9 +738,9 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 	wf.SetNamespace("default")
 	wf.SetName("addon-wf-test")
 
-	_, err := dynClient.Resource(common.WorkflowGVR()).Namespace("default").Create(wf, metav1.CreateOptions{})
+	_, err := dynClient.Resource(common.WorkflowGVR()).Namespace("default").Create(ctx, wf, metav1.CreateOptions{})
 	g.Expect(err).To(Not(HaveOccurred()))
 
 	// Now try to delete
-	g.Expect(wfl.Delete("addon-wf-test")).To(Not(HaveOccurred()))
+	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(Not(HaveOccurred()))
 }
