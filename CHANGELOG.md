@@ -1,6 +1,14 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.3.0"></a>
+## [v0.3.0] - 2020-09-23
+### Fixed
+- Change Failed status to Pending for dependant addons (#63)
+- Upgrade Argo and inject deadline for workflows. (#64) (#69)
+### Changed
+- Various improvements (#60) (#61) (#62)
+
 <a name="v0.2.1"></a>
 ## [v0.2.1] - 2020-04-13
 ### Fixed
@@ -34,7 +42,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...HEAD
+[v0.3.0]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...v0.2.1
 [v0.2.1]: https://github.com/keikoproj/addon-manager/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/keikoproj/addon-manager/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/keikoproj/addon-manager/compare/v0.1.0...v0.0.2
