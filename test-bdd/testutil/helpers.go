@@ -15,6 +15,7 @@
 package testutil
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -105,8 +106,9 @@ func ReadFile(path string) ([]byte, error) {
 
 // CRDExists returns true if a schema with the given name was found
 func CRDExists(kubeClient dynamic.Interface, name string) bool {
+	ctx := context.TODO()
 	CRDSchema := common.CRDGVR()
-	_, err := kubeClient.Resource(CRDSchema).Get(name, metav1.GetOptions{})
+	_, err := kubeClient.Resource(CRDSchema).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		fmt.Println(err)
 		return false

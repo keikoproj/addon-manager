@@ -15,6 +15,7 @@
 package testutil
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -28,12 +29,13 @@ import (
 
 // CreateCRD creates the CRD parsed from the path given
 func CreateCRD(kubeClient apiextcs.Interface, relativePath string) error {
+	ctx := context.TODO()
 	CRD, err := parseCRDYaml(relativePath)
 	if err != nil {
 		return err
 	}
 
-	_, err = kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(CRD.Name, metav1.GetOptions{})
+	_, err = kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(ctx, CRD.Name, metav1.GetOptions{})
 
 	if err == nil {
 		err = KubectlApply(relativePath)
@@ -42,7 +44,7 @@ func CreateCRD(kubeClient apiextcs.Interface, relativePath string) error {
 		}
 
 	} else {
-		_, err = kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(CRD)
+		_, err = kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(ctx, CRD, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -53,12 +55,13 @@ func CreateCRD(kubeClient apiextcs.Interface, relativePath string) error {
 
 // DeleteCRD deletes the CRD parsed from the path given
 func DeleteCRD(kubeClient apiextcs.Interface, relativePath string) error {
+	ctx := context.TODO()
 	CRD, err := parseCRDYaml(relativePath)
 	if err != nil {
 		return err
 	}
 
-	if err := kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(CRD.Name, &metav1.DeleteOptions{}); err != nil {
+	if err := kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(ctx, CRD.Name, metav1.DeleteOptions{}); err != nil {
 		return err
 	}
 
