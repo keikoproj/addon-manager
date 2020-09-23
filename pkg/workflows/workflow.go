@@ -40,8 +40,8 @@ import (
 )
 
 const (
-	WfInstanceIdLabelKey = "workflows.argoproj.io/controller-instanceid"
-	WfInstanceId         = "addon-manager-workflow-controller"
+	WfInstanceIdLabelKey           = "workflows.argoproj.io/controller-instanceid"
+	WfInstanceId                   = "addon-manager-workflow-controller"
 	WfDefaultActiveDeadlineSeconds = 300
 )
 
