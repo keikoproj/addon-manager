@@ -121,12 +121,28 @@ func (w *workflowLifecycle) configureGlobalWFParameters(addon *addonmgrv1alpha1.
 	namespaceParam := addon.Spec.Params.Namespace
 	contextParams := addon.Spec.Params.Context
 	dataParams := addon.Spec.Params.Data
+	pkgParams := addon.Spec.PackageSpec
 
 	namespaceMap := make(map[string]interface{})
 	namespaceMap["name"] = "namespace"
 	namespaceMap["value"] = namespaceParam
 
 	wfParams = append(wfParams, namespaceMap)
+
+	// Copy pkgParams into global workflow variables
+	refPkg := reflect.ValueOf(pkgParams)
+	for i := 0; i < refPkg.Type().NumField(); i++ {
+		pkgParamMap := make(map[string]interface{})
+		kind := refPkg.Field(i).Kind()
+		if kind == reflect.String {
+			tag := refPkg.Type().Field(i).Tag
+			jsonTag := strings.Split(tag.Get("json"), ",")[0]
+			value := refPkg.Field(i).String()
+			pkgParamMap["name"] = jsonTag
+			pkgParamMap["value"] = value
+			wfParams = append(wfParams, pkgParamMap)
+		}
+	}
 
 	// Copy general Context string params to global workflow variables (clusterName and clusterRegion currently)
 	cp := reflect.ValueOf(contextParams)
