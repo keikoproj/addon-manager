@@ -4,6 +4,5 @@ resources:
   - argo.yaml
 commonLabels:
   app.kubernetes.io/name: addon-manager-argo-addon
-  app.kubernetes.io/version: "v2.11.0"
   app.kubernetes.io/part-of: addon-manager-argo-addon
   app.kubernetes.io/managed-by: addonmgr.keikoproj.io
