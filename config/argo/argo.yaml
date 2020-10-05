@@ -163,11 +163,11 @@ spec:
             - --configmap
             - addon-manager-workflow-controller-configmap
             - --executor-image
-            - argoproj/argoexec:v2.11.0
+            - argoproj/argoexec:v2.11.1
             - --namespaced
           command:
             - workflow-controller
-          image: argoproj/workflow-controller:v2.11.0
+          image: argoproj/workflow-controller:v2.11.1
           name: workflow-controller
       serviceAccountName: argo
 ---
@@ -178,7 +178,7 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v2.11.0
+  pkgVersion: v2.11.1
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:
