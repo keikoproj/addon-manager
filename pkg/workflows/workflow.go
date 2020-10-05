@@ -249,13 +249,6 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 		if err := controllerutil.SetControllerReference(w.addon, wfv1, w.scheme); err != nil {
 			return addonmgrv1alpha1.Failed, err
 		}
-		ownerReferences := wfv1.GetOwnerReferences()
-		for _, ref := range ownerReferences {
-			if strings.ToLower(ref.Kind) == "addon" {
-				*ref.Controller = false
-			}
-		}
-		wfv1.SetOwnerReferences(ownerReferences)
 
 		err = w.Create(ctx, wfv1)
 		if err != nil {

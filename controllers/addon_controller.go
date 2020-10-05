@@ -146,14 +146,10 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 // SetupWithManager is called to setup manager and watchers
 func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := r.Log
-	//var addongrp = common.AddonGVR().Group
 	bldr := ctrl.NewControllerManagedBy(mgr).
 		For(&addonmgrv1alpha1.Addon{}).
 		// Watch workflows created by addon
-		Watches(&source.Kind{Type: common.WorkflowType()}, &handler.EnqueueRequestForOwner{
-			IsController: false,
-			OwnerType:    &addonmgrv1alpha1.Addon{},
-		})
+		Owns(common.WorkflowType())
 
 	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 
