@@ -1,6 +1,12 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.3.1"></a>
+## [v0.3.1] - 2020-10-06
+### Fixed
+- Upgrade Argo to v2.11.1 (#72)
+- Improve Watchers to only look for owned resources (#72)
+
 <a name="v0.3.0"></a>
 ## [v0.3.0] - 2020-09-23
 ### Fixed
@@ -42,7 +48,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.3.1...HEAD
+[v0.3.1]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...v0.2.1
 [v0.2.1]: https://github.com/keikoproj/addon-manager/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/keikoproj/addon-manager/compare/v0.1.0...v0.2.0
