@@ -6,6 +6,8 @@
 ### Fixed
 - Upgrade Argo to v2.11.1 (#72)
 - Improve Watchers to only look for owned resources (#72)
+### Changed
+- Remove common app.kubernetes.io/version labels from Kustomize (#71)
 
 <a name="v0.3.0"></a>
 ## [v0.3.0] - 2020-09-23
