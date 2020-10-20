@@ -92,7 +92,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=argoproj.io,resources=workflows,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=argoproj.io,resources=workflows,namespace=system,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=list
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;patch;create
 // +kubebuilder:rbac:groups="",resources=namespaces;clusterroles;configmaps;events;pods;serviceaccounts;services,verbs=get;list;watch;create;update;patch
@@ -146,16 +146,27 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 // SetupWithManager is called to setup manager and watchers
 func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := r.Log
+	nsInformers := informers.NewSharedInformerFactoryWithOptions(r.generatedClient, time.Minute*30, informers.WithNamespace("addon-manager-system"))
+	wfInf, err := nsInformers.ForResource(common.WorkflowGVR())
+	if err != nil {
+		log.Error(err, "Error getting informer for workflows")
+		return err
+	}
 	bldr := ctrl.NewControllerManagedBy(mgr).
 		For(&addonmgrv1alpha1.Addon{}).
-		// Watch workflows created by addon
-		Owns(common.WorkflowType())
+		// Watch workflows created by addon only in addon-manager-system namespace
+		Watches(&source.Informer{Informer: wfInf.Informer().(cache.Informer)}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &addonmgrv1alpha1.Addon{},
+		})
 
 	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 
-	err := mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
+	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
 		generatedInformers.Start(s)
 		generatedInformers.WaitForCacheSync(s)
+		nsInformers.Start(s)
+		nsInformers.WaitForCacheSync(s)
 		<-s
 		return nil
 	}))
