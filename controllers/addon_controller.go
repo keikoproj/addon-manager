@@ -146,16 +146,18 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 // SetupWithManager is called to setup manager and watchers
 func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := r.Log
+
+	bldr := ctrl.NewControllerManagedBy(mgr).
+		For(&addonmgrv1alpha1.Addon{})
+
 	nsInformers := informers.NewSharedInformerFactoryWithOptions(r.generatedClient, time.Minute*30, informers.WithNamespace("addon-manager-system"))
 	wfInf, err := nsInformers.ForResource(common.WorkflowGVR())
 	if err != nil {
 		log.Error(err, "Error getting informer for workflows")
 		return err
 	}
-	bldr := ctrl.NewControllerManagedBy(mgr).
-		For(&addonmgrv1alpha1.Addon{}).
-		// Watch workflows created by addon only in addon-manager-system namespace
-		Watches(&source.Informer{Informer: wfInf.Informer().(cache.Informer)}, &handler.EnqueueRequestForOwner{
+	// Watch workflows created by addon only in addon-manager-system namespace
+	bldr = 	bldr.Watches(&source.Informer{Informer: wfInf.Informer().(cache.Informer)}, &handler.EnqueueRequestForOwner{
 			IsController: true,
 			OwnerType:    &addonmgrv1alpha1.Addon{},
 		})
