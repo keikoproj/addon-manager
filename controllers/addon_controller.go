@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
@@ -92,7 +93,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=argoproj.io,resources=workflows,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=argoproj.io,resources=workflows,namespace=system,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=list
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;patch;create
 // +kubebuilder:rbac:groups="",resources=namespaces;clusterroles;configmaps;events;pods;serviceaccounts;services,verbs=get;list;watch;create;update;patch
@@ -106,7 +107,6 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("addon", req.NamespacedName)
 
 	log.Info("Starting addon-manager reconcile...")
-
 	var instance = &addonmgrv1alpha1.Addon{}
 	if err := r.Get(context.TODO(), req.NamespacedName, instance); err != nil {
 		log.Info("Addon not found.")
@@ -146,16 +146,25 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 // SetupWithManager is called to setup manager and watchers
 func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := r.Log
+	managedNS := "addon-manager-system"
+
+	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, managedNS, nil)
+	wfInf := nsInformers.ForResource(common.WorkflowGVR())
 	bldr := ctrl.NewControllerManagedBy(mgr).
 		For(&addonmgrv1alpha1.Addon{}).
-		// Watch workflows created by addon
-		Owns(common.WorkflowType())
+		// Watch workflows created by addon only in addon-manager-system namespace
+		Watches(&source.Informer{Informer: wfInf.Informer().(cache.Informer)}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &addonmgrv1alpha1.Addon{},
+		})
 
 	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 
 	err := mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
 		generatedInformers.Start(s)
 		generatedInformers.WaitForCacheSync(s)
+		nsInformers.Start(s)
+		nsInformers.WaitForCacheSync(s)
 		<-s
 		return nil
 	}))
