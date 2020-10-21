@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -75,6 +76,7 @@ type AddonReconciler struct {
 	versionCache    addon.VersionCacheClient
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
+	clientConfig    clientcmd.ClientConfig
 	recorder        record.EventRecorder
 }
 
@@ -87,6 +89,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		versionCache:    addon.NewAddonVersionCacheClient(),
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
+		clientConfig:    clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{}),
 		recorder:        mgr.GetEventRecorderFor("addons"),
 	}
 }
@@ -107,7 +110,6 @@ func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("addon", req.NamespacedName)
 
 	log.Info("Starting addon-manager reconcile...")
-
 	var instance = &addonmgrv1alpha1.Addon{}
 	if err := r.Get(context.TODO(), req.NamespacedName, instance); err != nil {
 		log.Info("Addon not found.")
@@ -147,7 +149,13 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 // SetupWithManager is called to setup manager and watchers
 func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := r.Log
-	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, "addon-manager-system", nil)
+	managedNS, _, err := r.clientConfig.Namespace()
+	if err != nil {
+		return err
+	}
+	log.Info("Controller namespace: %s", managedNS)
+
+	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, managedNS, nil)
 	wfInf := nsInformers.ForResource(common.WorkflowGVR())
 	bldr := ctrl.NewControllerManagedBy(mgr).
 		For(&addonmgrv1alpha1.Addon{}).
@@ -159,7 +167,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 
-	err := mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
+	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
 		generatedInformers.Start(s)
 		generatedInformers.WaitForCacheSync(s)
 		nsInformers.Start(s)
