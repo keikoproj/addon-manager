@@ -35,7 +35,6 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -76,7 +75,6 @@ type AddonReconciler struct {
 	versionCache    addon.VersionCacheClient
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
-	clientConfig    clientcmd.ClientConfig
 	recorder        record.EventRecorder
 }
 
@@ -89,7 +87,6 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		versionCache:    addon.NewAddonVersionCacheClient(),
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
-		clientConfig:    clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{}),
 		recorder:        mgr.GetEventRecorderFor("addons"),
 	}
 }
@@ -149,11 +146,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 // SetupWithManager is called to setup manager and watchers
 func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := r.Log
-	managedNS, _, err := r.clientConfig.Namespace()
-	if err != nil {
-		return err
-	}
-	log.Info("Controller namespace: %s", managedNS)
+	managedNS := "addon-manager-system"
 
 	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, managedNS, nil)
 	wfInf := nsInformers.ForResource(common.WorkflowGVR())
@@ -167,7 +160,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 
-	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
+	err := mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
 		generatedInformers.Start(s)
 		generatedInformers.WaitForCacheSync(s)
 		nsInformers.Start(s)
