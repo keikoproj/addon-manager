@@ -364,7 +364,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 			return reconcile.Result{}, err
 		}
 
-		// Update only if spec Body is changed
+		// Update only if spec Body is change, this is to make sure any intended drift is retained
 		if !checkSumStatus {
 			phase, err := r.runWorkflow(addonmgrv1alpha1.Install, instance, wfl)
 			instance.Status.Lifecycle.Installed = phase
