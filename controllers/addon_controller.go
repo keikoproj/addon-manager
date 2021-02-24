@@ -212,7 +212,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 
-	// Calculate Checksum
+	// Calculate Checksum, returns true if checksum is not changed
 	var checkSumStatus bool
 	checkSumStatus, instance.Status.Checksum = r.validateChecksum(instance)
 
