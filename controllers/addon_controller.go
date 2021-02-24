@@ -213,7 +213,8 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 
 	// Calculate Checksum
-	instance.Status.Checksum = instance.CalculateChecksum()
+	var checkSumStatus bool
+	checkSumStatus, instance.Status.Checksum = r.validateChecksum(instance)
 
 	// Resources list
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
@@ -321,26 +322,27 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Add addon to cache
 	//r.addAddonToCache(req, addon, addonmgrv1alpha1.Pending)
 
-	// Prereqs workflow
-	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
-	instance.Status.Lifecycle.Prereqs = prereqsPhase
-	if err != nil {
-		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Addon prereqs workflow failed.")
-		// if prereqs failed, set install status to failed as well so that STATUS is updated
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
-		instance.Status.Reason = reason
+	// Prereqs workflow and execute only if spec Body is changed
+	if !checkSumStatus {
+		prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
+		if err != nil {
+			reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
+			r.recorder.Event(instance, "Warning", "Failed", reason)
+			log.Error(err, "Addon prereqs workflow failed.")
+			// if prereqs failed, set install status to failed as well so that STATUS is updated
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+			instance.Status.StartTime = 0
+			instance.Status.Reason = reason
 
-		return reconcile.Result{}, err
+			return reconcile.Result{}, err
+		}
+		instance.Status.Lifecycle.Prereqs = prereqsPhase
 	}
 
 	//handle Prereqs failure
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Failed {
 		reason := fmt.Sprintf("Addon %s/%s Prereqs status is Failed", instance.Namespace, instance.Name)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Addon prereqs workflow failed.")
 		// if prereqs failed, set install status to failed as well so that STATUS is updated
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.StartTime = 0
@@ -362,16 +364,19 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 			return reconcile.Result{}, err
 		}
 
-		phase, err := r.runWorkflow(addonmgrv1alpha1.Install, instance, wfl)
-		instance.Status.Lifecycle.Installed = phase
-		if err != nil {
-			reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
-			log.Error(err, "Addon install workflow failed.")
-			instance.Status.StartTime = 0
-			instance.Status.Reason = reason
+		// Update only if spec Body is changed
+		if !checkSumStatus {
+			phase, err := r.runWorkflow(addonmgrv1alpha1.Install, instance, wfl)
+			instance.Status.Lifecycle.Installed = phase
+			if err != nil {
+				reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
+				r.recorder.Event(instance, "Warning", "Failed", reason)
+				log.Error(err, "Addon install workflow failed.")
+				instance.Status.StartTime = 0
+				instance.Status.Reason = reason
 
-			return reconcile.Result{}, err
+				return reconcile.Result{}, err
+			}
 		}
 
 		//r.addAddonToCache(req, instance, phase)
@@ -518,6 +523,17 @@ func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alp
 	}
 
 	return observed, nil
+}
+
+// Calculates new checksum and validates if there is a diff
+func (r *AddonReconciler) validateChecksum(instance *addonmgrv1alpha1.Addon) (bool, string) {
+	newCheckSum := instance.CalculateChecksum()
+
+	if instance.Status.Checksum == newCheckSum {
+		return true, newCheckSum
+	}
+
+	return false, newCheckSum
 }
 
 // Finalize runs finalizer for addon
