@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -67,6 +69,16 @@ var _ = Describe("AddonController", func() {
 			By("Verify addon has finalizers added which means it's valid")
 			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
 		})
+
+		//modify instance
+		wt := &instance.Spec.Lifecycle.Prereqs
+
+		wp, err := parseAddonWorkflow(wt)
+		if err != nil {
+			log.Error(err,"Error while parsing addon worflow")
+		}
+		log.Info("workflow", wp)
+
 	})
 })
 
@@ -84,4 +96,39 @@ func parseAddonYaml(data []byte) (*v1alpha1.Addon, error) {
 	}
 
 	return a, nil
+}
+
+func parseAddonWorkflow(wt *v1alpha1.WorkflowType) (*unstructured.Unstructured,error){
+
+	wf := &unstructured.Unstructured{}
+
+	var data map[string]interface{}
+
+	// Load workflow spec into data obj
+	if err := yaml.Unmarshal([]byte(wt.Template), &data); err != nil {
+		return nil,fmt.Errorf("invalid workflow yaml spec passed. %v", err)
+	}
+
+	// We need to marshal and unmarshal due to conversion issues.
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil,errors.New("invalid workflow, unable to marshal data")
+	}
+	err = wf.UnmarshalJSON(raw)
+	if err != nil {
+		return nil, errors.New("invalid workflow, unable to unmarshal to workflow")
+	}
+
+	return wf,nil
+
+}
+
+func updateTTLObject(wf *unstructured.Unstructured) error {
+	var ttl, _ = time.ParseDuration("1m")
+	err := unstructured.SetNestedField(wf.Object, int64(ttl.Seconds()), "spec", "ttlSecondsAfterFinished")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
