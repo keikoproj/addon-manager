@@ -325,6 +325,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Execute PreReq and Install workflow, if spec body has changed.
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
 	if changedStatus || instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
+		log.Info("Addon spec is updated, workflows will be generated")
+
 		err := r.executePrereqAndInstall(ctx, log, instance, wfl)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -410,6 +412,8 @@ func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger
 		r.recorder.Event(addon, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", addon.Namespace, addon.Name, err))
 		return err
 	}
+
+
 
 	return nil
 }
