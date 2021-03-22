@@ -2,10 +2,9 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -66,18 +65,56 @@ var _ = Describe("AddonController", func() {
 			By("Verify addon has been reconciled by checking for checksum status")
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
+
 			By("Verify addon has finalizers added which means it's valid")
 			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
+
+			oldCheckSum := instance.Status.Checksum
+
+			//Update instance params for checksum validation
+			instance.Spec.Params.Context.ClusterRegion = "us-east-2"
+			err = k8sClient.Update(context.TODO(), instance)
+
+			// This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
+			time.Sleep(5 * time.Second)
+
+			if apierrors.IsInvalid(err) {
+				log.Error(err, "failed to update object, got an invalid object error")
+				return
+			}
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+
+				if len(instance.ObjectMeta.Finalizers) > 0 {
+					return nil
+				}
+				return fmt.Errorf("addon is not valid")
+			}, timeout).Should(Succeed())
+
+			By("Verify changing addon spec generates new checksum")
+			Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
+
+			var wfv1 = &unstructured.Unstructured{}
+			wfv1.SetGroupVersionKind(schema.GroupVersionKind{
+				Kind:    "Workflow",
+				Group:   "argoproj.io",
+				Version: "v1alpha1",
+			})
+			wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
+			k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+			By("Verify addon has workflows generated with new checksum name")
+			Expect(wfv1.GetName()).Should(Equal(wfName))
+
+			By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
+			Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
+			Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
 		})
 
-		//modify instance
-		wt := &instance.Spec.Lifecycle.Prereqs
 
-		wp, err := parseAddonWorkflow(wt)
-		if err != nil {
-			log.Error(err,"Error while parsing addon worflow")
-		}
-		log.Info("workflow", wp)
 
 	})
 })
@@ -96,39 +133,4 @@ func parseAddonYaml(data []byte) (*v1alpha1.Addon, error) {
 	}
 
 	return a, nil
-}
-
-func parseAddonWorkflow(wt *v1alpha1.WorkflowType) (*unstructured.Unstructured,error){
-
-	wf := &unstructured.Unstructured{}
-
-	var data map[string]interface{}
-
-	// Load workflow spec into data obj
-	if err := yaml.Unmarshal([]byte(wt.Template), &data); err != nil {
-		return nil,fmt.Errorf("invalid workflow yaml spec passed. %v", err)
-	}
-
-	// We need to marshal and unmarshal due to conversion issues.
-	raw, err := json.Marshal(data)
-	if err != nil {
-		return nil,errors.New("invalid workflow, unable to marshal data")
-	}
-	err = wf.UnmarshalJSON(raw)
-	if err != nil {
-		return nil, errors.New("invalid workflow, unable to unmarshal to workflow")
-	}
-
-	return wf,nil
-
-}
-
-func updateTTLObject(wf *unstructured.Unstructured) error {
-	var ttl, _ = time.ParseDuration("1m")
-	err := unstructured.SetNestedField(wf.Object, int64(ttl.Seconds()), "spec", "ttlSecondsAfterFinished")
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
