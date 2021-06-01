@@ -212,11 +212,9 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 
-	// Calculate Checksum
-	instance.Status.Checksum = instance.CalculateChecksum()
-
-	// Resources list
-	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
+	// Calculate Checksum, returns true if checksum is not changed
+	var changedStatus bool
+	changedStatus, instance.Status.Checksum = r.validateChecksum(instance)
 
 	// Set ttl starttime if it is 0
 	if instance.Status.StartTime == 0 {
@@ -321,6 +319,17 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Add addon to cache
 	//r.addAddonToCache(req, addon, addonmgrv1alpha1.Pending)
 
+	// Execute PreReq and Install workflow, if spec body has changed.
+	// Also if workflow is in Pending state, execute it to update status to terminal state.
+	if changedStatus || instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
+		log.Info("Addon spec is updated, workflows will be generated")
+
+		err := r.executePrereqAndInstall(ctx, log, instance, wfl)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	// Prereqs workflow
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	instance.Status.Lifecycle.Prereqs = prereqsPhase
@@ -334,47 +343,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		instance.Status.Reason = reason
 
 		return reconcile.Result{}, err
-	}
-
-	//handle Prereqs failure
-	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Failed {
-		reason := fmt.Sprintf("Addon %s/%s Prereqs status is Failed", instance.Namespace, instance.Name)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Addon prereqs workflow failed.")
-		// if prereqs failed, set install status to failed as well so that STATUS is updated
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
-		instance.Status.Reason = reason
-
-		return reconcile.Result{}, fmt.Errorf(reason)
-	}
-
-	// Validate secrets are in the addon deployment namespace, this is here and not in validator b/c namespace must be used to validate.
-	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
-		if err := r.validateSecrets(ctx, instance); err != nil {
-			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
-			log.Error(err, "Addon could not validate secrets.")
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-			instance.Status.StartTime = 0
-			instance.Status.Reason = reason
-
-			return reconcile.Result{}, err
-		}
-
-		phase, err := r.runWorkflow(addonmgrv1alpha1.Install, instance, wfl)
-		instance.Status.Lifecycle.Installed = phase
-		if err != nil {
-			reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
-			log.Error(err, "Addon install workflow failed.")
-			instance.Status.StartTime = 0
-			instance.Status.Reason = reason
-
-			return reconcile.Result{}, err
-		}
-
-		//r.addAddonToCache(req, instance, phase)
 	}
 
 	// Observe resources matching selector labels.
@@ -468,6 +436,63 @@ func (r *AddonReconciler) addAddonToCache(instance *addonmgrv1alpha1.Addon) {
 		PkgPhase:    instance.GetInstallStatus(),
 	}
 	r.versionCache.AddVersion(version)
+}
+
+func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
+
+	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
+	if err != nil {
+		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
+		r.recorder.Event(instance, "Warning", "Failed", reason)
+		log.Error(err, "Addon prereqs workflow failed.")
+		// if prereqs failed, set install status to failed as well so that STATUS is updated
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.StartTime = 0
+		instance.Status.Reason = reason
+
+		return err
+	}
+	instance.Status.Lifecycle.Prereqs = prereqsPhase
+
+	//handle Prereqs failure
+	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Failed {
+		reason := fmt.Sprintf("Addon %s/%s Prereqs status is Failed", instance.Namespace, instance.Name)
+		log.Error(err, "Addon prereqs workflow failed.")
+		r.recorder.Event(instance, "Warning", "Failed", reason)
+		// if prereqs failed, set install status to failed as well so that STATUS is updated
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.StartTime = 0
+		instance.Status.Reason = reason
+
+		return fmt.Errorf(reason)
+	}
+
+	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
+		if err := r.validateSecrets(ctx, instance); err != nil {
+			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", instance.Namespace, instance.Name, err)
+			r.recorder.Event(instance, "Warning", "Failed", reason)
+			log.Error(err, "Addon could not validate secrets.")
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+			instance.Status.StartTime = 0
+			instance.Status.Reason = reason
+
+			return err
+		}
+
+		phase, err := r.runWorkflow(addonmgrv1alpha1.Install, instance, wfl)
+		instance.Status.Lifecycle.Installed = phase
+		if err != nil {
+			reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
+			r.recorder.Event(instance, "Warning", "Failed", reason)
+			log.Error(err, "Addon install workflow failed.")
+			instance.Status.StartTime = 0
+			instance.Status.Reason = reason
+
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alpha1.Addon) ([]addonmgrv1alpha1.ObjectStatus, error) {
@@ -570,4 +595,15 @@ func (r *AddonReconciler) SetFinalizer(ctx context.Context, addon *addonmgrv1alp
 	}
 
 	return nil
+}
+
+// Calculates new checksum and validates if there is a diff
+func (r *AddonReconciler) validateChecksum(instance *addonmgrv1alpha1.Addon) (bool, string) {
+	newCheckSum := instance.CalculateChecksum()
+
+	if instance.Status.Checksum == newCheckSum {
+		return false, newCheckSum
+	}
+
+	return true, newCheckSum
 }
