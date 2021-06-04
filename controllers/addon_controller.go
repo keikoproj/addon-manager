@@ -216,6 +216,9 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	var changedStatus bool
 	changedStatus, instance.Status.Checksum = r.validateChecksum(instance)
 
+	// Resources list
+	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
+
 	// Set ttl starttime if it is 0
 	if instance.Status.StartTime == 0 {
 		instance.Status.StartTime = common.GetCurretTimestamp()
@@ -328,21 +331,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-	}
-
-	// Prereqs workflow
-	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
-	instance.Status.Lifecycle.Prereqs = prereqsPhase
-	if err != nil {
-		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Addon prereqs workflow failed.")
-		// if prereqs failed, set install status to failed as well so that STATUS is updated
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
-		instance.Status.Reason = reason
-
-		return reconcile.Result{}, err
 	}
 
 	// Observe resources matching selector labels.
