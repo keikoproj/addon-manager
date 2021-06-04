@@ -19,7 +19,7 @@ import "fmt"
 // The below variables will be overrriden using ldflags set by goreleaser during the build process
 var (
 	// Version is the version string
-	Version = "DEV"
+	Version = "v0.4.0-dev"
 
 	// GitCommit is the git commit hash
 	GitCommit = "NONE"
