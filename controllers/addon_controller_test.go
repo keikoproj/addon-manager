@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -64,9 +65,57 @@ var _ = Describe("AddonController", func() {
 			By("Verify addon has been reconciled by checking for checksum status")
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
+
 			By("Verify addon has finalizers added which means it's valid")
 			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
+
+			oldCheckSum := instance.Status.Checksum
+
+			//Update instance params for checksum validation
+			instance.Spec.Params.Context.ClusterRegion = "us-east-2"
+			err = k8sClient.Update(context.TODO(), instance)
+
+			// This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
+			time.Sleep(5 * time.Second)
+
+			if apierrors.IsInvalid(err) {
+				log.Error(err, "failed to update object, got an invalid object error")
+				return
+			}
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+
+				if len(instance.ObjectMeta.Finalizers) > 0 {
+					return nil
+				}
+				return fmt.Errorf("addon is not valid")
+			}, timeout).Should(Succeed())
+
+			By("Verify changing addon spec generates new checksum")
+			Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
+
+			var wfv1 = &unstructured.Unstructured{}
+			wfv1.SetGroupVersionKind(schema.GroupVersionKind{
+				Kind:    "Workflow",
+				Group:   "argoproj.io",
+				Version: "v1alpha1",
+			})
+			wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
+			k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+			By("Verify addon has workflows generated with new checksum name")
+			Expect(wfv1.GetName()).Should(Equal(wfName))
+
+			By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
+			Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
+			Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
 		})
+
+
+
 	})
 })
 
