@@ -1,8 +1,11 @@
 
 before:
   hooks:
+    - go mod tidy
     - go mod download
-
+    - go generate ./...
+    - go fmt ./...
+    - go vet ./...
 builds:
   -
     id: 'manager'
@@ -10,9 +13,9 @@ builds:
     binary: manager
 
     ldflags:
-      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Date}}
       - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Version}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version=v{{.Version}}
 
     env:
       - CGO_ENABLED=0
@@ -23,6 +26,7 @@ builds:
 
     goarch:
       - amd64
+      - arm64
 
   -
     id: 'addonctl'
@@ -30,9 +34,9 @@ builds:
     main: ./cmd/addonctl/main.go
 
     ldflags:
-      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Timestamp}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.BuildDate={{.Date}}
       - -X github.com/keikoproj/addon-manager/pkg/version.GitCommit={{.ShortCommit}}
-      - -X github.com/keikoproj/addon-manager/pkg/version.Version={{.Version}}
+      - -X github.com/keikoproj/addon-manager/pkg/version.Version=v{{.Version}}
 
     env:
       - CGO_ENABLED=0
@@ -43,6 +47,7 @@ builds:
 
     goarch:
       - amd64
+      - arm64
 
 changelog:
   skip: true
@@ -54,24 +59,49 @@ changelog:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ .Major }}.{{ .Minor }}-snapshot-{{ .ShortCommit }}"
+  name_template: "{{ .Major }}.{{ .Minor }}-dev-{{ .ShortCommit }}"
 
 dockers:
   - goos: linux
     goarch: amd64
     goarm: ''
-    binaries:
-      - manager
-    builds:
-      - manager
     skip_push: false
+    use_buildx: true
+    ids:
+      - manager
     image_templates:
-      - "keikoproj/addon-manager:v{{ .Version }}"
-      - "keikoproj/addon-manager:latest"
+      - "keikoproj/addon-manager:v{{ .Version }}-amd64"
     build_flag_templates:
       - "--pull"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.name={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--build-arg=SOURCE_BINARY=manager"
+      - "--platform=linux/amd64"
+    extra_files:
+      - go.mod
+      - go.sum
+  - goos: linux
+    goarch: arm64
+    goarm: ''
+    skip_push: false
+    use_buildx: true
+    ids:
+      - manager
+    image_templates:
+      - "keikoproj/addon-manager:v{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.name={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/arm64"
+    extra_files:
+      - go.mod
+      - go.sum
+docker_manifests:
+  - name_template: "keikoproj/addon-manager:v{{ .Version }}"
+    image_templates:
+      - "keikoproj/addon-manager:v{{ .Version }}-amd64"
+      - "keikoproj/addon-manager:v{{ .Version }}-arm64"
