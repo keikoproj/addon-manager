@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +62,7 @@ func KubectlApply(manifestRelativePath string) error {
 
 	applyArgs := []string{"apply", "-f", path}
 	cmd := exec.Command(kubectlBinaryPath, applyArgs...)
-	log.Printf("Executing: %v %v", kubectlBinaryPath, applyArgs)
+	fmt.Printf("Executing: %v %v", kubectlBinaryPath, applyArgs)
 
 	err = cmd.Start()
 	if err != nil {
@@ -98,7 +97,7 @@ func ConcatonateList(list []string, delimiter string) string {
 func ReadFile(path string) ([]byte, error) {
 	f, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Errorf("failed to read file %v", path)
+		fmt.Printf("failed to read file %v", path)
 		return nil, err
 	}
 	return f, nil
