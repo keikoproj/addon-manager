@@ -65,7 +65,6 @@ var _ = Describe("AddonController", func() {
 			By("Verify addon has been reconciled by checking for checksum status")
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
-
 			By("Verify addon has finalizers added which means it's valid")
 			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
 
@@ -113,8 +112,6 @@ var _ = Describe("AddonController", func() {
 			Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
 			Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
 		})
-
-
 
 	})
 })

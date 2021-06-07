@@ -413,8 +413,6 @@ func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger
 		return err
 	}
 
-
-
 	return nil
 }
 

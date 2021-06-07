@@ -17,7 +17,6 @@ package addonctl
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -25,11 +24,13 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -68,13 +69,15 @@ var secretsList = make([]string, 0)
 var selectorMap = make(map[string]string)
 
 var addonMgrSystemNamespace = "addon-manager-system"
+var log logr.Logger
 
 // Execute the command
 func Execute() {
 	root := newRootCommand()
+	log = zap.New(zap.UseDevMode(true))
 
 	if err := root.Execute(); err != nil {
-		log.Errorf("%s", err)
+		log.Error(err, "Failed to execute command")
 		os.Exit(1)
 	}
 }
@@ -318,9 +321,9 @@ func parseDependencies(deps string) error {
 	for _, dep := range strings.Split(deps, ",") {
 		d := strings.Split(dep, ":")
 		if len(d) == 1 && d[0] == ":" {
-			log.Fatal("Missing ':' separator in dependency")
+			return fmt.Errorf("missing ':' separator in dependency")
 		} else if len(d) != 2 {
-			log.Fatal("Dependency had multiple separators")
+			return fmt.Errorf("dependency had multiple separators")
 		}
 		dependenciesMap[d[0]] = d[1]
 	}
@@ -337,18 +340,18 @@ func extractResources(prereqsPath, installPath string) error {
 
 			switch {
 			case err != nil:
-				log.Fatal(err)
+				return err
 			case fi.IsDir():
 				files, err := ioutil.ReadDir(path)
 				if err != nil {
-					log.Fatal(err)
+					return errors.Wrapf(err, "failed to read dir path %s", path)
 				}
 				for _, f := range files {
 					switch {
 					case strings.HasSuffix(f.Name(), ".py"):
 						data, err := ioutil.ReadFile(f.Name())
 						if err != nil {
-							log.Fatal(fmt.Sprintf("Unable to read file %s", f.Name()))
+							return fmt.Errorf("unable to read file %s", f.Name())
 						}
 
 						if stepName == "prereqs" {
@@ -358,7 +361,9 @@ func extractResources(prereqsPath, installPath string) error {
 						}
 
 					case strings.HasSuffix(f.Name(), ".yaml") || strings.HasSuffix(f.Name(), ".yml"):
-						parseResources(path, stepName)
+						if err := parseResources(path, stepName); err != nil {
+							return err
+						}
 					default:
 						// simply ignore the file
 						continue
@@ -370,7 +375,7 @@ func extractResources(prereqsPath, installPath string) error {
 				case strings.HasSuffix(fi.Name(), ".py"):
 					data, err := ioutil.ReadFile(path)
 					if err != nil {
-						log.Fatal(fmt.Sprintf("Unable to read file %s", fi.Name()))
+						return fmt.Errorf("unable to read file %s", fi.Name())
 					}
 
 					if stepName == "prereqs" {
@@ -380,7 +385,9 @@ func extractResources(prereqsPath, installPath string) error {
 					}
 
 				case strings.HasSuffix(fi.Name(), ".yaml") || strings.HasSuffix(fi.Name(), ".yml"):
-					parseResources(path, stepName)
+					if err := parseResources(path, stepName); err != nil {
+						return err
+					}
 				default:
 					// simply ignore the file
 					continue
@@ -407,10 +414,10 @@ func parseSecrets(raw string) error {
 
 // best way to write parsing functions? take no params and work on global variables, or take and modify the global params (need to pass in pointers in that case)
 
-func parseResources(filename, stepName string) {
+func parseResources(filename, stepName string) error {
 	rawBytes, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.Fatal(err)
+		return errors.Wrapf(err, "failed to read file %s", filename)
 	}
 	resources := strings.Split(string(rawBytes), "---\n")
 	for _, resource := range resources {
@@ -424,4 +431,5 @@ func parseResources(filename, stepName string) {
 			installResources = append(installResources, resource)
 		}
 	}
+	return nil
 }
