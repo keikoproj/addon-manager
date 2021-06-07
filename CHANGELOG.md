@@ -5,6 +5,7 @@
 ## [v0.4.0] - 2021-06-07
 ### Changed
 - Upgrade workflows and deps (#80)
+- Execute workflow only when addon checksum changes (#79)
 
 <a name="v0.3.1"></a>
 ## [v0.3.1] - 2020-10-06
