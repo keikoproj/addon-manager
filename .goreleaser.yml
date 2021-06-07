@@ -77,7 +77,7 @@ dockers:
     goarch: amd64
     goarm: ''
     skip_push: false
-    use_buildx: true
+    use_buildx: false
     ids:
       - manager
     image_templates:
@@ -96,7 +96,7 @@ dockers:
     goarch: arm64
     goarm: ''
     skip_push: false
-    use_buildx: true
+    use_buildx: false
     ids:
       - manager
     image_templates:
