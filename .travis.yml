@@ -1,7 +1,7 @@
 language: go
 
 go:
-  - 1.15.x
+  - 1.16.x
 
 git:
   depth: 1
@@ -22,9 +22,9 @@ cache:
 
 before_install:
   # install dependencies needed by jobs
-  - wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.1/kubebuilder_2.3.1_linux_amd64.tar.gz
-  - tar -zxvf  kubebuilder_2.3.1_linux_amd64.tar.gz
-  - sudo mv kubebuilder_2.3.1_linux_amd64 /usr/local/kubebuilder
+  - wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz
+  - tar -zxvf  kubebuilder_2.3.2_linux_amd64.tar.gz
+  - sudo mv kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
 
 install: skip
 

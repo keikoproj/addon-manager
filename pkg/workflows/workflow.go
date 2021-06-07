@@ -514,16 +514,23 @@ func (w *workflowLifecycle) deleteCollisionWorkflows(ctx context.Context) (bool,
 }
 
 func (w *workflowLifecycle) injectTTLs(wf *unstructured.Unstructured) error {
+	// Workflow spec ttlStrategy new in Argo Workflows v3.x
+	//spec:
+	//ttlStrategy:
+	//secondsAfterCompletion: 10 # Time to live after workflow is completed, replaces ttlSecondsAfterFinished
+	//secondsAfterSuccess: 5     # Time to live after workflow is successful
+	//secondsAfterFailure: 5     # Time to live after workflow fails
+
 	// Default ttl is to cleanup workflows after 3 days
 	var ttl, _ = time.ParseDuration("72h")
-	val, found, err := unstructured.NestedInt64(wf.UnstructuredContent(), "spec", "ttlSecondsAfterFinished")
+	val, found, err := unstructured.NestedInt64(wf.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
 	if err != nil {
 		return err
 	}
 
 	// Make sure workflows by default get cleaned up after 3 days
 	if !found || val == 0 {
-		err = unstructured.SetNestedField(wf.Object, int64(ttl.Seconds()), "spec", "ttlSecondsAfterFinished")
+		err = unstructured.SetNestedField(wf.Object, int64(ttl.Seconds()), "spec", "ttlStrategy", "secondsAfterCompletion")
 		if err != nil {
 			return err
 		}

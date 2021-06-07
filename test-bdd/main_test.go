@@ -20,23 +20,20 @@ import (
 	"io/ioutil"
 	"testing"
 
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/test-bdd/testutil"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	apiextcs "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
-	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/test-bdd/testutil"
 )
 
-var log = logrus.New()
 var ctx = context.TODO()
 
 func TestE2e(t *testing.T) {
@@ -74,7 +71,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 		crdsRoot := "../config/crd/bases"
 		files, err := ioutil.ReadDir(crdsRoot)
 		if err != nil {
-			log.Fatal(err)
+			Fail(fmt.Sprintf("failed to read crd path. %v", err))
 		}
 
 		for _, file := range files {

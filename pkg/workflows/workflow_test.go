@@ -398,7 +398,7 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 			Should(Succeed())
 
 		// Verify default ttl injected
-		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlSecondsAfterFinished")
+		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
 
@@ -541,9 +541,9 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 			Should(Succeed())
 
 		// Verify default ttl injected
-		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlSecondsAfterFinished")
+		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
+		g.Expect(ttl).To(Equal(int64((72 * time.Hour).Seconds())))
 
 		// Verify activeDeadlineSeconds are kept
 		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
