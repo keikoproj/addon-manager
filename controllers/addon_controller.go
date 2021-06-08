@@ -220,8 +220,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Resources list
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
-	// Set ttl starttime if it is 0
-	if instance.Status.StartTime == 0 {
+	// Set ttl starttime if checksum has changed
+	if changedStatus {
 		instance.Status.StartTime = common.GetCurretTimestamp()
 	}
 
@@ -244,7 +244,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.Reason = reason
-		instance.Status.StartTime = 0
 
 		return reconcile.Result{}, err
 	}
