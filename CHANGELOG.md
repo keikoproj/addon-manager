@@ -1,6 +1,12 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.4.1"></a>
+## [v0.4.1] - 2021-06-08
+### Changed
+- Add a conflict retry on status updates (#82)
+- Always reset the timer whenever checksum changes (#83)
+
 <a name="v0.4.0"></a>
 ## [v0.4.0] - 2021-06-07
 ### Changed
@@ -56,7 +62,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.4.1...HEAD
+[v0.4.1]: https://github.com/keikoproj/addon-manager/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/keikoproj/addon-manager/compare/v0.3.1...v0.4.0
 [v0.3.1]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...v0.2.1
