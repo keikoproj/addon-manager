@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -407,7 +408,10 @@ func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1
 }
 
 func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
-	if err := r.Status().Update(ctx, addon); err != nil {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		return r.Status().Update(ctx, addon, &client.UpdateOptions{})
+	})
+	if err != nil {
 		log.Error(err, "Addon status could not be updated.")
 		r.recorder.Event(addon, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", addon.Namespace, addon.Name, err))
 		return err
