@@ -280,7 +280,7 @@ type AddonStatus struct {
 	Lifecycle AddonStatusLifecycle `json:"lifecycle"`
 	Resources []ObjectStatus       `json:"resources"`
 	Reason    string               `json:"reason"`
-	StartTime int64                `json:"starttime,omitempty"`
+	StartTime int64                `json:"starttime"`
 }
 
 // +kubebuilder:object:root=true
