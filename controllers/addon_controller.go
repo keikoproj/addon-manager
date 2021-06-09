@@ -53,7 +53,7 @@ import (
 )
 
 // addon ttl time
-const TTL int64 = 180000
+const TTL int64 = int64((time.Duration(1) * time.Hour)/time.Millisecond) // 1 hour
 
 // Watched resources
 var (
