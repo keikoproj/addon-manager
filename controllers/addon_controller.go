@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -52,7 +53,7 @@ import (
 )
 
 // addon ttl time
-const TTL int64 = 180000
+const TTL = time.Duration(1) * time.Hour // 1 hour
 
 // Watched resources
 var (
@@ -77,6 +78,7 @@ type AddonReconciler struct {
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
+	statusWGMap     map[string]*sync.WaitGroup
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -89,6 +91,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
+		statusWGMap:     map[string]*sync.WaitGroup{},
 	}
 }
 
@@ -220,13 +223,15 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Resources list
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
-	// Set ttl starttime if checksum has changed
 	if changedStatus {
+		// Set ttl starttime if checksum has changed
 		instance.Status.StartTime = common.GetCurretTimestamp()
-	}
 
-	// Clear out the reason
-	instance.Status.Reason = ""
+		// Clear out status and reason
+		instance.Status.Lifecycle.Prereqs = ""
+		instance.Status.Lifecycle.Installed = ""
+		instance.Status.Reason = ""
+	}
 
 	// Update status that we have started reconciling this addon.
 	if instance.Status.Lifecycle.Installed == "" {
@@ -236,8 +241,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	}
 
 	// Check if addon installation expired.
-	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL) {
-		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
+	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL.Milliseconds()) {
+		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, TTL.String())
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
 		log.Error(err, reason)
@@ -264,7 +269,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
-			instance.Status.StartTime = 0
 			instance.Status.Reason = reason
 			log.Error(err, "Failed to finalize addon.")
 			return reconcile.Result{}, err
@@ -281,7 +285,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 			// Record an event if addon is not valid
 			r.recorder.Event(instance, "Normal", "Pending", reason)
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Pending
-			instance.Status.StartTime = 0
 			instance.Status.Reason = reason
 
 			log.Info("Addon %s/%s is waiting on dependencies to be out of Pending state.", instance.Namespace, instance.Name)
@@ -297,7 +300,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		// Record an event if addon is not valid
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
 		instance.Status.Reason = reason
 
 		log.Error(err, "Failed to validate addon.")
@@ -314,7 +316,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Failed to add finalizer for addon.")
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
 		instance.Status.Reason = reason
 		return reconcile.Result{}, err
 	}
@@ -340,7 +341,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Addon failed to find deployed resources.")
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
 		instance.Status.Reason = reason
 
 		return reconcile.Result{}, err
@@ -407,6 +407,16 @@ func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1
 }
 
 func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
+	addonName := types.NamespacedName{Name: addon.Name, Namespace: addon.Namespace}.String()
+	wg, ok := r.statusWGMap[addonName]
+	if !ok {
+		wg = &sync.WaitGroup{}
+		r.statusWGMap[addonName] = wg
+	}
+	// Wait to process addon updates until we have finished updating same addon
+	wg.Wait()
+	wg.Add(1)
+	defer wg.Done()
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		return r.Status().Update(ctx, addon, &client.UpdateOptions{})
 	})
@@ -438,7 +448,6 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 		log.Error(err, "Addon prereqs workflow failed.")
 		// if prereqs failed, set install status to failed as well so that STATUS is updated
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
 		instance.Status.Reason = reason
 
 		return err
@@ -452,7 +461,6 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		// if prereqs failed, set install status to failed as well so that STATUS is updated
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.StartTime = 0
 		instance.Status.Reason = reason
 
 		return fmt.Errorf(reason)
@@ -464,7 +472,6 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon could not validate secrets.")
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-			instance.Status.StartTime = 0
 			instance.Status.Reason = reason
 
 			return err
@@ -476,7 +483,6 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 			reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon install workflow failed.")
-			instance.Status.StartTime = 0
 			instance.Status.Reason = reason
 
 			return err
