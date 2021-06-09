@@ -355,6 +355,7 @@ spec:
             - lifecycle
             - reason
             - resources
+            - starttime
             type: object
         type: object
     served: true
