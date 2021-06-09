@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -77,6 +78,7 @@ type AddonReconciler struct {
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
+	statusWGMap     map[string]*sync.WaitGroup
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -89,6 +91,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
+		statusWGMap:     map[string]*sync.WaitGroup{},
 	}
 }
 
@@ -402,6 +405,16 @@ func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1
 }
 
 func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
+	addonName := types.NamespacedName{Name: addon.Name, Namespace: addon.Namespace}.String()
+	wg, ok := r.statusWGMap[addonName]
+	if !ok {
+		wg = &sync.WaitGroup{}
+		r.statusWGMap[addonName] = wg
+	}
+	// Wait to process addon updates until we have finished updating same addon
+	wg.Wait()
+	wg.Add(1)
+	defer wg.Done()
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		return r.Status().Update(ctx, addon, &client.UpdateOptions{})
 	})
