@@ -320,9 +320,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	// Add addon to cache
-	//r.addAddonToCache(req, addon, addonmgrv1alpha1.Pending)
-
 	// Execute PreReq and Install workflow, if spec body has changed.
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
 	if changedStatus || instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
