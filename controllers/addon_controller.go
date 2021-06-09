@@ -53,7 +53,7 @@ import (
 )
 
 // addon ttl time
-const TTL int64 = int64((time.Duration(1) * time.Hour) / time.Millisecond) // 1 hour
+const TTL = time.Duration(1) * time.Hour // 1 hour
 
 // Watched resources
 var (
@@ -241,8 +241,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	}
 
 	// Check if addon installation expired.
-	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL) {
-		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime was %d", instance.Namespace, instance.Name, instance.Status.StartTime)
+	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL.Milliseconds()) {
+		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, TTL.String())
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
 		log.Error(err, reason)
