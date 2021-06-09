@@ -1,6 +1,11 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.4.2"></a>
+## [v0.4.2] - 2021-06-09
+### Changed
+- Increase Addon TTL to 1-hour and reset status per checksum change (#86)
+
 <a name="v0.4.1"></a>
 ## [v0.4.1] - 2021-06-08
 ### Changed
@@ -62,7 +67,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.4.2...HEAD
+[v0.4.2]: https://github.com/keikoproj/addon-manager/compare/v0.4.1...v0.4.2
 [v0.4.1]: https://github.com/keikoproj/addon-manager/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/keikoproj/addon-manager/compare/v0.3.1...v0.4.0
 [v0.3.1]: https://github.com/keikoproj/addon-manager/compare/v0.3.0...v0.3.1
