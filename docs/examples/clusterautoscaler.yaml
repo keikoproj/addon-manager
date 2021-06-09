@@ -5,7 +5,7 @@ metadata:
   namespace: addon-manager-system
 spec:
   pkgChannel: cluster-autoscaler
-  pkgName: cluster-autoscaler-addon
+  pkgName: cluster-autoscaler
   pkgVersion: v0.1
   pkgType: composite
   pkgDescription: "cluster-autoscaler"
