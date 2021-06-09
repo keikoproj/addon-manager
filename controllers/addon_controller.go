@@ -240,7 +240,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 
 	// Check if addon installation expired.
 	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL) {
-		reason := fmt.Sprintf("Addon %s/%s ttl expired", instance.Namespace, instance.Name)
+		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime was %d", instance.Namespace, instance.Name, instance.Status.StartTime)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
 		log.Error(err, reason)
