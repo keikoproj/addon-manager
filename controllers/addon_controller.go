@@ -223,13 +223,15 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	// Resources list
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
-	// Set ttl starttime if checksum has changed
 	if changedStatus {
+		// Set ttl starttime if checksum has changed
 		instance.Status.StartTime = common.GetCurretTimestamp()
-	}
 
-	// Clear out the reason
-	instance.Status.Reason = ""
+		// Clear out status and reason
+		instance.Status.Lifecycle.Prereqs = ""
+		instance.Status.Lifecycle.Installed = ""
+		instance.Status.Reason = ""
+	}
 
 	// Update status that we have started reconciling this addon.
 	if instance.Status.Lifecycle.Installed == "" {
