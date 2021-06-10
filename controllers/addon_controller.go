@@ -132,8 +132,33 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
 		}
 	}()
+
+	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
+
+	// Resource is being deleted, run finalizers and exit.
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// For a better user experience we want to update the status and requeue
+		if instance.Status.Lifecycle.Installed != addonmgrv1alpha1.Deleting {
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Deleting
+			log.Info("Requeue to set deleting status")
+			return reconcile.Result{Requeue: true}, nil
+		}
+
+		err := r.Finalize(ctx, instance, wfl, finalizerName)
+		if err != nil {
+			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
+			r.recorder.Event(instance, "Warning", "Failed", reason)
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
+			instance.Status.Reason = reason
+			log.Error(err, "Failed to finalize addon.")
+			return reconcile.Result{}, err
+		}
+		// Requeue to remove from caches
+		return reconcile.Result{Requeue: true}, nil
+	}
+
 	// Process addon instance
-	ret, procErr := r.processAddon(ctx, req, log, instance)
+	ret, procErr := r.processAddon(ctx, log, instance, wfl)
 
 	// Always update cache, status
 	r.addAddonToCache(log, instance)
@@ -214,7 +239,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return bldr.Complete(r)
 }
 
-func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
+func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
 
 	// Calculate Checksum, returns true if checksum is not changed
 	var changedStatus bool
@@ -251,30 +276,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		instance.Status.Reason = reason
 
 		return reconcile.Result{}, err
-	}
-
-	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
-
-	// Resource is being deleted, run finalizers and exit.
-	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		// For a better user experience we want to update the status and requeue
-		if instance.Status.Lifecycle.Installed != addonmgrv1alpha1.Deleting {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Deleting
-			log.Info("Requeue to set deleting status")
-			return reconcile.Result{Requeue: true}, nil
-		}
-
-		err := r.Finalize(ctx, instance, wfl, finalizerName)
-		if err != nil {
-			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
-			instance.Status.Reason = reason
-			log.Error(err, "Failed to finalize addon.")
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
 	}
 
 	// Validate Addon
