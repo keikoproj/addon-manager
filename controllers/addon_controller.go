@@ -132,11 +132,36 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
 		}
 	}()
+
+	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
+
+	// Resource is being deleted, run finalizers and exit.
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// For a better user experience we want to update the status and requeue
+		if instance.Status.Lifecycle.Installed != addonmgrv1alpha1.Deleting {
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Deleting
+			log.Info("Requeue to set deleting status")
+			return reconcile.Result{Requeue: true}, nil
+		}
+
+		err := r.Finalize(ctx, instance, wfl, finalizerName)
+		if err != nil {
+			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
+			r.recorder.Event(instance, "Warning", "Failed", reason)
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
+			instance.Status.Reason = reason
+			log.Error(err, "Failed to finalize addon.")
+			return reconcile.Result{}, err
+		}
+		// Requeue to remove from caches
+		return reconcile.Result{Requeue: true}, nil
+	}
+
 	// Process addon instance
-	ret, procErr := r.processAddon(ctx, req, log, instance)
+	ret, procErr := r.processAddon(ctx, log, instance, wfl)
 
 	// Always update cache, status
-	r.addAddonToCache(instance)
+	r.addAddonToCache(log, instance)
 
 	err := r.updateAddonStatus(ctx, log, instance)
 	if err != nil {
@@ -214,7 +239,7 @@ func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return bldr.Complete(r)
 }
 
-func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
+func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
 
 	// Calculate Checksum, returns true if checksum is not changed
 	var changedStatus bool
@@ -253,30 +278,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
-
-	// Resource is being deleted, run finalizers and exit.
-	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		// For a better user experience we want to update the status and requeue
-		if instance.Status.Lifecycle.Installed != addonmgrv1alpha1.Deleting {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Deleting
-			log.Info("Requeue to set deleting status")
-			return reconcile.Result{Requeue: true}, nil
-		}
-
-		err := r.Finalize(ctx, instance, wfl, finalizerName)
-		if err != nil {
-			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
-			instance.Status.Reason = reason
-			log.Error(err, "Failed to finalize addon.")
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
-	}
-
 	// Validate Addon
 	if ok, err := addon.NewAddonValidator(instance, r.versionCache, r.dynClient).Validate(); !ok {
 		// if an addons dependency is in a Pending state then make the parent addon Pending
@@ -299,7 +300,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		reason := fmt.Sprintf("Addon %s/%s is not valid. %v", instance.Namespace, instance.Name, err)
 		// Record an event if addon is not valid
 		r.recorder.Event(instance, "Warning", "Failed", reason)
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ValidationFailed
 		instance.Status.Reason = reason
 
 		log.Error(err, "Failed to validate addon.")
@@ -320,12 +321,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	// Add addon to cache
-	//r.addAddonToCache(req, addon, addonmgrv1alpha1.Pending)
-
 	// Execute PreReq and Install workflow, if spec body has changed.
+	// In the case when validation failed and continued here we should execute.
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
-	if changedStatus || instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
+	if changedStatus || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.ValidationFailed ||
+		instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
 		log.Info("Addon spec is updated, workflows will be generated")
 
 		err := r.executePrereqAndInstall(ctx, log, instance, wfl)
@@ -429,7 +429,7 @@ func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger
 	return nil
 }
 
-func (r *AddonReconciler) addAddonToCache(instance *addonmgrv1alpha1.Addon) {
+func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1alpha1.Addon) {
 	var version = addon.Version{
 		Name:        instance.GetName(),
 		Namespace:   instance.GetNamespace(),
@@ -437,10 +437,12 @@ func (r *AddonReconciler) addAddonToCache(instance *addonmgrv1alpha1.Addon) {
 		PkgPhase:    instance.GetInstallStatus(),
 	}
 	r.versionCache.AddVersion(version)
+	log.Info("Adding version cache", "phase", version.PkgPhase)
 }
 
 func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
-
+	// Always reset reason when executing
+	instance.Status.Reason = ""
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	if err != nil {
 		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
