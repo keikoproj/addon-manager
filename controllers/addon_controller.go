@@ -299,7 +299,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 		reason := fmt.Sprintf("Addon %s/%s is not valid. %v", instance.Namespace, instance.Name, err)
 		// Record an event if addon is not valid
 		r.recorder.Event(instance, "Warning", "Failed", reason)
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ValidationFailed
 		instance.Status.Reason = reason
 
 		log.Error(err, "Failed to validate addon.")
@@ -321,8 +321,10 @@ func (r *AddonReconciler) processAddon(ctx context.Context, req reconcile.Reques
 	}
 
 	// Execute PreReq and Install workflow, if spec body has changed.
+	// In the case when validation failed and continued here we should execute.
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
-	if changedStatus || instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
+	if changedStatus || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.ValidationFailed ||
+		instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
 		log.Info("Addon spec is updated, workflows will be generated")
 
 		err := r.executePrereqAndInstall(ctx, log, instance, wfl)
@@ -438,7 +440,8 @@ func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1a
 }
 
 func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
-
+	// Always reset reason when executing
+	instance.Status.Reason = ""
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	if err != nil {
 		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)

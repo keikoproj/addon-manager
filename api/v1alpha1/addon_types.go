@@ -138,20 +138,18 @@ type ApplicationAssemblyPhase string
 
 // Constants
 const (
-	// Used to indicate that not all of application's components
-	// have been deployed yet.
+	// Pending Used to indicate that not all of application's components have been deployed yet.
 	Pending ApplicationAssemblyPhase = "Pending"
-	// Used to indicate that all of application's components
-	// have already been deployed.
+	// Succeeded Used to indicate that all of application's components have already been deployed.
 	Succeeded ApplicationAssemblyPhase = "Succeeded"
-	// Used to indicate that deployment of application's components
-	// failed. Some components might be present, but deployment of
-	// the remaining ones will not be re-attempted.
+	// Failed Used to indicate that deployment of application's components failed. Some components
+	// might be present, but deployment of the remaining ones will not be re-attempted.
 	Failed ApplicationAssemblyPhase = "Failed"
-	// Used to indicate that all application's components
-	// are being deleted.
+	// ValidationFailed Used to indicate validation failed
+	ValidationFailed ApplicationAssemblyPhase = "Validation Failed"
+	// Deleting Used to indicate that all application's components are being deleted.
 	Deleting ApplicationAssemblyPhase = "Deleting"
-	// Used to indicate that delete failed.
+	// DeleteFailed Used to indicate that delete failed.
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
 )
 
