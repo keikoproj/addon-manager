@@ -67,7 +67,7 @@ var _ = Describe("AddonController", func() {
 				}
 				return fmt.Errorf("addon is not valid")
 			}, timeout).Should(Succeed())
-			//Fail("Debugging...")
+
 			By("Verify addon has been reconciled by checking for checksum status")
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
