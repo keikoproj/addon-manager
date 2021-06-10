@@ -6,15 +6,13 @@ import (
 	"io/ioutil"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 
@@ -57,7 +55,7 @@ var _ = Describe("AddonController", func() {
 				Fail(fmt.Sprintf("failed to create object, got an invalid object error. %v", err))
 			}
 			Expect(err).NotTo(HaveOccurred())
-			//defer k8sClient.Delete(context.TODO(), instance)
+			defer k8sClient.Delete(context.TODO(), instance)
 
 			Eventually(func() error {
 				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
@@ -69,7 +67,7 @@ var _ = Describe("AddonController", func() {
 				}
 				return fmt.Errorf("addon is not valid")
 			}, timeout).Should(Succeed())
-
+			//Fail("Debugging...")
 			By("Verify addon has been reconciled by checking for checksum status")
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
@@ -118,15 +116,29 @@ var _ = Describe("AddonController", func() {
 		})
 
 		It("instance with dependencies should succeed", func() {
-			var instance2 = &v1alpha1.Addon{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: addonNamespace},
+			instance = &v1alpha1.Addon{
+				ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: addonNamespace},
 				Spec: v1alpha1.AddonSpec{
 					PackageSpec: v1alpha1.PackageSpec{
 						PkgType:    v1alpha1.CompositePkg,
 						PkgName:    "test/addon-1",
+						PkgVersion: "1.0.1",
+					},
+					Params: v1alpha1.AddonParams{
+						Namespace: "addon-test-ns",
+					},
+				},
+			}
+			var instanceKey = types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+			var instance2 = &v1alpha1.Addon{
+				ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: addonNamespace},
+				Spec: v1alpha1.AddonSpec{
+					PackageSpec: v1alpha1.PackageSpec{
+						PkgType:    v1alpha1.CompositePkg,
+						PkgName:    "test/addon-2",
 						PkgVersion: "1.0.0",
 						PkgDeps: map[string]string{
-							"cluster-autoscaler": "*",
+							"test/addon-1": "*",
 						},
 					},
 					Params: v1alpha1.AddonParams{
@@ -134,14 +146,27 @@ var _ = Describe("AddonController", func() {
 					},
 				},
 			}
+			var instanceKey2 = types.NamespacedName{Namespace: instance2.Namespace, Name: instance2.Name}
 
-			By("Verify first addon-1 exists and is valid")
-			patch := client.MergeFrom(instance.DeepCopy())
-			instance.Status.Lifecycle.Installed = v1alpha1.Succeeded
-			instance.Status.Lifecycle.Prereqs = v1alpha1.Succeeded
-			Expect(k8sClient.Status().Patch(context.TODO(), instance, patch)).ToNot(HaveOccurred())
+			By("Verify first addon-2 that depends on addon-1 is created and has validation failed state")
+			Expect(k8sClient.Create(context.TODO(), instance2)).NotTo(HaveOccurred())
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
+					return err
+				}
+
+				if instance2.Status.Lifecycle.Installed == v1alpha1.ValidationFailed {
+					return nil
+				}
+
+				return fmt.Errorf("addon-2 is not in validation failed state")
+			}, timeout).Should(Succeed())
+
+			By("Verify addon-1 is submitted and completes successfully")
+			Expect(k8sClient.Create(context.TODO(), instance)).NotTo(HaveOccurred())
+			defer k8sClient.Delete(context.TODO(), instance)
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), instanceKey, instance); err != nil {
 					return err
 				}
 
@@ -152,14 +177,9 @@ var _ = Describe("AddonController", func() {
 				return fmt.Errorf("addon-1 is not installed")
 			}, timeout).Should(Succeed())
 
-			By("Verify addon-2 that depends on addon-1 works as expected")
-			err := k8sClient.Create(context.TODO(), instance2)
-			if apierrors.IsInvalid(err) {
-				Fail(fmt.Sprintf("failed to create object, got an invalid object error. %v", err))
-			}
-			Expect(err).NotTo(HaveOccurred())
+			By("Verify addon-2 succeeds after addon-1 completed")
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: instance2.Name, Namespace: instance2.Namespace}, instance2); err != nil {
+				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
 					return err
 				}
 
@@ -167,11 +187,8 @@ var _ = Describe("AddonController", func() {
 					return nil
 				}
 
-				//fmt.Printf("Addon phase: %s", instance2.Status.Lifecycle.Installed)
-
 				return fmt.Errorf("addon-2 is not valid")
 			}, timeout*2).Should(Succeed())
-
 		})
 
 	})
