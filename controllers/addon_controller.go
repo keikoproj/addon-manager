@@ -136,7 +136,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	ret, procErr := r.processAddon(ctx, req, log, instance)
 
 	// Always update cache, status
-	r.addAddonToCache(instance)
+	r.addAddonToCache(log, instance)
 
 	err := r.updateAddonStatus(ctx, log, instance)
 	if err != nil {
@@ -426,7 +426,7 @@ func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger
 	return nil
 }
 
-func (r *AddonReconciler) addAddonToCache(instance *addonmgrv1alpha1.Addon) {
+func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1alpha1.Addon) {
 	var version = addon.Version{
 		Name:        instance.GetName(),
 		Namespace:   instance.GetNamespace(),
@@ -434,6 +434,7 @@ func (r *AddonReconciler) addAddonToCache(instance *addonmgrv1alpha1.Addon) {
 		PkgPhase:    instance.GetInstallStatus(),
 	}
 	r.versionCache.AddVersion(version)
+	log.Info("Adding version cache", "phase", version.PkgPhase)
 }
 
 func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
