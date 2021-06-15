@@ -55,7 +55,6 @@ var _ = Describe("AddonController", func() {
 				Fail(fmt.Sprintf("failed to create object, got an invalid object error. %v", err))
 			}
 			Expect(err).NotTo(HaveOccurred())
-			defer k8sClient.Delete(context.TODO(), instance)
 
 			Eventually(func() error {
 				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
@@ -113,6 +112,29 @@ var _ = Describe("AddonController", func() {
 			By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
 			Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
 			Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
+		})
+
+		It("instance should be deleted w/ deleting state", func() {
+			By("Verify deleting instance should set Deleting state")
+			Expect(k8sClient.Delete(context.TODO(), instance)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+
+				if instance.ObjectMeta.DeletionTimestamp != nil && instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
+					return nil
+				}
+				return fmt.Errorf("addon is not being deleted")
+			}, timeout).Should(Succeed())
+
+			By("Verify delete workflow was generated")
+			wfName := instance.GetFormattedWorkflowName(v1alpha1.Delete)
+			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
+			Eventually(func() error {
+				return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+			}, timeout).Should(Succeed())
+			Expect(wfv1.GetName()).Should(Equal(wfName))
 		})
 
 		It("instance with dependencies should succeed", func() {
