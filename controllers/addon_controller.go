@@ -141,7 +141,8 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		if instance.Status.Lifecycle.Installed != addonmgrv1alpha1.Deleting {
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Deleting
 			log.Info("Requeue to set deleting status")
-			return reconcile.Result{Requeue: true}, nil
+			err := r.updateAddonStatus(ctx, log, instance)
+			return reconcile.Result{}, err
 		}
 
 		err := r.Finalize(ctx, instance, wfl, finalizerName)
