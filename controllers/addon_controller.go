@@ -282,19 +282,33 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Validate Addon
 	if ok, err := addon.NewAddonValidator(instance, r.versionCache, r.dynClient).Validate(); !ok {
 		// if an addons dependency is in a Pending state then make the parent addon Pending
-		if strings.HasPrefix(err.Error(), addon.ErrDepPending) {
+		if err != nil && strings.HasPrefix(err.Error(), addon.ErrDepPending) {
 			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be out of Pending state.", instance.Namespace, instance.Name)
 			// Record an event if addon is not valid
 			r.recorder.Event(instance, "Normal", "Pending", reason)
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Pending
 			instance.Status.Reason = reason
 
-			log.Info("Addon %s/%s is waiting on dependencies to be out of Pending state.", instance.Namespace, instance.Name)
+			log.Info(reason)
 
 			// requeue after 10 seconds
 			return reconcile.Result{
 				Requeue:      true,
 				RequeueAfter: 10 * time.Second,
+			}, nil
+		} else if err != nil && strings.HasPrefix(err.Error(), addon.ErrDepNotInstalled) {
+			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be installed. %v", instance.Namespace, instance.Name, err)
+			// Record an event if addon is not valid
+			r.recorder.Event(instance, "Normal", "Failed", reason)
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ValidationFailed
+			instance.Status.Reason = reason
+
+			log.Info(reason)
+
+			// requeue after 30 seconds
+			return reconcile.Result{
+				Requeue:      true,
+				RequeueAfter: 30 * time.Second,
 			}, nil
 		}
 
