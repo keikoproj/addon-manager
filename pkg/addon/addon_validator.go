@@ -182,7 +182,7 @@ func (av *addonValidator) validateDependencies() error {
 			// Ignore version
 			versions := av.cache.GetVersions(pkgName)
 			if versions == nil {
-				return fmt.Errorf("required dependency %s is not installed", pkgName)
+				return fmt.Errorf(ErrDepNotInstalled+": %q", pkgName)
 			}
 
 			// Look for any successfully installed version
@@ -195,7 +195,7 @@ func (av *addonValidator) validateDependencies() error {
 			}
 
 			if !versionFound {
-				return fmt.Errorf("required dependency %s has no valid versions installed", pkgName)
+				return fmt.Errorf(ErrDepNotInstalled+": %q has no valid versions installed", pkgName)
 			}
 		} else {
 			// Check for specific version
@@ -238,7 +238,7 @@ func (av *addonValidator) resolveDependencies(n *Version, visited map[string]*Ve
 		v := av.cache.GetVersion(pkgName, pkgVersion)
 		if v == nil {
 			// Unresolvable dependency
-			return fmt.Errorf("unable to resolve required dependency %s:%s", pkgName, pkgVersion)
+			return fmt.Errorf(ErrDepNotInstalled+": unable to resolve required dependency %s:%s", pkgName, pkgVersion)
 		}
 
 		// Validate it resolves without cyclic dependency
