@@ -1,6 +1,14 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.4.3"></a>
+## [v0.4.3] - 2021-07-15
+### Fixed
+- Fix delete flow and add tests (#90)
+### Changed
+- Record Addon dependency validation errors as state (#88)
+- Requeue addon for deps not installed error (#91)
+
 <a name="v0.4.2"></a>
 ## [v0.4.2] - 2021-06-09
 ### Changed
