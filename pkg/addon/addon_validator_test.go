@@ -516,7 +516,7 @@ func Test_addonValidator_Validate_With_Installed_Deps(t *testing.T) {
 					Namespace: "addon-test-ns",
 				},
 			},
-		}}, want: false, wantErr: true, errStartsWith: "unable to resolve required dependency"},
+		}}, want: false, wantErr: true, errStartsWith: "required dependency is not installed: unable to resolve required dependency"},
 		{name: "addon-throws-error-for-dependencies-in-pending-state", fields: fields{addon: &addonmgrv1alpha1.Addon{
 			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
 			Spec: addonmgrv1alpha1.AddonSpec{
