@@ -10,105 +10,105 @@ metadata:
   name: argo-role
   namespace: system
 rules:
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - create
-  - get
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/exec
-  verbs:
-  - create
-  - get
-  - list
-  - watch
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - watch
-  - list
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims
-  verbs:
-  - create
-  - delete
-  - get
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflows
-  - workflows/finalizers
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-  - patch
-  - delete
-  - create
-- apiGroups:
-  - argoproj.io
-  resources:
-  - workflowtemplates
-  - workflowtemplates/finalizers
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-- apiGroups:
-  - argoproj.io
-  resources:
-  - cronworkflows
-  - cronworkflows/finalizers
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
-  - policy
-  resources:
-  - poddisruptionbudgets
-  verbs:
-  - create
-  - get
-  - delete
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/exec
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - persistentvolumeclaims
+    verbs:
+      - create
+      - delete
+      - get
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - workflows
+      - workflows/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+      - create
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - workflowtemplates
+      - workflowtemplates/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - cronworkflows
+      - cronworkflows/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - create
+      - get
+      - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -120,8 +120,8 @@ roleRef:
   kind: Role
   name: argo-role
 subjects:
-- kind: ServiceAccount
-  name: argo
+  - kind: ServiceAccount
+    name: argo
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -140,10 +140,10 @@ metadata:
   namespace: system
 spec:
   ports:
-  - name: metrics
-    port: 9090
-    protocol: TCP
-    targetPort: 9090
+    - name: metrics
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
   selector:
     app: workflow-controller
 ---
@@ -162,41 +162,41 @@ spec:
         app: workflow-controller
     spec:
       containers:
-      - args:
-        - --configmap
-        - addon-manager-workflow-controller-configmap
-        - --executor-image
-        - argoproj/argoexec:v3.0.7
-        - --namespaced
-        command:
-        - workflow-controller
-        env:
-        - name: LEADER_ELECTION_IDENTITY
-          valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.name
-        image: docker.io/argoproj/workflow-controller:v3.0.7
-        livenessProbe:
-          failureThreshold: 3
-          httpGet:
-            path: /healthz
-            port: 6060
-          initialDelaySeconds: 90
-          periodSeconds: 60
-          timeoutSeconds: 30
-        name: workflow-controller
-        ports:
-        - containerPort: 9090
-          name: metrics
-        - containerPort: 6060
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
+        - args:
+            - --configmap
+            - addon-manager-workflow-controller-configmap
+            - --executor-image
+            - argoproj/argoexec:v3.2.6
+            - --namespaced
+          command:
+            - workflow-controller
+          env:
+            - name: LEADER_ELECTION_IDENTITY
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+          image: docker.io/argoproj/workflow-controller:v3.2.6
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 6060
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 30
+          name: workflow-controller
+          ports:
+            - containerPort: 9090
+              name: metrics
+            - containerPort: 6060
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
       nodeSelector:
         kubernetes.io/os: linux
       securityContext:
@@ -210,7 +210,7 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v3.0.7
+  pkgVersion: v3.2.6
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:
