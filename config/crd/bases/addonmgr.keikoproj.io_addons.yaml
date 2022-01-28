@@ -1,6 +1,5 @@
-
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
@@ -9,21 +8,21 @@ metadata:
   name: addons.addonmgr.keikoproj.io
 spec:
   additionalPrinterColumns:
-  - JSONPath: .spec.pkgName
-    name: PACKAGE
-    type: string
-  - JSONPath: .spec.pkgVersion
-    name: VERSION
-    type: string
-  - JSONPath: .status.lifecycle.installed
-    name: STATUS
-    type: string
-  - JSONPath: .status.reason
-    name: REASON
-    type: string
-  - JSONPath: .metadata.creationTimestamp
-    name: AGE
-    type: date
+    - JSONPath: .spec.pkgName
+      name: PACKAGE
+      type: string
+    - JSONPath: .spec.pkgVersion
+      name: VERSION
+      type: string
+    - JSONPath: .status.lifecycle.installed
+      name: STATUS
+      type: string
+    - JSONPath: .status.reason
+      name: REASON
+      type: string
+    - JSONPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
   group: addonmgr.keikoproj.io
   names:
     kind: Addon
@@ -38,14 +37,16 @@ spec:
       description: Addon is the Schema for the addons API
       properties:
         apiVersion:
-          description: 'APIVersion defines the versioned schema of this representation
+          description:
+            "APIVersion defines the versioned schema of this representation
             of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources"
           type: string
         kind:
-          description: 'Kind is a string value representing the REST resource this
+          description:
+            "Kind is a string value representing the REST resource this
             object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
           type: string
         metadata:
           type: object
@@ -53,11 +54,13 @@ spec:
           description: AddonSpec defines the desired state of Addon
           properties:
             lifecycle:
-              description: LifecycleWorkflowSpec is where all of the lifecycle workflow
+              description:
+                LifecycleWorkflowSpec is where all of the lifecycle workflow
                 templates will be specified under
               properties:
                 delete:
-                  description: WorkflowType allows user to specify workflow templates
+                  description:
+                    WorkflowType allows user to specify workflow templates
                     with optional namePrefix, workflowRole or role.
                   properties:
                     namePrefix:
@@ -65,21 +68,24 @@ spec:
                       maxLength: 10
                       type: string
                     role:
-                      description: Role used to denote the role annotation that should
+                      description:
+                        Role used to denote the role annotation that should
                         be used by the deployment resource
                       type: string
                     template:
                       description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
-                      description: WorkflowRole used to denote the role annotation
+                      description:
+                        WorkflowRole used to denote the role annotation
                         that should be used by the workflow
                       type: string
                   required:
-                  - template
+                    - template
                   type: object
                 install:
-                  description: WorkflowType allows user to specify workflow templates
+                  description:
+                    WorkflowType allows user to specify workflow templates
                     with optional namePrefix, workflowRole or role.
                   properties:
                     namePrefix:
@@ -87,21 +93,24 @@ spec:
                       maxLength: 10
                       type: string
                     role:
-                      description: Role used to denote the role annotation that should
+                      description:
+                        Role used to denote the role annotation that should
                         be used by the deployment resource
                       type: string
                     template:
                       description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
-                      description: WorkflowRole used to denote the role annotation
+                      description:
+                        WorkflowRole used to denote the role annotation
                         that should be used by the workflow
                       type: string
                   required:
-                  - template
+                    - template
                   type: object
                 prereqs:
-                  description: WorkflowType allows user to specify workflow templates
+                  description:
+                    WorkflowType allows user to specify workflow templates
                     with optional namePrefix, workflowRole or role.
                   properties:
                     namePrefix:
@@ -109,21 +118,24 @@ spec:
                       maxLength: 10
                       type: string
                     role:
-                      description: Role used to denote the role annotation that should
+                      description:
+                        Role used to denote the role annotation that should
                         be used by the deployment resource
                       type: string
                     template:
                       description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
-                      description: WorkflowRole used to denote the role annotation
+                      description:
+                        WorkflowRole used to denote the role annotation
                         that should be used by the workflow
                       type: string
                   required:
-                  - template
+                    - template
                   type: object
                 validate:
-                  description: WorkflowType allows user to specify workflow templates
+                  description:
+                    WorkflowType allows user to specify workflow templates
                     with optional namePrefix, workflowRole or role.
                   properties:
                     namePrefix:
@@ -131,22 +143,25 @@ spec:
                       maxLength: 10
                       type: string
                     role:
-                      description: Role used to denote the role annotation that should
+                      description:
+                        Role used to denote the role annotation that should
                         be used by the deployment resource
                       type: string
                     template:
                       description: Template is used to provide the workflow spec
                       type: string
                     workflowRole:
-                      description: WorkflowRole used to denote the role annotation
+                      description:
+                        WorkflowRole used to denote the role annotation
                         that should be used by the workflow
                       type: string
                   required:
-                  - template
+                    - template
                   type: object
               type: object
             overrides:
-              description: Overrides are kustomize patches that can be applied to
+              description:
+                Overrides are kustomize patches that can be applied to
                 templates
               properties:
                 kustomize:
@@ -163,7 +178,8 @@ spec:
                       description: Common labels as per Kustomize spec
                       type: object
                     overlay:
-                      description: Overlay templates, these are patch objects as per
+                      description:
+                        Overlay templates, these are patch objects as per
                         kustomize spec
                       properties:
                         template:
@@ -185,7 +201,8 @@ spec:
                   type: object
               type: object
             params:
-              description: Parameters that will be injected into the workflows for
+              description:
+                Parameters that will be injected into the workflows for
                 addon
               properties:
                 context:
@@ -193,10 +210,12 @@ spec:
                   properties:
                     additionalConfigs:
                       additionalProperties:
-                        description: FlexString is a ptr to string type that is used
+                        description:
+                          FlexString is a ptr to string type that is used
                           to provide additional configs
                         type: string
-                      description: AdditionalConfigs are a map of string values that
+                      description:
+                        AdditionalConfigs are a map of string values that
                         correspond to additional context data that can be passed along
                       type: object
                     clusterName:
@@ -208,7 +227,8 @@ spec:
                   type: object
                 data:
                   additionalProperties:
-                    description: FlexString is a ptr to string type that is used to
+                    description:
+                      FlexString is a ptr to string type that is used to
                       provide additional configs
                     type: string
                   description: Data values that will be parameters injected into workflows
@@ -228,53 +248,62 @@ spec:
             pkgName:
               type: string
             pkgType:
-              description: PackageType is a specific deployer type that will be used
+              description:
+                PackageType is a specific deployer type that will be used
                 for deploying templates
               type: string
             pkgVersion:
               type: string
             secrets:
-              description: Secrets is a list of secret names expected to exist in
+              description:
+                Secrets is a list of secret names expected to exist in
                 the target namespace
               items:
-                description: 'SecretCmdSpec is a secret list and/or generator for
-                  secrets using the available commands: random, cert.'
+                description:
+                  "SecretCmdSpec is a secret list and/or generator for
+                  secrets using the available commands: random, cert."
                 properties:
                   args:
                     items:
                       type: string
                     type: array
                   cmd:
-                    description: CmdType represents a function that can be performed
+                    description:
+                      CmdType represents a function that can be performed
                       with arguments
                     type: integer
                   name:
                     type: string
                 required:
-                - name
+                  - name
                 type: object
               type: array
             selector:
               description: Selector that is used to filter the resource watching
               properties:
                 matchExpressions:
-                  description: matchExpressions is a list of label selector requirements.
+                  description:
+                    matchExpressions is a list of label selector requirements.
                     The requirements are ANDed.
                   items:
-                    description: A label selector requirement is a selector that contains
+                    description:
+                      A label selector requirement is a selector that contains
                       values, a key, and an operator that relates the key and values.
                     properties:
                       key:
-                        description: key is the label key that the selector applies
+                        description:
+                          key is the label key that the selector applies
                           to.
                         type: string
                       operator:
-                        description: operator represents a key's relationship to a
+                        description:
+                          operator represents a key's relationship to a
                           set of values. Valid operators are In, NotIn, Exists and
                           DoesNotExist.
                         type: string
                       values:
-                        description: values is an array of string values. If the operator
+                        description:
+                          values is an array of string values. If the operator
                           is In or NotIn, the values array must be non-empty. If the
                           operator is Exists or DoesNotExist, the values array must
                           be empty. This array is replaced during a strategic merge
@@ -283,14 +312,15 @@ spec:
                           type: string
                         type: array
                     required:
-                    - key
-                    - operator
+                      - key
+                      - operator
                     type: object
                   type: array
                 matchLabels:
                   additionalProperties:
                     type: string
-                  description: matchLabels is a map of {key,value} pairs. A single
+                  description:
+                    matchLabels is a map of {key,value} pairs. A single
                     {key,value} in the matchLabels map is equivalent to an element
                     of matchExpressions, whose key field is "key", the operator is
                     "In", and the values array contains only "value". The requirements
@@ -298,10 +328,10 @@ spec:
                   type: object
               type: object
           required:
-          - pkgDescription
-          - pkgName
-          - pkgType
-          - pkgVersion
+            - pkgDescription
+            - pkgName
+            - pkgType
+            - pkgVersion
           type: object
         status:
           description: AddonStatus defines the observed state of Addon
@@ -312,12 +342,14 @@ spec:
               description: AddonStatusLifecycle defines the lifecycle status for steps.
               properties:
                 installed:
-                  description: 'ApplicationAssemblyPhase tracks the Addon CRD phases:
-                    pending, succeeded, failed, deleting, deleteFailed'
+                  description:
+                    "ApplicationAssemblyPhase tracks the Addon CRD phases:
+                    pending, succeeded, failed, deleting, deleteFailed"
                   type: string
                 prereqs:
-                  description: 'ApplicationAssemblyPhase tracks the Addon CRD phases:
-                    pending, succeeded, failed, deleting, deleteFailed'
+                  description:
+                    "ApplicationAssemblyPhase tracks the Addon CRD phases:
+                    pending, succeeded, failed, deleting, deleteFailed"
                   type: string
               type: object
             reason:
@@ -339,7 +371,7 @@ spec:
                     description: Name of object
                     type: string
                   status:
-                    description: 'Status. Values: InProgress, Ready, Unknown'
+                    description: "Status. Values: InProgress, Ready, Unknown"
                     type: string
                 type: object
               type: array
@@ -347,18 +379,18 @@ spec:
               format: int64
               type: integer
           required:
-          - checksum
-          - lifecycle
-          - reason
-          - resources
-          - starttime
+            - checksum
+            - lifecycle
+            - reason
+            - resources
+            - starttime
           type: object
       type: object
   version: v1alpha1
   versions:
-  - name: v1alpha1
-    served: true
-    storage: true
+    - name: v1alpha1
+      served: true
+      storage: true
 status:
   acceptedNames:
     kind: ""
