@@ -33,7 +33,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: jimin1/keiko:addon-manager
+        image: keikoproj/addon-manager:latest
         name: manager
         resources:
           requests:

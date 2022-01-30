@@ -8,5 +8,5 @@ spec:
     spec:
       containers:
       # Change the value of image field below to your controller image URL
-      - image: jimin1/keiko:addon-manager
+      - image: keikoproj/addon-manager:latest
         name: manager
