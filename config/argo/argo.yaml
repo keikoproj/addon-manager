@@ -168,7 +168,7 @@ spec:
         - --configmap
         - addon-manager-workflow-controller-configmap
         - --executor-image
-        - argoproj/argoexec:v3.2.6
+        - argoproj/argoexec:v3.2.7
         - --namespaced
         command:
         - workflow-controller
@@ -178,7 +178,7 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.name
-        image: docker.io/argoproj/workflow-controller:v3.2.6
+        image: docker.io/argoproj/workflow-controller:v3.2.7
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -212,7 +212,7 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v3.2.6
+  pkgVersion: v3.2.7
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:
