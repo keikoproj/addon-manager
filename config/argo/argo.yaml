@@ -168,7 +168,7 @@ spec:
         - --configmap
         - addon-manager-workflow-controller-configmap
         - --executor-image
-        - argoproj/argoexec:v3.2.7
+        - quay.io/argoproj/argoexec:latest
         - --namespaced
         command:
         - workflow-controller
@@ -178,7 +178,7 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.name
-        image: docker.io/argoproj/workflow-controller:v3.2.7
+        image: quay.io/argoproj/workflow-controller:latest
         livenessProbe:
           failureThreshold: 3
           httpGet:

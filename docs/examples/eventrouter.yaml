@@ -18,6 +18,8 @@ spec:
       template: |
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
+        metadata:
+          name: er-prereqs-
         spec:
           entrypoint: entry
           serviceAccountName: addon-manager-workflow-installer-sa
@@ -78,6 +80,8 @@ spec:
       template: |
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
+        metadata:
+          name: er-install-
         spec:
           entrypoint: entry
           serviceAccountName: addon-manager-workflow-installer-sa
@@ -125,6 +129,8 @@ spec:
       template: |
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
+	metadata:
+          name: er-delete-
         spec:
           entrypoint: delete-wf
           serviceAccountName: addon-manager-workflow-installer-sa
