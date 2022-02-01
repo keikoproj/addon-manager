@@ -15,6 +15,7 @@
 package workflows
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -175,8 +176,7 @@ func (w *workflowLifecycle) configureGlobalWFParameters(addon *addonmgrv1alpha1.
 		wfParams = append(wfParams, addParam)
 	}
 
-	err := unstructured.SetNestedSlice(wf.UnstructuredContent(), wfParams, "spec", "arguments", "parameters")
-	if err != nil {
+	if err := unstructured.SetNestedSlice(wf.UnstructuredContent(), wfParams, "spec", "arguments", "parameters"); err != nil {
 		return false
 	}
 
@@ -367,16 +367,16 @@ func (w *workflowLifecycle) processWorkflowResources(workflowStepObject interfac
 				return err
 			}
 
-			var objs []string
+			var buffer bytes.Buffer
 			for _, obj := range strings.Split(data, "---\n") {
 				resource := &unstructured.Unstructured{}
 				data, err = w.processArtifact(obj, resource, wt)
 				if err != nil {
 					return err
 				}
-				objs = append(objs, data)
+				buffer.WriteString(data)
 			}
-			data = strings.Join(objs, "---\n")
+			data = buffer.String()
 			err = unstructured.SetNestedField(artifact, data, "raw", "data")
 			if err != nil {
 				return err
