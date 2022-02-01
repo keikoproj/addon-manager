@@ -392,15 +392,14 @@ func (w *workflowLifecycle) processWorkflowResources(workflowStepObject interfac
 		if foundManifests {
 			var objs []string
 			for _, obj := range strings.Split(manifests.(string), "---\n") {
-				resource := &unstructured.Unstructured{}
-				data, err := w.processArtifact(obj, resource, wt)
+				data, err := w.processArtifact(obj, &unstructured.Unstructured{}, wt)
 				if err != nil {
 					return err
 				}
 				objs = append(objs, data)
 			}
-			manifests = strings.Join(objs, "---\n")
-			err = unstructured.SetNestedField(workflowStepObject.(map[string]interface{}), manifests.(string), "resource", "manifest")
+			manifests = strings.Join(objs, "\n")
+			err = unstructured.SetNestedField(workflowStepObject.(map[string]interface{}), manifests, "resource", "manifest")
 			if err != nil {
 				return err
 			}
@@ -423,13 +422,13 @@ func (w *workflowLifecycle) processArtifact(obj string, resource *unstructured.U
 
 	resource.SetUnstructuredContent(data)
 
-	// Add the default labels to the resource
+	//Add the default labels to the resource
 	w.addDefaultLabelsToResource(resource)
 
-	// Add the provided role annotation to the resource
+	//Add the provided role annotation to the resource
 	w.addRoleAnnotationToResource(resource, wt)
 
-	appendData, err := yaml.Marshal(resource.UnstructuredContent())
+	appendData, err := json.Marshal(resource.UnstructuredContent())
 	if err != nil {
 		return "", fmt.Errorf("unable to marshall resource: %+v", resource)
 	}
