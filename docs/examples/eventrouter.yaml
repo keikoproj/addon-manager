@@ -175,6 +175,6 @@ spec:
 
             - name: delete-ns
               container:
-                image: docker.intuit.com/dev/patterns/kubernetes/dev/kubectl-awscli:v1.19.11
+                image: expert360/kubectl-awscli:v1.11.2
                 command: [sh, -c]
                 args: ["kubectl delete all -n {{workflow.parameters.namespace}} --all"]
