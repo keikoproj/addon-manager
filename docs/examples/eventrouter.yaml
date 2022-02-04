@@ -19,8 +19,7 @@ spec:
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
         metadata:
-          labels:
-            workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+          name: wf-prereq-
         spec:
           activeDeadlineSeconds: 600
           entrypoint: entry
@@ -106,8 +105,7 @@ spec:
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
         metadata:
-          labels:
-            workflows.argoproj.io/controller-instanceid: addon-manager-workflow-controller
+          name: wf-install-
         spec:
           activeDeadlineSeconds: 600
           entrypoint: entry
