@@ -18,19 +18,23 @@ import (
 	"flag"
 	"os"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/controllers"
+	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/version"
+
 	// +kubebuilder:scaffold:imports
+
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
 var (
-	scheme               = runtime.NewScheme()
 	setupLog             = ctrl.Log.WithName("setup")
 	debug                bool
 	metricsAddr          string
@@ -44,7 +48,6 @@ func init() {
 	flag.BoolVar(&debug, "debug", false, "Debug logging")
 	flag.Parse()
 
-	_ = addonmgrv1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -53,11 +56,17 @@ func main() {
 
 	setupLog.Info(version.ToString())
 
+	nonCached := []client.Object{
+		&wfv1.Workflow{},
+		&addonmgrv1alpha1.Addon{},
+		&apiextensionsv1.CustomResourceDefinition{},
+	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "addonmgr.keikoproj.io",
+		Scheme:                common.GetAddonMgrScheme(),
+		MetricsBindAddress:    metricsAddr,
+		LeaderElection:        enableLeaderElection,
+		LeaderElectionID:      "addonmgr.keikoproj.io",
+		ClientDisableCacheFor: nonCached,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
