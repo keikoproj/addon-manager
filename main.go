@@ -64,7 +64,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = controllers.NewAddonReconciler(mgr, ctrl.Log.WithName("controllers").WithName("Addon")).SetupWithManager(mgr)
+	_, err = controllers.New(mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Addon")
 		os.Exit(1)
