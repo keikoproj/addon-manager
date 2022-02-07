@@ -212,7 +212,7 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v3.0.7
+  pkgVersion: v3.2.6
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:

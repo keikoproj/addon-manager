@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/jinzhu/inflection"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -30,7 +29,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
@@ -533,37 +531,52 @@ func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alp
 		return observed, fmt.Errorf("label selector is invalid. %v", err)
 	}
 
-	for _, resc := range resources {
+	var errs []error
+	cli := r.Client
 
-		gvk := resc.GetObjectKind().GroupVersionKind()
-		_, kind := gvk.ToAPIVersionAndKind()
-
-		gvr := schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: inflection.Plural(strings.ToLower(kind)),
-		}
-
-		inf, err := generatedInformers.ForResource(gvr)
-		if err != nil {
-			return observed, err
-		}
-
-		objs, err := inf.Lister().ByNamespace(a.Spec.Params.Namespace).List(selector)
-		if err != nil {
-			return observed, err
-		}
-
-		for _, item := range objs {
-			observed = append(observed, addonmgrv1alpha1.ObjectStatus{
-				Kind:  gvk.Kind,
-				Group: gvk.Group,
-				Name:  item.(metav1.Object).GetName(),
-				Link:  item.(metav1.Object).GetSelfLink(),
-			})
-		}
+	res, err := ObserveService(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "service", a.GetNamespace(), a.GetName(), err))
 	}
+	observed = append(observed, res...)
+	res, err = ObserveJob(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "job", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+	res, err = ObserveCronJob(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "cronjob", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
 
+	res, err = ObserveStatefulSet(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "StatefulSet", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	res, err = ObserveDeployment(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "Deployment", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	res, err = ObserveDaemonSet(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "DaemonSet", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	res, err = ObserveReplicaSet(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "ReplicaSet", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	if len(errs) > 0 {
+		return observed, fmt.Errorf("observed err %v", errs)
+	}
 	return observed, nil
 }
 
