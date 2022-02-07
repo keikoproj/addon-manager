@@ -47,8 +47,6 @@ func init() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&debug, "debug", false, "Debug logging")
 	flag.Parse()
-
-	// +kubebuilder:scaffold:scheme
 }
 
 func main() {

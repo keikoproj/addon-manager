@@ -15,6 +15,7 @@
 package controllers
 
 import (
+	"context"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -86,8 +87,8 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(mgr).ToNot(BeNil())
 
-	err = NewAddonReconciler(mgr, ctrl.Log.WithName("controllers").WithName("Addon")).SetupWithManager(mgr)
-	Expect(err).ToNot(HaveOccurred())
+	rec := NewAddonReconciler(mgr, ctrl.Log.WithName("controllers").WithName("Addon"))
+	Expect(rec).ToNot(BeNil())
 
 	stopMgr, wg = StartTestManager(mgr)
 
@@ -107,9 +108,10 @@ var _ = AfterSuite(func() {
 func StartTestManager(mgr manager.Manager) (chan struct{}, *sync.WaitGroup) {
 	stop := make(chan struct{})
 	wg := &sync.WaitGroup{}
+	ctx := context.Background()
 	go func() {
 		wg.Add(1)
-		Expect(mgr.Start(stop)).ToNot(HaveOccurred())
+		Expect(mgr.Start(ctx)).ToNot(HaveOccurred())
 		wg.Done()
 	}()
 	return stop, wg
