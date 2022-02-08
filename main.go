@@ -29,6 +29,7 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/version"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	// +kubebuilder:scaffold:imports
 )
 
 var (

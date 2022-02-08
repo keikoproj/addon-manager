@@ -203,27 +203,27 @@ func New(mgr manager.Manager) (controller.Controller, error) {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, r.enqueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &v1.Service{}}, r.enqueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(&source.Kind{Type: &v1.Service{}}, r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, r.enqueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, r.enqueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, r.enqueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &batchv1.Job{}}, r.enqueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(&source.Kind{Type: &batchv1.Job{}}, r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 	return c, nil
