@@ -120,6 +120,7 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		log.Info("Addon not found.")
 
 		// Remove version from cache
+
 		if ok, v := r.versionCache.HasVersionName(req.Name); ok {
 			r.versionCache.RemoveVersion(v.PkgName, v.PkgVersion)
 		}
@@ -160,6 +161,10 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		}
 		// Requeue to remove from caches
 		return reconcile.Result{Requeue: true}, nil
+	}
+
+	if addon.IsDuplicate(instance, r.versionCache) {
+		return reconcile.Result{Requeue: true}, fmt.Errorf("duplicated addon. ignore")
 	}
 
 	// Process addon instance

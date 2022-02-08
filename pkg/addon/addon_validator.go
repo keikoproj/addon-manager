@@ -48,6 +48,20 @@ func NewAddonValidator(addon *addonmgrv1alpha1.Addon, cache VersionCacheClient, 
 	}
 }
 
+func IsDuplicate(addon *addonmgrv1alpha1.Addon, cache VersionCacheClient) bool {
+	var version = &Version{
+		Name:        addon.GetName(),
+		Namespace:   addon.GetNamespace(),
+		PackageSpec: addon.GetPackageSpec(),
+		PkgPhase:    addon.Status.Lifecycle.Installed,
+	}
+	if v := cache.GetVersion(version.PkgName, version.PkgVersion); v != nil && v.Name != version.Name {
+		return true
+	}
+
+	return false
+}
+
 func (av *addonValidator) Validate() (bool, error) {
 	var version = &Version{
 		Name:        av.addon.GetName(),
