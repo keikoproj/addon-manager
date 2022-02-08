@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -54,6 +56,8 @@ const (
 	controllerName = "addon_manager_controller"
 	// addon ttl time
 	TTL = time.Duration(1) * time.Hour // 1 hour
+
+	workflowDeployedNS = "addon-manager-system"
 )
 
 // Watched resources
@@ -194,7 +198,7 @@ func New(mgr manager.Manager) (controller.Controller, error) {
 	if err := c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonmgrv1alpha1.Addon{},
-	}); err != nil {
+	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
 		return nil, err
 	}
 
@@ -227,6 +231,18 @@ func New(mgr manager.Manager) (controller.Controller, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
+	wf, ok := obj.(*wfv1.Workflow)
+	if !ok {
+		r.Log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
+		return false
+	}
+	if wf.GetNamespace() == workflowDeployedNS {
+		return true
+	}
+	return false
 }
 
 func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
