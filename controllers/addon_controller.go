@@ -229,7 +229,7 @@ func New(mgr manager.Manager) (controller.Controller, error) {
 	return c, nil
 }
 
-func (r *AddonReconciler) enqueRequestWithAddonLabel() handler.EventHandler {
+func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
 		var reqs = make([]reconcile.Request, 0)
 		var labels = a.GetLabels()
