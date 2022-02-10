@@ -48,6 +48,7 @@ import (
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
+	AddonPkg "github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
 )
@@ -122,7 +123,6 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		log.Info("Addon not found.")
 
 		// Remove version from cache
-
 		if ok, v := r.versionCache.HasVersionName(req.Name); ok {
 			r.versionCache.RemoveVersion(v.PkgName, v.PkgVersion)
 		}
@@ -165,14 +165,10 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	if addon.IsDuplicate(instance, r.versionCache) {
-		return reconcile.Result{Requeue: true}, fmt.Errorf("duplicated addon. ignore")
-	}
-
 	// Process addon instance
 	ret, procErr := r.processAddon(ctx, log, instance, wfl)
 
-	// Always update cache, status
+	// Always update cache, status except errors
 	r.addAddonToCache(log, instance)
 
 	err := r.updateAddonStatus(ctx, log, instance)
@@ -210,7 +206,8 @@ func New(mgr manager.Manager) (controller.Controller, error) {
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
-	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{},
+		predicate.NewPredicateFuncs(r.filterAddons)); err != nil {
 		return nil, err
 	}
 
@@ -238,6 +235,19 @@ func New(mgr manager.Manager) (controller.Controller, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func (r *AddonReconciler) filterAddons(obj client.Object) bool {
+	addon, ok := obj.(*addonmgrv1alpha1.Addon)
+	if !ok {
+		r.Log.Error(fmt.Errorf("unexpected object type in addon watch predicates"), "expected", "*addonmgrv1alpha1.Addon", "found", reflect.TypeOf(obj))
+		return false
+	}
+	if AddonPkg.IsDuplicate(addon, r.versionCache) {
+		r.Log.Error(fmt.Errorf("duplicated addon"), "found", addon)
+		return false
+	}
+	return true
 }
 
 func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
