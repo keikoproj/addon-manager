@@ -74,7 +74,7 @@ var _ = Describe("Large Volume Addons should only use limited CPU and Memory.", 
 
 		var wg sync.WaitGroup
 		lock := &sync.Mutex{}
-		numberOfRoutines := 4
+		numberOfRoutines := 6
 		wg.Add(numberOfRoutines)
 		for i := 1; i <= numberOfRoutines; i++ {
 			go func(i int, lock *sync.Mutex) {
