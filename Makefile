@@ -14,6 +14,10 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+LOADTEST_TIMEOUT ?= "60m"
+LOADTEST_START_NUMBER ?= 1
+LOADTEST_END_NUMBER ?= 2000
+
 .EXPORT_ALL_VARIABLES:
 GO111MODULE=on
 
@@ -26,6 +30,9 @@ test: generate fmt vet manifests
 # Run E2E tests
 bdd: fmt vet deploy
 	go test -timeout 5m -v ./test-bdd/...
+
+loadtest: fmt vet deploy
+	go test -timeout $(LOADTEST_TIMEOUT) -startnumber $(LOADTEST_START_NUMBER) -endnumber $(LOADTEST_END_NUMBER) -v ./test-load/...
 
 # Build manager binary
 manager: generate fmt vet
