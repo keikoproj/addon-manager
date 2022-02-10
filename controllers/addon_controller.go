@@ -108,7 +108,6 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=list
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;patch;create
 // +kubebuilder:rbac:groups="",resources=namespaces;clusterroles;configmaps;events;pods;serviceaccounts;services,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups="argoproj.io",resources=workflows,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments;daemonsets;replicasets;statefulsets,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=extensions,resources=deployments;daemonsets;replicasets;ingresses,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch;create;update;patch
@@ -243,6 +242,7 @@ func (r *AddonReconciler) filterAddons(obj client.Object) bool {
 		r.Log.Error(fmt.Errorf("unexpected object type in addon watch predicates"), "expected", "*addonmgrv1alpha1.Addon", "found", reflect.TypeOf(obj))
 		return false
 	}
+
 	if AddonPkg.IsDuplicate(addon, r.versionCache) {
 		r.Log.Error(fmt.Errorf("duplicated addon"), "found", addon)
 		return false
