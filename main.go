@@ -62,7 +62,7 @@ func main() {
 		MetricsBindAddress:    metricsAddr,
 		LeaderElection:        enableLeaderElection,
 		LeaderElectionID:      "addonmgr.keikoproj.io",
-		ClientDisableCacheFor: nonCached,
+		ClientDisableCacheFor: nonCached, // if any cache is used, to bypass it for the given objects
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
