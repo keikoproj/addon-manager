@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/keikoproj/addon-manager/pkg/common"
@@ -70,16 +71,27 @@ var _ = Describe("Large Volume Addons should only use limited CPU and Memory.", 
 		x, _ := strconv.Atoi(s)
 		y, _ := strconv.Atoi(e)
 		fmt.Printf("start = %d end = %d", x, y)
-		for i := x; i < y; i++ {
-			addon, err := testutil.CreateLoadTestsAddon(dynClient, relativeAddonPath, fmt.Sprintf("-%d", i))
-			Expect(err).NotTo(HaveOccurred())
 
-			addonName = addon.GetName()
-			addonNamespace = addon.GetNamespace()
-			Eventually(func() map[string]interface{} {
-				a, _ := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
-				return a.UnstructuredContent()
-			}, 600*600*30).Should(HaveKey("status"))
+		var wg sync.WaitGroup
+		lock := &sync.Mutex{}
+		numberOfRoutines := 4
+		wg.Add(numberOfRoutines)
+		for i := 1; i <= numberOfRoutines; i++ {
+			go func(i int, lock *sync.Mutex) {
+				for j := i * 1000; j < i*1000+200; j++ {
+					addon, err := testutil.CreateLoadTestsAddon(lock, dynClient, relativeAddonPath, fmt.Sprintf("-%d", i))
+					Expect(err).NotTo(HaveOccurred())
+
+					addonName = addon.GetName()
+					addonNamespace = addon.GetNamespace()
+					Eventually(func() map[string]interface{} {
+						a, _ := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
+						return a.UnstructuredContent()
+					}, 600*600*600).Should(HaveKey("status"))
+				}
+			}(i, lock)
 		}
+		wg.Wait()
 	})
+
 })

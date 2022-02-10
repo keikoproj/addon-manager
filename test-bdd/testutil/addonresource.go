@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -120,7 +121,10 @@ func parseAddonYaml(relativePath string) (*unstructured.Unstructured, error) {
 	return addon, nil
 }
 
-func CreateLoadTestsAddon(kubeClient dynamic.Interface, relativePath string, nameSuffix string) (*unstructured.Unstructured, error) {
+func CreateLoadTestsAddon(lock *sync.Mutex, kubeClient dynamic.Interface, relativePath string, nameSuffix string) (*unstructured.Unstructured, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	ctx := context.TODO()
 	addon, err := parseAddonYaml(relativePath)
 	if err != nil {
