@@ -37,7 +37,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -199,16 +198,15 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 
-	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
-	wfInf := nsInformers.ForResource(common.WorkflowGVR())
 	// Watch workflows created by addon only in addon-manager-system namespace
-	if err := c.Watch(&source.Informer{Informer: wfInf.Informer().(cache.Informer)}, &handler.EnqueueRequestForOwner{
+	if err := c.Watch(&source.Kind{Type: &wfv1.CronWorkflow{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonmgrv1alpha1.Addon{},
 	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
 		return nil, err
 	}
 
+	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
 	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 	wfInforms := NewWfInformers(generatedInformers, nsInformers, stopChan)
 	err = mgr.Add(wfInforms)
