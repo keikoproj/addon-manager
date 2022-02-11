@@ -96,7 +96,7 @@ func main() {
 					a, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 					if a == nil || err != nil || a.UnstructuredContent()["status"] == nil {
 						fmt.Printf("\n\n retry get addon status %v get ", err)
-						time.Sleep(500 * time.Millisecond)
+						time.Sleep(1 * time.Second)
 						continue
 					}
 					break
