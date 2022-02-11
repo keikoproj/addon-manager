@@ -69,7 +69,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, err = controllers.New(mgr)
+	stopChan := make(chan struct{})
+	_, err = controllers.New(mgr, stopChan)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Addon")
 		os.Exit(1)
@@ -82,4 +83,5 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+	close(stopChan)
 }

@@ -49,7 +49,7 @@ import (
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
-	AddonPkg "github.com/keikoproj/addon-manager/pkg/addon"
+	addonPkg "github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
 
@@ -182,7 +182,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	return ret, procErr
 }
 
-func New(mgr manager.Manager) (controller.Controller, error) {
+func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
 	r := &AddonReconciler{
 		Client:          mgr.GetClient(),
 		Log:             ctrl.Log.WithName(controllerName),
@@ -207,6 +207,12 @@ func New(mgr manager.Manager) (controller.Controller, error) {
 		OwnerType:    &addonmgrv1alpha1.Addon{},
 	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
 		return nil, err
+	}
+
+	wfInforms := NewwfInformers(generatedInformers, nsInformers, stopChan)
+	err = mgr.Add(wfInforms)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start workflowinformers")
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
@@ -248,7 +254,7 @@ func (r *AddonReconciler) filterAddons(obj client.Object) bool {
 		return false
 	}
 
-	if AddonPkg.IsDuplicate(addon, r.versionCache) {
+	if addonPkg.IsDuplicate(addon, r.versionCache) {
 		r.Log.Error(fmt.Errorf("duplicated addon"), "found", addon)
 		return false
 	}
