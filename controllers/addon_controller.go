@@ -29,6 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
@@ -45,7 +46,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	addonPkg "github.com/keikoproj/addon-manager/pkg/addon"
@@ -199,14 +199,15 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	}
 
 	// Watch workflows created by addon only in addon-manager-system namespace
-	if err := c.Watch(&source.Kind{Type: &wfv1.CronWorkflow{}}, &handler.EnqueueRequestForOwner{
+	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
+	wfInf := nsInformers.ForResource(common.WorkflowGVR())
+	if err := c.Watch(&source.Informer{Informer: wfInf.Informer()}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonmgrv1alpha1.Addon{},
 	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
 		return nil, err
 	}
 
-	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
 	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
 	wfInforms := NewWfInformers(generatedInformers, nsInformers, stopChan)
 	err = mgr.Add(wfInforms)
@@ -261,15 +262,15 @@ func (r *AddonReconciler) filterAddons(obj client.Object) bool {
 }
 
 func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
-	wf, ok := obj.(*wfv1.Workflow)
-	if !ok {
+	u, _ := obj.(*unstructured.Unstructured)
+	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
 		r.Log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
 		return false
 	}
-	if wf.GetNamespace() == workflowDeployedNS {
-		return true
+	if obj.GetNamespace() != workflowDeployedNS {
+		return false
 	}
-	return false
+	return true
 }
 
 func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
