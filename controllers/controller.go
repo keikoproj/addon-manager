@@ -14,7 +14,7 @@ type WfInformers struct {
 	stopCh <-chan struct{}
 }
 
-func NewwfInformers(gInfo informers.SharedInformerFactory, nsInfo dynamicinformer.DynamicSharedInformerFactory, stopCh <-chan struct{}) *WfInformers {
+func NewWfInformers(gInfo informers.SharedInformerFactory, nsInfo dynamicinformer.DynamicSharedInformerFactory, stopCh <-chan struct{}) *WfInformers {
 	return &WfInformers{
 		generatedInformers: gInfo,
 		nsInformers:        nsInfo,

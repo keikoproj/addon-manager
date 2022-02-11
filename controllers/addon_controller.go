@@ -209,7 +209,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 
-	wfInforms := NewwfInformers(generatedInformers, nsInformers, stopChan)
+	wfInforms := NewWfInformers(generatedInformers, nsInformers, stopChan)
 	err = mgr.Add(wfInforms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start workflowinformers")
