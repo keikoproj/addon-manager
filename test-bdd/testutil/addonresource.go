@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -116,6 +117,49 @@ func parseAddonYaml(relativePath string) (*unstructured.Unstructured, error) {
 
 	if err != io.EOF && err != nil {
 		return nil, err
+	}
+	return addon, nil
+}
+
+func CreateLoadTestsAddon(lock *sync.Mutex, kubeClient dynamic.Interface, relativePath string, nameSuffix string) (*unstructured.Unstructured, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	ctx := context.TODO()
+	addon, err := parseAddonYaml(relativePath)
+	if err != nil {
+		return addon, err
+	}
+
+	name := addon.GetName()
+	namespace := addon.GetNamespace()
+
+	if nameSuffix != "" {
+		addon.SetName(name + nameSuffix)
+		name = addon.GetName()
+	}
+
+	// make sure the addonGroupScheme is valid if failing
+	addonObject, err := kubeClient.Resource(addonGroupSchema).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+
+	pkgName, pkgVersion, ns := name, "v"+nameSuffix, "addon-event-router-ns"+nameSuffix
+	unstructured.SetNestedField(addon.UnstructuredContent(), pkgName, "spec", "pkgName")
+	unstructured.SetNestedField(addon.UnstructuredContent(), pkgVersion, "spec", "pkgVersion")
+	unstructured.SetNestedField(addon.UnstructuredContent(), ns, "spec", "params", "namespace")
+
+	if err == nil {
+		resourceVersion := addonObject.GetResourceVersion()
+		addon.SetResourceVersion(resourceVersion)
+		_, err = kubeClient.Resource(addonGroupSchema).Namespace(namespace).Update(ctx, addon, metav1.UpdateOptions{})
+		if err != nil {
+			return addon, err
+		}
+
+	} else {
+		_, err = kubeClient.Resource(addonGroupSchema).Namespace(namespace).Create(ctx, addon, metav1.CreateOptions{})
+		if err != nil {
+			return addon, err
+		}
 	}
 	return addon, nil
 }

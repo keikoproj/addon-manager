@@ -29,6 +29,7 @@ import (
 	apiextcs "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -89,7 +90,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 		Eventually(func() map[string]interface{} {
 			a, _ := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 			return a.UnstructuredContent()
-		}, 20).Should(HaveKey("status"))
+		}, 30).Should(HaveKey("status"))
 	})
 
 	It("addon workflows should succeed and addon lifecycle should be updated", func() {
@@ -97,11 +98,12 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			statusMap := addonObject.UnstructuredContent()["status"].(map[string]interface{})
-			lifecycleMap := statusMap["lifecycle"].(map[string]interface{})
+			addon := addonmgrv1alpha1.Addon{}
+			err = runtime.DefaultUnstructuredConverter.FromUnstructured(addonObject.UnstructuredContent(), &addon)
+			Expect(err).NotTo(HaveOccurred())
 
-			return addonmgrv1alpha1.ApplicationAssemblyPhase(lifecycleMap["prereqs"].(string))
-		}, 30).Should(Equal(addonmgrv1alpha1.Succeeded))
+			return addon.Status.Lifecycle.Prereqs
+		}, 85).Should(Equal(addonmgrv1alpha1.Succeeded))
 
 		Eventually(func() addonmgrv1alpha1.ApplicationAssemblyPhase {
 			addonObject, err := dynClient.Resource(addonGroupSchema).Namespace(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
@@ -111,7 +113,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 			lifecycleMap := statusMap["lifecycle"].(map[string]interface{})
 
 			return addonmgrv1alpha1.ApplicationAssemblyPhase(lifecycleMap["installed"].(string))
-		}, 30).Should(Equal(addonmgrv1alpha1.Succeeded))
+		}, 85).Should(Equal(addonmgrv1alpha1.Succeeded))
 	})
 
 	It("should copy addon.spec.params to workflow.spec.arguments.parameters", func() {

@@ -11,23 +11,37 @@ spec:
   params:
     namespace: addon-event-router-ns
     context:
-      clusterName: "kops-aws-usw2.cluster.k8s.local"
+      clusterName: "cluster-name"
       clusterRegion: us-west-2
   lifecycle:
     prereqs:
       template: |
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
+        metadata:
+          name: wf-prereq-
         spec:
+          activeDeadlineSeconds: 600
           entrypoint: entry
           serviceAccountName: addon-manager-workflow-installer-sa
           templates:
           - name: entry
+            retryStrategy:
+              limit: 2
+              retryPolicy: "Always"
             steps:
-            - - name: prereq-resources
-                template: submit
+            - - name: prereq-namespace
+                template: submit-ns
+              - name: prereq-serviceaccount
+                template: submit-sa
+              - name: prereq-configmap
+                template: submit-cm
+              - name: prereq-clusterrole
+                template: submit-cr
+              - name: prereq-clusterrolebinding
+                template: submit-crb
 
-          - name: submit
+          - name: submit-ns
             resource:
               action: apply
               manifest: |
@@ -35,25 +49,34 @@ spec:
                 kind: Namespace
                 metadata:
                   name: "{{workflow.parameters.namespace}}"
-                ---
+          - name: submit-sa
+            resource:
+              action: apply
+              manifest: |
                 apiVersion: v1
                 kind: ServiceAccount
                 metadata:
                   name: event-router-sa
                   namespace: "{{workflow.parameters.namespace}}"
-                ---
+          - name: submit-cm
+            resource:
+              action: apply
+              manifest: |
                 apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: event-router-cm
+                  namespace: "{{workflow.parameters.namespace}}"
                 data:
                   config.json: |-
                     {
                       "sink": "stdout"
                     }
-                kind: ConfigMap
-                metadata:
-                  name: event-router-cm
-                  namespace: "{{workflow.parameters.namespace}}"
-                ---
-                apiVersion: rbac.authorization.k8s.io/v1beta1
+          - name: submit-cr
+            resource:
+              action: apply
+              manifest: |
+                apiVersion: rbac.authorization.k8s.io/v1
                 kind: ClusterRole
                 metadata:
                   name: event-router-cr
@@ -61,8 +84,11 @@ spec:
                 - apiGroups: [""]
                   resources: ["events"]
                   verbs: ["get", "watch", "list"]
-                ---
-                apiVersion: rbac.authorization.k8s.io/v1beta1
+          - name: submit-crb
+            resource:
+              action: apply
+              manifest: |
+                apiVersion: rbac.authorization.k8s.io/v1
                 kind: ClusterRoleBinding
                 metadata:
                   name: event-router-crb
@@ -78,11 +104,17 @@ spec:
       template: |
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
+        metadata:
+          name: wf-install-
         spec:
+          activeDeadlineSeconds: 600
           entrypoint: entry
           serviceAccountName: addon-manager-workflow-installer-sa
           templates:
           - name: entry
+            retryStrategy:
+              limit: 2
+              retryPolicy: "Always"
             steps:
             - - name: install-deployment
                 template: submit
@@ -113,24 +145,28 @@ spec:
                           image: gcr.io/heptio-images/eventrouter:v0.2
                           imagePullPolicy: IfNotPresent
                           volumeMounts:
-                          - name: config-volume
-                            mountPath: /etc/eventrouter
+                            - name: config-volume
+                              mountPath: /etc/eventrouter
                       serviceAccount: event-router-sa
                       volumes:
                         - name: config-volume
                           configMap:
                             name: event-router-cm
-
     delete:
       template: |
         apiVersion: argoproj.io/v1alpha1
         kind: Workflow
+        metadata:
+          name: er-delete-
         spec:
           entrypoint: delete-wf
           serviceAccountName: addon-manager-workflow-installer-sa
 
           templates:
             - name: delete-wf
+              retryStrategy:
+                limit: 2
+                retryPolicy: "Always"
               steps:
                 - - name: delete-ns
                     template: delete-ns

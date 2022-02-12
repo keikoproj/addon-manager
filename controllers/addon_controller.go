@@ -17,32 +17,32 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/jinzhu/inflection"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -50,10 +50,17 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
+
+	"k8s.io/client-go/dynamic/dynamicinformer"
 )
 
-// addon ttl time
-const TTL = time.Duration(1) * time.Hour // 1 hour
+const (
+	controllerName = "addon_manager_controller"
+	// addon ttl time
+	TTL = time.Duration(1) * time.Hour // 1 hour
+
+	workflowDeployedNS = "addon-manager-system"
+)
 
 // Watched resources
 var (
@@ -98,6 +105,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=addonmgr.keikoproj.io,resources=addons/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=argoproj.io,resources=workflows,namespace=system,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,namespace=system,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=list
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;patch;create
 // +kubebuilder:rbac:groups="",resources=namespaces;clusterroles;configmaps;events;pods;serviceaccounts;services,verbs=get;list;watch;create;update;patch
@@ -106,13 +114,12 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 // +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch;create;update;patch
 
 // Reconcile method for all addon requests
-func (r *AddonReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("addon", req.NamespacedName)
 
 	log.Info("Starting addon-manager reconcile...")
 	var instance = &addonmgrv1alpha1.Addon{}
-	if err := r.Get(context.TODO(), req.NamespacedName, instance); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		log.Info("Addon not found.")
 
 		// Remove version from cache
@@ -161,7 +168,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	// Process addon instance
 	ret, procErr := r.processAddon(ctx, log, instance, wfl)
 
-	// Always update cache, status
+	// Always update cache, status except errors
 	r.addAddonToCache(log, instance)
 
 	err := r.updateAddonStatus(ctx, log, instance)
@@ -173,71 +180,97 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	return ret, procErr
 }
 
-// SetupWithManager is called to setup manager and watchers
-func (r *AddonReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	log := r.Log
-	managedNS := "addon-manager-system"
+func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
+	r := &AddonReconciler{
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName(controllerName),
+		Scheme:          mgr.GetScheme(),
+		versionCache:    addon.NewAddonVersionCacheClient(),
+		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
+		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
+		recorder:        mgr.GetEventRecorderFor("addons"),
+		statusWGMap:     map[string]*sync.WaitGroup{},
+	}
 
-	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, managedNS, nil)
-	wfInf := nsInformers.ForResource(common.WorkflowGVR())
-	bldr := ctrl.NewControllerManagedBy(mgr).
-		For(&addonmgrv1alpha1.Addon{}).
-		// Watch workflows created by addon only in addon-manager-system namespace
-		Watches(&source.Informer{Informer: wfInf.Informer().(cache.Informer)}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &addonmgrv1alpha1.Addon{},
-		})
-
-	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
-
-	err := mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
-		generatedInformers.Start(s)
-		generatedInformers.WaitForCacheSync(s)
-		nsInformers.Start(s)
-		nsInformers.WaitForCacheSync(s)
-		<-s
-		return nil
-	}))
+	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
-		log.Error(err, "Error adding InformerFactory to the Manager")
-		return err
+		return nil, err
+	}
+
+	// Watch workflows created by addon only in addon-manager-system namespace
+	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
+	wfInf := nsInformers.ForResource(common.WorkflowGVR())
+	if err := c.Watch(&source.Informer{Informer: wfInf.Informer()}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &addonmgrv1alpha1.Addon{},
+	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
+		return nil, err
+	}
+
+	wfInforms := NewWfInformers(nsInformers, stopChan)
+	err = mgr.Add(wfInforms)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start workflowinformers")
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
-	for _, resc := range resources {
-		gvk := resc.GetObjectKind().GroupVersionKind()
-		_, kind := gvk.ToAPIVersionAndKind()
-
-		gvr := schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: inflection.Plural(strings.ToLower(kind)),
-		}
-
-		inf, err := generatedInformers.ForResource(gvr)
-		if err != nil {
-			return err
-		}
-
-		bldr = bldr.Watches(&source.Informer{Informer: inf.Informer().(cache.Informer)}, &handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-				var reqs = make([]reconcile.Request, 0)
-				var labels = a.Meta.GetLabels()
-				if name, ok := labels["app.kubernetes.io/name"]; ok && strings.TrimSpace(name) != "" {
-					// Let's lookup addon related to this object.
-					if ok, v := r.versionCache.HasVersionName(name); ok {
-						reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
-							Name:      v.Name,
-							Namespace: v.Namespace,
-						}})
-					}
-				}
-				return reqs
-			}),
-		})
+	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{}); err != nil {
+		return nil, err
 	}
 
-	return bldr.Complete(r)
+	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+		return nil, err
+	}
+
+	if err := c.Watch(&source.Kind{Type: &v1.Service{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+		return nil, err
+	}
+
+	if err := c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+		return nil, err
+	}
+
+	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+		return nil, err
+	}
+
+	if err := c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+		return nil, err
+	}
+
+	if err := c.Watch(&source.Kind{Type: &batchv1.Job{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
+	u, _ := obj.(*unstructured.Unstructured)
+	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
+		r.Log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
+		return false
+	}
+	if obj.GetNamespace() != workflowDeployedNS {
+		return false
+	}
+	return true
+}
+
+func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
+		var reqs = make([]reconcile.Request, 0)
+		var labels = a.GetLabels()
+		if name, ok := labels["app.kubernetes.io/name"]; ok && strings.TrimSpace(name) != "" {
+			// Let's lookup addon related to this object.
+			if ok, v := r.versionCache.HasVersionName(name); ok {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      v.Name,
+					Namespace: v.Namespace,
+				}})
+			}
+		}
+		return reqs
+	})
 }
 
 func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
@@ -525,37 +558,52 @@ func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alp
 		return observed, fmt.Errorf("label selector is invalid. %v", err)
 	}
 
-	for _, resc := range resources {
+	var errs []error
+	cli := r.Client
 
-		gvk := resc.GetObjectKind().GroupVersionKind()
-		_, kind := gvk.ToAPIVersionAndKind()
-
-		gvr := schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: inflection.Plural(strings.ToLower(kind)),
-		}
-
-		inf, err := generatedInformers.ForResource(gvr)
-		if err != nil {
-			return observed, err
-		}
-
-		objs, err := inf.Lister().ByNamespace(a.Spec.Params.Namespace).List(selector)
-		if err != nil {
-			return observed, err
-		}
-
-		for _, item := range objs {
-			observed = append(observed, addonmgrv1alpha1.ObjectStatus{
-				Kind:  gvk.Kind,
-				Group: gvk.Group,
-				Name:  item.(metav1.Object).GetName(),
-				Link:  item.(metav1.Object).GetSelfLink(),
-			})
-		}
+	res, err := ObserveService(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "service", a.GetNamespace(), a.GetName(), err))
 	}
+	observed = append(observed, res...)
+	res, err = ObserveJob(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "job", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+	res, err = ObserveCronJob(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "cronjob", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
 
+	res, err = ObserveStatefulSet(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "StatefulSet", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	res, err = ObserveDeployment(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "Deployment", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	res, err = ObserveDaemonSet(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "DaemonSet", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	res, err = ObserveReplicaSet(cli, a.GetNamespace(), selector)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "ReplicaSet", a.GetNamespace(), a.GetName(), err))
+	}
+	observed = append(observed, res...)
+
+	if len(errs) > 0 {
+		return observed, fmt.Errorf("observed err %v", errs)
+	}
 	return observed, nil
 }
 
