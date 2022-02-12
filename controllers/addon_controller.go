@@ -208,8 +208,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 
-	generatedInformers = informers.NewSharedInformerFactory(r.generatedClient, time.Minute*30)
-	wfInforms := NewWfInformers(generatedInformers, nsInformers, stopChan)
+	wfInforms := NewWfInformers(nsInformers, stopChan)
 	err = mgr.Add(wfInforms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start workflowinformers")
