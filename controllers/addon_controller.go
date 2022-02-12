@@ -48,7 +48,6 @@ import (
 
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
-	addonPkg "github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
 
@@ -215,8 +214,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
-	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{},
-		predicate.NewPredicateFuncs(r.filterAddons)); err != nil {
+	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{}); err != nil {
 		return nil, err
 	}
 
@@ -244,20 +242,6 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 	return c, nil
-}
-
-func (r *AddonReconciler) filterAddons(obj client.Object) bool {
-	addon, ok := obj.(*addonmgrv1alpha1.Addon)
-	if !ok {
-		r.Log.Error(fmt.Errorf("unexpected object type in addon watch predicates"), "expected", "*addonmgrv1alpha1.Addon", "found", reflect.TypeOf(obj))
-		return false
-	}
-
-	if addonPkg.IsDuplicate(addon, r.versionCache) {
-		r.Log.Error(fmt.Errorf("duplicated addon"), "found", addon)
-		return false
-	}
-	return true
 }
 
 func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
