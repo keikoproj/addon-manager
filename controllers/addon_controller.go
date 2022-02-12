@@ -17,7 +17,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -29,7 +28,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
@@ -42,16 +40,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
-
-	"k8s.io/client-go/dynamic/dynamicinformer"
 )
 
 const (
@@ -59,7 +55,7 @@ const (
 	// addon ttl time
 	TTL = time.Duration(1) * time.Hour // 1 hour
 
-	workflowDeployedNS = "addon-manager-system"
+	managedNameSpace = "addon-manager-system"
 )
 
 // Watched resources
@@ -197,17 +193,15 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 
-	// Watch workflows created by addon only in addon-manager-system namespace
-	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
-	wfInf := nsInformers.ForResource(common.WorkflowGVR())
-	if err := c.Watch(&source.Informer{Informer: wfInf.Informer()}, &handler.EnqueueRequestForOwner{
+	if err := c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonmgrv1alpha1.Addon{},
-	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
-	wfInforms := NewWfInformers(nsInformers, stopChan)
+	// Watch workflows only in managed namespace
+	wfInforms := NewWfInformers(NewWorkflowInformer(r.dynClient, managedNameSpace, workflowResyncPeriod, nil, nil), stopChan)
 	err = mgr.Add(wfInforms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start workflowinformers")
@@ -242,18 +236,6 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 	return c, nil
-}
-
-func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
-	u, _ := obj.(*unstructured.Unstructured)
-	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
-		r.Log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
-		return false
-	}
-	if obj.GetNamespace() != workflowDeployedNS {
-		return false
-	}
-	return true
 }
 
 func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {

@@ -1,0 +1,5 @@
+addons number        4
+ addonmanager cpu/mem usage  %CPU %MEM
+  0.0  1.0
+ controller cpu/mem usage  %CPU %MEM
+  2.3  4.5
