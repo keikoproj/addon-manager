@@ -71,10 +71,10 @@ kops-cluster-delete:
 	kops delete --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
 
 kind-cluster-config:
-	export KUBECONFIG=$$(kind get kubeconfig-path --name="kind")
+	export KUBECONFIG=$$(kind export kubeconfig --name="kind")
 
-kind-cluster: kind-cluster-config
-	kind create cluster --config hack/kind.cluster.yaml $(KUBERNETES_LOCAL_CLUSTER_VERSION)
+kind-cluster:
+	kind create cluster --config hack/kind.cluster.yaml --name="kind" $(KUBERNETES_LOCAL_CLUSTER_VERSION)
 	kind load docker-image ${IMG}
 
 kind-cluster-delete: kind-cluster-config
