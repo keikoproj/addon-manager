@@ -89,6 +89,8 @@ dockers:
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--platform=linux/amd64"
+      - "--build-arg=GIT_COMMIT={{.ShortCommit}}"
+      - "--build-arg=BUILD_DATE={{.Date}}"
     extra_files:
       - go.mod
       - go.sum
@@ -108,6 +110,8 @@ dockers:
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--platform=linux/arm64"
+      - "--build-arg=GIT_COMMIT={{.ShortCommit}}"
+      - "--build-arg=BUILD_DATE={{.Date}}"
     extra_files:
       - go.mod
       - go.sum
