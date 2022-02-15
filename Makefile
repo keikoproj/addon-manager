@@ -6,6 +6,8 @@ CRD_OPTIONS ?= "crd:trivialVersions=true"
 KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.21.2
 KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
 KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
+GIT_COMMIT := $(shell git rev-parse --short HEAD)
+BUILD_DATE := $(shell date +%Y-%m-%dT%H:%M:%SZ)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -71,10 +73,10 @@ kops-cluster-delete:
 	kops delete --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml --yes
 
 kind-cluster-config:
-	export KUBECONFIG=$$(kind get kubeconfig-path --name="kind")
+	export KUBECONFIG=$$(kind export kubeconfig --name="kind")
 
-kind-cluster: kind-cluster-config
-	kind create cluster --config hack/kind.cluster.yaml $(KUBERNETES_LOCAL_CLUSTER_VERSION)
+kind-cluster:
+	kind create cluster --config hack/kind.cluster.yaml --name="kind" $(KUBERNETES_LOCAL_CLUSTER_VERSION)
 	kind load docker-image ${IMG}
 
 kind-cluster-delete: kind-cluster-config
@@ -98,7 +100,7 @@ generate: controller-gen
 
 # Build the docker image
 docker-build: manager
-	docker build -t ${IMG} .
+	docker build --build-arg COMMIT=${GIT_COMMIT} --build-arg DATE=${BUILD_DATE} -t ${IMG} .
 	@echo "updating kustomize image patch file for manager resource"
 	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
 
