@@ -49,6 +49,9 @@ builds:
     goarch:
       - amd64
       - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
 archives:
   - id: addonctl-archive
     builds:
@@ -76,8 +79,7 @@ dockers:
   - goos: linux
     goarch: amd64
     goarm: ''
-    skip_push: false
-    use_buildx: true
+    use: buildx
     ids:
       - manager
     image_templates:
@@ -94,11 +96,15 @@ dockers:
     extra_files:
       - go.mod
       - go.sum
+      - main.go
+      - pkg/
+      - api/
+      - cmd/
+      - controllers/
   - goos: linux
     goarch: arm64
     goarm: ''
-    skip_push: false
-    use_buildx: true
+    use: buildx
     ids:
       - manager
     image_templates:
@@ -115,6 +121,11 @@ dockers:
     extra_files:
       - go.mod
       - go.sum
+      - main.go
+      - pkg/
+      - api/
+      - cmd/
+      - controllers/
 docker_manifests:
   - name_template: "keikoproj/addon-manager:v{{ .Version }}"
     image_templates:
