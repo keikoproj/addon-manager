@@ -3,8 +3,13 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	informers "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions"
+	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions/workflow/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -15,6 +20,9 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
+
+	addonwfutility "github.com/keikoproj/addon-manager/pkg/workflows"
 )
 
 const (
@@ -25,18 +33,43 @@ const (
 type WfInformers struct {
 	//nsInformers dynamicinformer.DynamicSharedInformerFactory
 	nsInformers cache.SharedIndexInformer
-
-	stopCh <-chan struct{}
+	config      CtrlConfig
+	stopCh      <-chan struct{}
 }
 
-func NewWfInformers(nsInfo cache.SharedIndexInformer, stopCh <-chan struct{}) *WfInformers {
+func NewWfInformers(nsInfo cache.SharedIndexInformer, ctrlConfig CtrlConfig, stopCh <-chan struct{}) *WfInformers {
 	return &WfInformers{
 		nsInformers: nsInfo,
+		config:      ctrlConfig,
 		stopCh:      stopCh,
 	}
+
 }
 
 func (wfinfo *WfInformers) Start(ctx context.Context) error {
+
+	// cfg, err := common.InClusterConfig()
+	// if err != nil {
+	// 	return err
+	// }
+	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
+	wfcli := common.NewWFClient(cfg)
+	if wfcli == nil {
+		return fmt.Errorf("failed to create workflow client")
+	}
+	wfinformfactory := informers.NewSharedInformerFactory(wfcli, time.Second*30)
+	wfinfo.nsInformers.AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				wfinfo.handleWorkFlowUpdate(newObj, wfinformfactory.Argoproj().V1alpha1().Workflows())
+			},
+
+			AddFunc: func(obj interface{}) {
+				wfinfo.handleWorkFlowAdd(obj, wfinformfactory.Argoproj().V1alpha1().Workflows())
+			},
+		},
+	)
+
 	go wfinfo.nsInformers.Run(wfinfo.stopCh)
 	if ok := cache.WaitForCacheSync(wfinfo.stopCh, wfinfo.nsInformers.HasSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
@@ -97,4 +130,46 @@ func InstanceIDRequirement(instanceID string) labels.Requirement {
 		panic(err)
 	}
 	return *instanceIDReq
+}
+
+func (wfinfo *WfInformers) handleWorkFlowUpdate(obj interface{}, informers v1alpha1.WorkflowInformer) {
+	if err := addonwfutility.IsValidV1WorkFlow(obj); err != nil {
+		fmt.Printf("not an expected workflow object %v", err)
+		return
+	}
+	wfobj := &wfv1.Workflow{}
+	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.(*unstructured.Unstructured).UnstructuredContent(), wfobj)
+	if wfobj.Status.Phase.Completed() {
+		// check the associated addons and update its status
+		fmt.Printf("\n handleWorkFlowUpdate %s/%s completed status event %s\n",
+			wfobj.GetNamespace(),
+			wfobj.GetName(),
+			wfobj.Status.Phase)
+
+		wfinfo.config.statusCache.Update(
+			strings.TrimSpace(wfobj.GetNamespace()),
+			strings.TrimSpace(wfobj.GetName()),
+			string(wfobj.Status.Phase))
+	}
+}
+
+func (wfinfo *WfInformers) handleWorkFlowAdd(obj interface{}, informers v1alpha1.WorkflowInformer) {
+	if err := addonwfutility.IsValidV1WorkFlow(obj); err != nil {
+		fmt.Printf("not an expected workflow object %v", err)
+		return
+	}
+	wfobj := &wfv1.Workflow{}
+	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.(*unstructured.Unstructured).UnstructuredContent(), wfobj)
+	if wfobj.Status.Phase.Completed() {
+		// check the associated addons and update its status
+		fmt.Printf("\n handleWorkFlowAdd %s/%s completed status event %s\n",
+			wfobj.GetNamespace(),
+			wfobj.GetName(),
+			wfobj.Status.Phase)
+
+		wfinfo.config.statusCache.Update(
+			strings.TrimSpace(wfobj.GetNamespace()),
+			strings.TrimSpace(wfobj.GetName()),
+			string(wfobj.Status.Phase))
+	}
 }

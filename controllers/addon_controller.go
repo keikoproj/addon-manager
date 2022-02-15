@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -81,10 +82,12 @@ type AddonReconciler struct {
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
 	statusWGMap     map[string]*sync.WaitGroup
+
+	config CtrlConfig
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
+func NewAddonReconciler(mgr manager.Manager, cfg CtrlConfig, log logr.Logger) *AddonReconciler {
 	return &AddonReconciler{
 		Client:          mgr.GetClient(),
 		Log:             log,
@@ -94,6 +97,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
 		statusWGMap:     map[string]*sync.WaitGroup{},
+		config:          cfg,
 	}
 }
 
@@ -175,7 +179,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	return ret, procErr
 }
 
-func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
+func New(mgr manager.Manager, config CtrlConfig, stopChan <-chan struct{}) (controller.Controller, error) {
 	r := &AddonReconciler{
 		Client:          mgr.GetClient(),
 		Log:             ctrl.Log.WithName(controllerName),
@@ -192,6 +196,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 
+	// Watch workflows only in managed namespace
 	sharedInforms := NewWorkflowInformer(r.dynClient, managedNameSpace, workflowResyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		internalinterfaces.TweakListOptionsFunc(func(x *metav1.ListOptions) {
 			r := InstanceIDRequirement("addon-manager-workflow-controller")
@@ -205,11 +210,13 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 
-	// Watch workflows only in managed namespace
-	wfInforms := NewWfInformers(sharedInforms, stopChan)
+	// register worflow informers with manager
+	wfInforms := NewWfInformers(sharedInforms, config, stopChan)
+	go wfInforms.Start(context.TODO())
+
 	err = mgr.Add(wfInforms)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start workflowinformers")
+		return nil, fmt.Errorf("failed to register workflowinformers")
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
@@ -362,10 +369,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	if changedStatus || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.ValidationFailed ||
 		instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
 		log.Info("Addon spec is updated, workflows will be generated")
-
-		err := r.executePrereqAndInstall(ctx, log, instance, wfl)
-		if err != nil {
-			return reconcile.Result{}, err
+		if prereqwfstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Prereqs)); prereqwfstatus != "" {
+			instance.Status.Lifecycle.Prereqs = addonmgrv1alpha1.ApplicationAssemblyPhase(prereqwfstatus)
+		}
+		if wfinstallstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Install)); wfinstallstatus != "" {
+			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ApplicationAssemblyPhase(wfinstallstatus)
 		}
 	}
 
@@ -467,6 +475,7 @@ func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1a
 
 func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
 	// Always reset reason when executing
+	fmt.Printf("\n why execute repeat PrereqAndInstall. instead we should check wf status directly.\n")
 	instance.Status.Reason = ""
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	if err != nil {

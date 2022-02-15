@@ -566,3 +566,15 @@ func (w *workflowLifecycle) injectActiveDeadlineSeconds(wf *unstructured.Unstruc
 
 	return nil
 }
+
+func IsValidV1WorkFlow(obj interface{}) error {
+	wf, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("error : unstructured type.")
+	}
+
+	if wf.GetKind() != "Workflow" || wf.GetAPIVersion() != "argoproj.io/v1alpha1" {
+		return fmt.Errorf("error : unsupported object from v1workflow update event %v", obj)
+	}
+	return nil
+}

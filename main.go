@@ -70,7 +70,8 @@ func main() {
 	}
 
 	stopChan := make(chan struct{})
-	_, err = controllers.New(mgr, stopChan)
+	cfg := controllers.NewCtrlConfig()
+	_, err = controllers.New(mgr, cfg, stopChan)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Addon")
 		os.Exit(1)
