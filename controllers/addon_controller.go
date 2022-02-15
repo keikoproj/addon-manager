@@ -27,12 +27,12 @@ import (
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/informers"
+	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,11 +43,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -68,8 +68,7 @@ var (
 		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
 		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
 	}
-	finalizerName      = "delete.addonmgr.keikoproj.io"
-	generatedInformers informers.SharedInformerFactory
+	finalizerName = "delete.addonmgr.keikoproj.io"
 )
 
 // AddonReconciler reconciles a Addon object
@@ -193,7 +192,13 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
+	sharedInforms := NewWorkflowInformer(r.dynClient, managedNameSpace, workflowResyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		internalinterfaces.TweakListOptionsFunc(func(x *metav1.ListOptions) {
+			r := InstanceIDRequirement("addon-manager-workflow-controller")
+			x.LabelSelector = r.String()
+		}),
+	)
+	if err := c.Watch(&source.Informer{Informer: sharedInforms}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonmgrv1alpha1.Addon{},
 	}); err != nil {
@@ -201,7 +206,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	}
 
 	// Watch workflows only in managed namespace
-	wfInforms := NewWfInformers(NewWorkflowInformer(r.dynClient, managedNameSpace, workflowResyncPeriod, nil, nil), stopChan)
+	wfInforms := NewWfInformers(sharedInforms, stopChan)
 	err = mgr.Add(wfInforms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start workflowinformers")
