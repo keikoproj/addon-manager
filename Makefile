@@ -3,7 +3,7 @@
 IMG ?= keikoproj/addon-manager:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
-KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.14.3
+KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.21.2
 KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
 KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
 
