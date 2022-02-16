@@ -141,7 +141,7 @@ func (wfinfo *WfInformers) handleWorkFlowUpdate(obj interface{}, informers v1alp
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.(*unstructured.Unstructured).UnstructuredContent(), wfobj)
 	if wfobj.Status.Phase.Completed() {
 		// check the associated addons and update its status
-		fmt.Printf("\n handleWorkFlowUpdate %s/%s completed status event %s\n",
+		fmt.Printf("\n %s/%s  WorkFlowUpdate event status.phase <%s>\n",
 			wfobj.GetNamespace(),
 			wfobj.GetName(),
 			wfobj.Status.Phase)
@@ -160,16 +160,15 @@ func (wfinfo *WfInformers) handleWorkFlowAdd(obj interface{}, informers v1alpha1
 	}
 	wfobj := &wfv1.Workflow{}
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.(*unstructured.Unstructured).UnstructuredContent(), wfobj)
-	if wfobj.Status.Phase.Completed() {
-		// check the associated addons and update its status
-		fmt.Printf("\n handleWorkFlowAdd %s/%s completed status event %s\n",
-			wfobj.GetNamespace(),
-			wfobj.GetName(),
-			wfobj.Status.Phase)
 
-		wfinfo.config.statusCache.Update(
-			strings.TrimSpace(wfobj.GetNamespace()),
-			strings.TrimSpace(wfobj.GetName()),
-			string(wfobj.Status.Phase))
-	}
+	// check the associated addons and update its status
+	fmt.Printf("\n %s/%s  WorkFlowAdd event status.phase <%s>\n",
+		wfobj.GetNamespace(),
+		wfobj.GetName(),
+		wfobj.Status.Phase)
+	wfinfo.config.statusCache.Add(
+		strings.TrimSpace(wfobj.GetNamespace()),
+		strings.TrimSpace(wfobj.GetName()),
+		string(wfobj.Status.Phase))
+
 }

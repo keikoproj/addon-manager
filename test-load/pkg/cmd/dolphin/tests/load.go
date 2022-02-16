@@ -31,6 +31,7 @@ type flagpole struct {
 
 const (
 	NumberOfWFPerRoutine = 200
+	eventNameBase        = 100
 )
 
 // NewCommand ...
@@ -92,7 +93,7 @@ func RunLoads(logger log.Logger, flags *flagpole) error {
 	for i := 1; i <= flags.numberOfGoRoutines; i++ {
 		go func(i int, lock *sync.Mutex) {
 			defer wg.Done()
-			for j := i * 100; j < i*100+int(NumberOfWFPerRoutine); j++ {
+			for j := i * eventNameBase; j < i*eventNameBase+int(NumberOfWFPerRoutine); j++ {
 				addon, err := testutil.CreateLoadTestsAddon(lock, dynClient, relativeAddonPath, fmt.Sprintf("-%d", j))
 				if err != nil {
 					fmt.Printf("\n create addon failure for %v. retry 10 times after every 1 second. \n", err)
