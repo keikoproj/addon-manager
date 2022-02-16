@@ -33,7 +33,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
@@ -754,7 +754,7 @@ func TestExtractAddOnNameAndLifecycleStep(t *testing.T) {
 	for _, testsString := range testsString {
 		name, step, err := ExtractAddOnNameAndLifecycleStep(testsString)
 		if err != nil {
-			fmt.Errorf("err %v", err)
+			fmt.Printf("failed extracting addon name and lifecycle step.")
 		}
 		fmt.Printf(" addon name %s step %s", name, step)
 	}

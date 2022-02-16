@@ -15,9 +15,10 @@
 package addon
 
 import (
-	"github.com/Masterminds/semver/v3"
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
 	"sync"
+
+	"github.com/Masterminds/semver/v3"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
 )
 
 // VersionCacheClient interface clients must implement for addon version cache.
