@@ -368,12 +368,23 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
 	if changedStatus || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.ValidationFailed ||
 		instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
-		log.Info("Addon spec is updated, workflows will be generated")
+		log.Info("Addon spec is updated, workflows will be updated.")
 		if prereqwfstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Prereqs)); prereqwfstatus != "" {
 			instance.Status.Lifecycle.Prereqs = addonmgrv1alpha1.ApplicationAssemblyPhase(prereqwfstatus)
+		} else {
+			err := r.executePrereq(ctx, log, instance, wfl)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
+
 		if wfinstallstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Install)); wfinstallstatus != "" {
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ApplicationAssemblyPhase(wfinstallstatus)
+		} else {
+			err := r.executeInstall(ctx, log, instance, wfl)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 
@@ -473,9 +484,8 @@ func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1a
 	log.Info("Adding version cache", "phase", version.PkgPhase)
 }
 
-func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
+func (r *AddonReconciler) executePrereq(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
 	// Always reset reason when executing
-	fmt.Printf("\n why execute repeat PrereqAndInstall. instead we should check wf status directly.\n")
 	instance.Status.Reason = ""
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	if err != nil {
@@ -501,6 +511,11 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 
 		return fmt.Errorf(reason)
 	}
+
+	return nil
+}
+
+func (r *AddonReconciler) executeInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
 
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
 		if err := r.validateSecrets(ctx, instance); err != nil {
