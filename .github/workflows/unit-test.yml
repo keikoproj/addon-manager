@@ -1,4 +1,4 @@
-name: unit-test
+name: pr-gate
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
 
-  build:
+  unit-test:
     if: github.repository_owner == 'keikoproj'
     runs-on: ubuntu-latest
     steps:
@@ -37,8 +37,9 @@ jobs:
   buildx:
     if: github.repository_owner == 'keikoproj'
     runs-on: ubuntu-latest
-    needs: build
     steps:
+      - uses: actions/checkout@v2
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
         with:
