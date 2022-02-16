@@ -25,21 +25,6 @@ jobs:
           tar -zxvf  kubebuilder_2.3.2_linux_amd64.tar.gz
           sudo mv kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
 
-      - name: Test
-        run: |
-          make test
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v1
-        with:
-          file: ./coverage.txt
-
-  buildx:
-    if: github.repository_owner == 'keikoproj'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
         with:
@@ -54,6 +39,19 @@ jobs:
       - name: Available platforms
         run: echo ${{ steps.buildx.outputs.platforms }}
 
+      - name: Test
+        run: |
+          make test
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.txt
+
       - name: Build
         run: |
           make docker-build
+
+
+
+
