@@ -16,7 +16,6 @@ package workflows
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -744,18 +743,4 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 
 	// Now try to delete
 	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(Not(HaveOccurred()))
-}
-
-func TestExtractAddOnNameAndLifecycleStep(t *testing.T) {
-	testsString := []string{
-		"event-router-4-prereqs-2c13ee7f-wf",
-		"event-router-4-install-2c13ee7f-wf",
-	}
-	for _, testsString := range testsString {
-		name, step, err := ExtractAddOnNameAndLifecycleStep(testsString)
-		if err != nil {
-			fmt.Errorf("err %v", err)
-		}
-		fmt.Printf(" addon name %s step %s", name, step)
-	}
 }

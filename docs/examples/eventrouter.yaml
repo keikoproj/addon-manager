@@ -11,7 +11,7 @@ spec:
   params:
     namespace: addon-event-router-ns
     context:
-      clusterName: "minikube"
+      clusterName: "cluster-name"
       clusterRegion: us-west-2
   lifecycle:
     prereqs:
@@ -26,34 +26,57 @@ spec:
           serviceAccountName: addon-manager-workflow-installer-sa
           templates:
           - name: entry
-            script:
-              image: docker.intuit.com/dev/patterns/kubernetes/dev/kubectl-awscli:v1.20.11
-              imagePullPolicy: Never
-              command: [ "kubectl", "apply", "-f" ]
-              source: |
+            retryStrategy:
+              limit: 2
+              retryPolicy: "Always"
+            steps:
+            - - name: prereq-namespace
+                template: submit-ns
+              - name: prereq-serviceaccount
+                template: submit-sa
+              - name: prereq-configmap
+                template: submit-cm
+              - name: prereq-clusterrole
+                template: submit-cr
+              - name: prereq-clusterrolebinding
+                template: submit-crb
+
+          - name: submit-ns
+            resource:
+              action: apply
+              manifest: |
                 apiVersion: v1
                 kind: Namespace
                 metadata:
                   name: "{{workflow.parameters.namespace}}"
-                ---
+          - name: submit-sa
+            resource:
+              action: apply
+              manifest: |
                 apiVersion: v1
                 kind: ServiceAccount
                 metadata:
                   name: event-router-sa
                   namespace: "{{workflow.parameters.namespace}}"
-                ---
+          - name: submit-cm
+            resource:
+              action: apply
+              manifest: |
                 apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: event-router-cm
+                  namespace: "{{workflow.parameters.namespace}}"
                 data:
                   config.json: |-
                     {
                       "sink": "stdout"
                     }
-                kind: ConfigMap
-                metadata:
-                  name: event-router-cm
-                  namespace: "{{workflow.parameters.namespace}}"
-                ---
-                apiVersion: rbac.authorization.k8s.io/v1beta1
+          - name: submit-cr
+            resource:
+              action: apply
+              manifest: |
+                apiVersion: rbac.authorization.k8s.io/v1
                 kind: ClusterRole
                 metadata:
                   name: event-router-cr
@@ -61,8 +84,11 @@ spec:
                 - apiGroups: [""]
                   resources: ["events"]
                   verbs: ["get", "watch", "list"]
-                ---
-                apiVersion: rbac.authorization.k8s.io/v1beta1
+          - name: submit-crb
+            resource:
+              action: apply
+              manifest: |
+                apiVersion: rbac.authorization.k8s.io/v1
                 kind: ClusterRoleBinding
                 metadata:
                   name: event-router-crb
