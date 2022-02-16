@@ -261,15 +261,13 @@ func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
 
 func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
 
-	// Calculate Checksum, returns true if checksum is not changed
+	// Calculate Checksum, returns true if checksum is changed
+	// possibly configure command
 	var changedStatus bool
 	changedStatus, instance.Status.Checksum = r.validateChecksum(instance)
 
-	// Resources list
-	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
-
 	if changedStatus {
-		// Set ttl starttime if checksum has changed
+		// ReSet ttl starttime if checksum has changed
 		instance.Status.StartTime = common.GetCurretTimestamp()
 
 		// Clear out status and reason
@@ -278,12 +276,19 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		instance.Status.Reason = ""
 	}
 
-	// Update status that we have started reconciling this addon.
-	if instance.Status.Lifecycle.Installed == "" {
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Pending
-		log.Info("Requeue to set pending status")
-		return reconcile.Result{Requeue: true}, nil
+	if instance.Status.Lifecycle.Prereqs == "" || instance.Status.Lifecycle.Installed == "" {
+		err := r.executePrereq(ctx, log, instance, wfl)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		err = r.executeInstall(ctx, log, instance, wfl)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
 	}
+
+	// Resources list
+	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
 	// Check if addon installation expired.
 	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL.Milliseconds()) {
@@ -358,28 +363,18 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Execute PreReq and Install workflow, if spec body has changed.
 	// In the case when validation failed and continued here we should execute.
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
-	if changedStatus || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.ValidationFailed ||
-		instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
-		log.Info("Addon spec is updated, workflows will be updated.")
+	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending ||
+		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
+		log.Info("Addon spec is updated, workflows should be updated.")
 
 		if prereqwfstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Prereqs)); len(prereqwfstatus) > 0 {
 			instance.Status.Lifecycle.Prereqs = addonmgrv1alpha1.ApplicationAssemblyPhase(prereqwfstatus)
 			fmt.Printf("\n hit prereq memory %s, avoid duplicate prereq \n", prereqwfstatus)
-		} else {
-			err := r.executePrereq(ctx, log, instance, wfl)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
 		}
 
 		if wfinstallstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Install)); len(wfinstallstatus) > 0 {
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ApplicationAssemblyPhase(wfinstallstatus)
 			fmt.Printf("\n hit install memory %s, avoid duplicate install. \n", wfinstallstatus)
-		} else {
-			err := r.executeInstall(ctx, log, instance, wfl)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
 		}
 	}
 

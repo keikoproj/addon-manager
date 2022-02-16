@@ -20,7 +20,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 
 	addonwfutility "github.com/keikoproj/addon-manager/pkg/workflows"
 )
@@ -47,12 +46,11 @@ func NewWfInformers(nsInfo cache.SharedIndexInformer, ctrlConfig CtrlConfig, sto
 }
 
 func (wfinfo *WfInformers) Start(ctx context.Context) error {
-
-	// cfg, err := common.InClusterConfig()
-	// if err != nil {
-	// 	return err
-	// }
-	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
+	cfg, err := common.InClusterConfig()
+	if err != nil {
+		return err
+	}
+	//cfg, _ := clientcmd.BuildConfigFromFlags("", "")
 	wfcli := common.NewWFClient(cfg)
 	if wfcli == nil {
 		return fmt.Errorf("failed to create workflow client")
@@ -150,6 +148,8 @@ func (wfinfo *WfInformers) handleWorkFlowUpdate(obj interface{}, informers v1alp
 			strings.TrimSpace(wfobj.GetNamespace()),
 			strings.TrimSpace(wfobj.GetName()),
 			string(wfobj.Status.Phase))
+
+		// find the Addon from the namespace and update its status accordingly
 	}
 }
 
