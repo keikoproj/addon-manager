@@ -128,3 +128,8 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+./generate-groups.sh all \
+"github.com/keikoproj/addon-manager/pkg/client" "github.com/keikoproj/addon-manager/pkg/api" \
+addonmgr.keikoproj.io:v1alpha1 \
+--go-header-file github.com/keikoproj/addon-manager/hack/boilerplate.go.txt
