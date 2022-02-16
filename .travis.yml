@@ -1,7 +1,7 @@
 language: go
 
 go:
-  - 1.16.x
+  - 1.17.x
 
 git:
   depth: 1
@@ -25,6 +25,7 @@ before_install:
   - wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz
   - tar -zxvf  kubebuilder_2.3.2_linux_amd64.tar.gz
   - sudo mv kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
+  - go install github.com/goreleaser/goreleaser@v1.5.0
 
 install: skip
 
@@ -52,10 +53,10 @@ jobs:
       script:
         - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
         - export IMG=keikoproj/addon-manager
-        - curl -sL https://git.io/goreleaser | bash -s release --rm-dist --snapshot
+        - goreleaser release --rm-dist --snapshot
         - docker push ${IMG}:latest
 
     - stage: release
       script:
         - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-        - curl -sL https://git.io/goreleaser | bash -s release --rm-dist
+        - goreleaser release --rm-dist
