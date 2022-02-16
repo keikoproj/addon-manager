@@ -16,7 +16,6 @@ type flagpole struct {
 	Quiet     bool
 }
 
-// NewCommand returns a new cobra.Command implementing the root command for dolphin
 func NewCommand(logger log.Logger, streams cmd.IOStreams) *cobra.Command {
 	flags := &flagpole{}
 	cmd := &cobra.Command{
@@ -53,13 +52,11 @@ func NewCommand(logger log.Logger, streams cmd.IOStreams) *cobra.Command {
 		false,
 		"silence all stderr output",
 	)
-	// add all top level subcommands
 	cmd.AddCommand(tests.NewCommand(logger, streams))
 	return cmd
 }
 
 func runE(logger log.Logger, flags *flagpole, command *cobra.Command) error {
-	// handle limited migration for --loglevel
 	setLogLevel := command.Flag("loglevel").Changed
 	setVerbosity := command.Flag("verbosity").Changed
 	if setLogLevel && !setVerbosity {
@@ -70,7 +67,6 @@ func runE(logger log.Logger, flags *flagpole, command *cobra.Command) error {
 			flags.Verbosity = 2147483647
 		}
 	}
-	// normal logger setup
 	if flags.Quiet {
 		maybeSetWriter(logger, ioutil.Discard)
 	}
@@ -81,7 +77,6 @@ func runE(logger log.Logger, flags *flagpole, command *cobra.Command) error {
 	return nil
 }
 
-// maybeSetWriter will call logger.SetWriter(w) if logger has a SetWriter method
 func maybeSetWriter(logger log.Logger, w io.Writer) {
 	type writerSetter interface {
 		SetWriter(io.Writer)
@@ -92,8 +87,6 @@ func maybeSetWriter(logger log.Logger, w io.Writer) {
 	}
 }
 
-// maybeSetVerbosity will call logger.SetVerbosity(verbosity) if logger
-// has a SetVerbosity method
 func maybeSetVerbosity(logger log.Logger, verbosity log.Level) {
 	type verboser interface {
 		SetVerbosity(log.Level)

@@ -5,20 +5,12 @@ import (
 	"os"
 )
 
-// IOStreams provides the standard names for iostreams.
-// This is useful for embedding and for unit testing.
-// Inconsistent and different names make it hard to read and review code
-// This is based on cli-runtime, but just the nice type without the dependency
 type IOStreams struct {
-	// In think, os.Stdin
-	In io.Reader
-	// Out think, os.Stdout
-	Out io.Writer
-	// ErrOut think, os.Stderr
+	In     io.Reader
+	Out    io.Writer
 	ErrOut io.Writer
 }
 
-// StandardIOStreams returns an IOStreams from os.Stdin, os.Stdout
 func StandardIOStreams() IOStreams {
 	return IOStreams{
 		In:     os.Stdin,

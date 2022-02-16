@@ -12,7 +12,6 @@ import (
 	"github.com/keikoproj/addon-manager/test-load/pkg/log"
 )
 
-// Logger is the dolphin cli's log.Logger implementation
 type Logger struct {
 	writer        io.Writer
 	writerMu      sync.Mutex
@@ -23,7 +22,6 @@ type Logger struct {
 
 var _ log.Logger = &Logger{}
 
-// NewLogger returns a new Logger with the given verbosity
 func NewLogger(writer io.Writer, verbosity log.Level) *Logger {
 	l := &Logger{
 		verbosity:  verbosity,
@@ -33,7 +31,6 @@ func NewLogger(writer io.Writer, verbosity log.Level) *Logger {
 	return l
 }
 
-// SetWriter sets the output writer
 func (l *Logger) SetWriter(w io.Writer) {
 	l.writerMu.Lock()
 	defer l.writerMu.Unlock()
@@ -41,7 +38,6 @@ func (l *Logger) SetWriter(w io.Writer) {
 	l.isSmartWriter = false
 }
 
-// ColorEnabled returns true if the caller is OK to write colored output
 func (l *Logger) ColorEnabled() bool {
 	l.writerMu.Lock()
 	defer l.writerMu.Unlock()
@@ -52,36 +48,28 @@ func (l *Logger) getVerbosity() log.Level {
 	return log.Level(atomic.LoadInt32((*int32)(&l.verbosity)))
 }
 
-// SetVerbosity sets the loggers verbosity
 func (l *Logger) SetVerbosity(verbosity log.Level) {
 	atomic.StoreInt32((*int32)(&l.verbosity), int32(verbosity))
 }
 
-// synchronized write to the inner writer
 func (l *Logger) write(p []byte) (n int, err error) {
 	l.writerMu.Lock()
 	defer l.writerMu.Unlock()
 	return l.writer.Write(p)
 }
 
-// writeBuffer writes buf with write, ensuring there is a trailing newline
 func (l *Logger) writeBuffer(buf *bytes.Buffer) {
-	// ensure trailing newline
 	if buf.Len() == 0 || buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')
 	}
-	// TODO: should we handle this somehow??
-	// Who logs for the logger? 🤔
 	_, _ = l.write(buf.Bytes())
 }
 
-// print writes a simple string to the log writer
 func (l *Logger) print(message string) {
 	buf := bytes.NewBufferString(message)
 	l.writeBuffer(buf)
 }
 
-// printf is roughly fmt.Fprintf against the log writer
 func (l *Logger) printf(format string, args ...interface{}) {
 	buf := l.bufferPool.Get()
 	fmt.Fprintf(buf, format, args...)
@@ -89,10 +77,8 @@ func (l *Logger) printf(format string, args ...interface{}) {
 	l.bufferPool.Put(buf)
 }
 
-// addDebugHeader inserts the debug line header to buf
 func addDebugHeader(buf *bytes.Buffer) {
 	_, file, line, ok := runtime.Caller(3)
-	// lifted from klog
 	if !ok {
 		file = "???"
 		line = 1

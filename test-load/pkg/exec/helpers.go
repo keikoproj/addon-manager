@@ -9,7 +9,6 @@ import (
 	"github.com/alessio/shellescape"
 )
 
-// PrettyCommand...
 func PrettyCommand(name string, args ...string) string {
 	var out strings.Builder
 	out.WriteString(shellescape.Quote(name))
@@ -20,8 +19,6 @@ func PrettyCommand(name string, args ...string) string {
 	return out.String()
 }
 
-// RunErrorForError returns a RunError if the error contains a RunError.
-// Otherwise it returns nil
 func RunErrorForError(err error) *RunError {
 	var runError *RunError
 	for {
@@ -34,9 +31,6 @@ func RunErrorForError(err error) *RunError {
 	return runError
 }
 
-// CombinedOutputLines is like os/exec's cmd.CombinedOutput(),
-// but over our Cmd interface, and instead of returning the byte buffer of
-// stderr + stdout, it scans these for lines and returns a slice of output lines
 func CombinedOutputLines(cmd Cmd) (lines []string, err error) {
 	var buff bytes.Buffer
 	cmd.SetStdout(&buff)
@@ -49,9 +43,6 @@ func CombinedOutputLines(cmd Cmd) (lines []string, err error) {
 	return lines, err
 }
 
-// OutputLines is like os/exec's cmd.Output(),
-// but over our Cmd interface, and instead of returning the byte buffer of
-// stdout, it scans these for lines and returns a slice of output lines
 func OutputLines(cmd Cmd) (lines []string, err error) {
 	var buff bytes.Buffer
 	cmd.SetStdout(&buff)
@@ -63,7 +54,6 @@ func OutputLines(cmd Cmd) (lines []string, err error) {
 	return lines, err
 }
 
-// Output is like os/exec's cmd.Output, but over our Cmd interface
 func Output(cmd Cmd) ([]byte, error) {
 	var buff bytes.Buffer
 	cmd.SetStdout(&buff)
@@ -71,7 +61,6 @@ func Output(cmd Cmd) ([]byte, error) {
 	return buff.Bytes(), err
 }
 
-// InheritOutput sets cmd's output to write to the current process's stdout and stderr
 func InheritOutput(cmd Cmd) Cmd {
 	cmd.SetStderr(os.Stderr)
 	cmd.SetStdout(os.Stdout)
