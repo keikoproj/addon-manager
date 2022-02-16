@@ -17,23 +17,24 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
-
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/informers/internalinterfaces"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -48,7 +50,8 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"k8s.io/client-go/dynamic/dynamicinformer"
 )
 
 const (
@@ -56,7 +59,7 @@ const (
 	// addon ttl time
 	TTL = time.Duration(1) * time.Hour // 1 hour
 
-	managedNameSpace = "addon-manager-system"
+	workflowDeployedNS = "addon-manager-system"
 )
 
 // Watched resources
@@ -69,7 +72,8 @@ var (
 		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
 		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
 	}
-	finalizerName = "delete.addonmgr.keikoproj.io"
+	finalizerName      = "delete.addonmgr.keikoproj.io"
+	generatedInformers informers.SharedInformerFactory
 )
 
 // AddonReconciler reconciles a Addon object
@@ -82,12 +86,10 @@ type AddonReconciler struct {
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
 	statusWGMap     map[string]*sync.WaitGroup
-
-	config CtrlConfig
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager, cfg CtrlConfig, log logr.Logger) *AddonReconciler {
+func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 	return &AddonReconciler{
 		Client:          mgr.GetClient(),
 		Log:             log,
@@ -97,8 +99,6 @@ func NewAddonReconciler(mgr manager.Manager, cfg CtrlConfig, log logr.Logger) *A
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
 		statusWGMap:     map[string]*sync.WaitGroup{},
-
-		config: cfg,
 	}
 }
 
@@ -134,11 +134,11 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
-	// defer func() {
-	// 	if err := recover(); err != nil {
-	// 		log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
-	// 	}
-	// }()
+	defer func() {
+		if err := recover(); err != nil {
+			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
+		}
+	}()
 
 	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
 
@@ -180,35 +180,37 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	return ret, procErr
 }
 
-func New(mgr manager.Manager, config CtrlConfig, stopChan <-chan struct{}) (controller.Controller, error) {
-	r := NewAddonReconciler(mgr, config, ctrl.Log.WithName(controllerName))
+func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
+	r := &AddonReconciler{
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName(controllerName),
+		Scheme:          mgr.GetScheme(),
+		versionCache:    addon.NewAddonVersionCacheClient(),
+		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
+		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
+		recorder:        mgr.GetEventRecorderFor("addons"),
+		statusWGMap:     map[string]*sync.WaitGroup{},
+	}
 
 	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return nil, err
 	}
 
-	// Watch workflows only in managed namespace
-	sharedInforms := NewWorkflowInformer(r.dynClient, managedNameSpace, workflowResyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		internalinterfaces.TweakListOptionsFunc(func(x *metav1.ListOptions) {
-			r := InstanceIDRequirement("addon-manager-workflow-controller")
-			x.LabelSelector = r.String()
-		}),
-	)
-	if err := c.Watch(&source.Informer{Informer: sharedInforms}, &handler.EnqueueRequestForOwner{
+	// Watch workflows created by addon only in addon-manager-system namespace
+	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
+	wfInf := nsInformers.ForResource(common.WorkflowGVR())
+	if err := c.Watch(&source.Informer{Informer: wfInf.Informer()}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonmgrv1alpha1.Addon{},
-	}); err != nil {
+	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
 		return nil, err
 	}
 
-	// register worflow informers with manager
-	wfInforms := NewWfInformers(sharedInforms, config, stopChan)
-	go wfInforms.Start(context.TODO())
-
+	wfInforms := NewWfInformers(nsInformers, stopChan)
 	err = mgr.Add(wfInforms)
 	if err != nil {
-		return nil, fmt.Errorf("failed to register workflowinformers")
+		return nil, fmt.Errorf("failed to start workflowinformers")
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
@@ -242,6 +244,18 @@ func New(mgr manager.Manager, config CtrlConfig, stopChan <-chan struct{}) (cont
 	return c, nil
 }
 
+func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
+	u, _ := obj.(*unstructured.Unstructured)
+	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
+		r.Log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
+		return false
+	}
+	if obj.GetNamespace() != workflowDeployedNS {
+		return false
+	}
+	return true
+}
+
 func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
 		var reqs = make([]reconcile.Request, 0)
@@ -261,13 +275,15 @@ func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
 
 func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
 
-	// Calculate Checksum, returns true if checksum is changed
-	// possibly configure command
+	// Calculate Checksum, returns true if checksum is not changed
 	var changedStatus bool
 	changedStatus, instance.Status.Checksum = r.validateChecksum(instance)
 
+	// Resources list
+	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
+
 	if changedStatus {
-		// ReSet ttl starttime if checksum has changed
+		// Set ttl starttime if checksum has changed
 		instance.Status.StartTime = common.GetCurretTimestamp()
 
 		// Clear out status and reason
@@ -276,19 +292,12 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		instance.Status.Reason = ""
 	}
 
-	if instance.Status.Lifecycle.Prereqs == "" || instance.Status.Lifecycle.Installed == "" {
-		err := r.executePrereq(ctx, log, instance, wfl)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		err = r.executeInstall(ctx, log, instance, wfl)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
+	// Update status that we have started reconciling this addon.
+	if instance.Status.Lifecycle.Installed == "" {
+		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Pending
+		log.Info("Requeue to set pending status")
+		return reconcile.Result{Requeue: true}, nil
 	}
-
-	// Resources list
-	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
 	// Check if addon installation expired.
 	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL.Milliseconds()) {
@@ -363,18 +372,13 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Execute PreReq and Install workflow, if spec body has changed.
 	// In the case when validation failed and continued here we should execute.
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
-	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending ||
-		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
-		log.Info("Addon spec is updated, workflows should be updated.")
+	if changedStatus || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.ValidationFailed ||
+		instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending || instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
+		log.Info("Addon spec is updated, workflows will be generated")
 
-		if prereqwfstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Prereqs)); len(prereqwfstatus) > 0 {
-			instance.Status.Lifecycle.Prereqs = addonmgrv1alpha1.ApplicationAssemblyPhase(prereqwfstatus)
-			fmt.Printf("\n hit prereq memory %s, avoid duplicate prereq \n", prereqwfstatus)
-		}
-
-		if wfinstallstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Install)); len(wfinstallstatus) > 0 {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ApplicationAssemblyPhase(wfinstallstatus)
-			fmt.Printf("\n hit install memory %s, avoid duplicate install. \n", wfinstallstatus)
+		err := r.executePrereqAndInstall(ctx, log, instance, wfl)
+		if err != nil {
+			return reconcile.Result{}, err
 		}
 	}
 
@@ -451,6 +455,16 @@ func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1
 }
 
 func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
+	addonName := types.NamespacedName{Name: addon.Name, Namespace: addon.Namespace}.String()
+	wg, ok := r.statusWGMap[addonName]
+	if !ok {
+		wg = &sync.WaitGroup{}
+		r.statusWGMap[addonName] = wg
+	}
+	// Wait to process addon updates until we have finished updating same addon
+	wg.Wait()
+	wg.Add(1)
+	defer wg.Done()
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		return r.Status().Update(ctx, addon, &client.UpdateOptions{})
 	})
@@ -474,9 +488,8 @@ func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1a
 	log.Info("Adding version cache", "phase", version.PkgPhase)
 }
 
-func (r *AddonReconciler) executePrereq(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
+func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
 	// Always reset reason when executing
-	fmt.Printf("\n execute workflow %s  prereqs\n", instance.Name)
 	instance.Status.Reason = ""
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	if err != nil {
@@ -503,12 +516,6 @@ func (r *AddonReconciler) executePrereq(ctx context.Context, log logr.Logger, in
 		return fmt.Errorf(reason)
 	}
 
-	return nil
-}
-
-func (r *AddonReconciler) executeInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
-
-	fmt.Printf("\n execute workflow %s install \n", instance.Name)
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
 		if err := r.validateSecrets(ctx, instance); err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", instance.Namespace, instance.Name, err)
@@ -630,8 +637,6 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 			// Wait for workflow to succeed or fail.
 			removeFinalizer = true
 		}
-
-		r.config.statusCache.Delete(addon.GetNamespace(), addon.GetName())
 	}
 
 	// Remove version from cache
