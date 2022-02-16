@@ -281,6 +281,9 @@ type AddonStatus struct {
 	StartTime int64                `json:"starttime"`
 }
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // +kubebuilder:object:root=true
 
 // Addon is the Schema for the addons API
@@ -300,6 +303,7 @@ type Addon struct {
 	Status AddonStatus `json:"status,omitempty"`
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 
 // AddonList contains a list of Addon
