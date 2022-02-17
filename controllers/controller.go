@@ -7,12 +7,15 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	informers "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions/workflow/v1alpha1"
 	addonv1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
+	addonv1informers "github.com/keikoproj/addon-manager/pkg/client/informers/externalversions"
+	addonv1listers "github.com/keikoproj/addon-manager/pkg/client/listers/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -25,6 +28,7 @@ import (
 	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 
 	addonwfutility "github.com/keikoproj/addon-manager/pkg/workflows"
 )
@@ -37,28 +41,55 @@ const (
 type WfInformers struct {
 	//nsInformers dynamicinformer.DynamicSharedInformerFactory
 	nsInformers  cache.SharedIndexInformer
-	config       CtrlConfig
 	stopCh       <-chan struct{}
 	apiclientset addonv1versioned.Interface
+	addonlister  addonv1listers.AddonLister
 	log          logr.Logger
+	k8sclient    client.Client
+	dynClient    dynamic.Interface
+	recorder     record.EventRecorder
 }
 
-func NewWfInformers(nsInfo cache.SharedIndexInformer, ctrlConfig CtrlConfig, stopCh <-chan struct{}, log logr.Logger) *WfInformers {
+func NewWfInformers(nsInfo cache.SharedIndexInformer, stopCh <-chan struct{}, log logr.Logger, k8scli client.Client, recorder record.EventRecorder, dynClient dynamic.Interface) *WfInformers {
 	return &WfInformers{
 		nsInformers: nsInfo,
-		config:      ctrlConfig,
 		stopCh:      stopCh,
 		log:         log,
+		k8sclient:   k8scli,
+		recorder:    recorder,
+		dynClient:   dynClient,
 	}
 
 }
 
-func (wfinfo *WfInformers) Start(ctx context.Context) error {
-	// cfg, err := common.InClusterConfig()
-	// if err != nil {
-	// 	return err
-	// }
+func (wfinfo *WfInformers) startAddonInformers() error {
 	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
+	addoncli := common.NewAddonClient(cfg)
+	if addoncli == nil {
+		panic("addon cli is empty")
+	}
+	addonInformFactory := addonv1informers.NewSharedInformerFactory(addoncli, time.Second*30)
+
+	wfinfo.addonlister = addonInformFactory.Addonmgr().V1alpha1().Addons().Lister()
+	//addonInform := addonInformFactory.Addonmgr().V1alpha1().Addons().Informer()
+	addonInformFactory.Start(wfinfo.stopCh)
+	return nil
+}
+
+func (wfinfo *WfInformers) Start(ctx context.Context) error {
+	cfg, err := common.InClusterConfig()
+	if err != nil {
+		return err
+	}
+	//cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
+
+	addoncli := common.NewAddonClient(cfg)
+	if addoncli == nil {
+		return fmt.Errorf("failed to create addon client")
+	}
+	wfinfo.apiclientset = addoncli
+	wfinfo.startAddonInformers()
+
 	wfcli := common.NewWFClient(cfg)
 	if wfcli == nil {
 		return fmt.Errorf("failed to create workflow client")
@@ -202,10 +233,13 @@ func (wfinfo *WfInformers) updateAddonStatus(namespace, name, lifecycle string, 
 
 	msg := fmt.Sprintf("updating addon %s/%s step %s status to %s\n", namespace, name, lifecycle, lifecyclestatus)
 	wfinfo.log.Info(msg)
+
 	// retry is needed
-	addonobj, err := wfinfo.apiclientset.AddonmgrV1alpha1().Addons(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf(" failed to get the interested addon %s from ns %s, err %v", namespace, name, err)
+	addonobj, err := wfinfo.addonlister.Addons(namespace).Get(name)
+	if err != nil || addonobj == nil {
+		msg := fmt.Sprintf("\n\n failed getting addon %s/%s, err %v", namespace, name, err)
+		fmt.Print(msg)
+		return fmt.Errorf(msg)
 
 	}
 
@@ -216,9 +250,12 @@ func (wfinfo *WfInformers) updateAddonStatus(namespace, name, lifecycle string, 
 	} else if lifecycle == "delete" {
 		addonobj.Status.Lifecycle.Delete = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 	}
-	_, err = wfinfo.apiclientset.AddonmgrV1alpha1().Addons(namespace).Update(context.TODO(), addonobj, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf(" failed to update ns/addon %s/%s status, err %v", namespace, name, err)
+
+	addonobj, err = wfinfo.apiclientset.AddonmgrV1alpha1().Addons(namespace).Update(context.TODO(), addonobj, metav1.UpdateOptions{})
+	if err != nil || addonobj == nil {
+		msg := fmt.Sprintf("\n failed updating addon %s/%s, err %v\n", namespace, name, err)
+		fmt.Print(msg)
+		return fmt.Errorf(msg)
 	}
 	msg = fmt.Sprintf("successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
 	wfinfo.log.Info(msg)

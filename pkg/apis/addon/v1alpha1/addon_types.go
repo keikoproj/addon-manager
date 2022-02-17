@@ -395,3 +395,12 @@ func (p ApplicationAssemblyPhase) NotTriggered() bool {
 		return false
 	}
 }
+
+func (p ApplicationAssemblyPhase) Completed() bool {
+	switch p {
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
+}

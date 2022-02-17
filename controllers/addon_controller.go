@@ -82,12 +82,10 @@ type AddonReconciler struct {
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
 	statusWGMap     map[string]*sync.WaitGroup
-
-	config CtrlConfig
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager, cfg CtrlConfig, log logr.Logger) *AddonReconciler {
+func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 	return &AddonReconciler{
 		Client:          mgr.GetClient(),
 		Log:             log,
@@ -97,8 +95,6 @@ func NewAddonReconciler(mgr manager.Manager, cfg CtrlConfig, log logr.Logger) *A
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
 		statusWGMap:     map[string]*sync.WaitGroup{},
-
-		config: cfg,
 	}
 }
 
@@ -180,8 +176,8 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	return ret, procErr
 }
 
-func New(mgr manager.Manager, config CtrlConfig, stopChan <-chan struct{}) (controller.Controller, error) {
-	r := NewAddonReconciler(mgr, config, ctrl.Log.WithName(controllerName))
+func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
+	r := NewAddonReconciler(mgr, ctrl.Log.WithName(controllerName))
 
 	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
@@ -204,7 +200,7 @@ func New(mgr manager.Manager, config CtrlConfig, stopChan <-chan struct{}) (cont
 
 	// register worflow informers with manager
 
-	wfInforms := NewWfInformers(sharedInforms, config, stopChan, r.Log)
+	wfInforms := NewWfInformers(sharedInforms, stopChan, r.Log, r.Client, r.recorder, r.dynClient)
 	go wfInforms.Start(context.TODO())
 
 	err = mgr.Add(wfInforms)
@@ -293,8 +289,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		}
 	}
 
-	fmt.Printf("\n\n prereqs status <%s> install status <%s> \n", instance.Status.Lifecycle.Prereqs, instance.Status.Lifecycle.Installed)
-	if instance.Status.Lifecycle.Installed == "" && instance.Status.Lifecycle.Prereqs.NotTriggered() {
+	fmt.Printf("\n\n addon %s/%s prereqs status <%s> install status <%s> \n",
+		instance.Namespace,
+		instance.Name,
+		instance.Status.Lifecycle.Prereqs, instance.Status.Lifecycle.Installed)
+	if instance.Status.Lifecycle.Installed == "" && instance.Status.Lifecycle.Prereqs.Completed() {
 		msg := fmt.Sprintf("addon %s/%s install wf not installed yet, trigger install wf installation.", instance.GetNamespace(), instance.GetName())
 		r.Log.Info(msg)
 		err := r.executeInstall(ctx, log, instance, wfl)
