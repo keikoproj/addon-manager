@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/Masterminds/semver/v3 v3.1.1
+	github.com/alessio/shellescape v1.4.1
 	github.com/argoproj/argo-workflows/v3 v3.2.6
 	github.com/go-logr/logr v0.4.0
 	github.com/onsi/ginkgo v1.16.4
