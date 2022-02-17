@@ -240,8 +240,8 @@ Please see [DEVELOPER.md](.github/DEVELOPER.md).
 [GithubPrsUrl]: https://github.com/keikoproj/addon-manager/pulls
 [SlackUrl]: https://keikoproj.slack.com/messages/addon-manager
 
-[BuildStatusImg]: https://travis-ci.org/keikoproj/addon-manager.svg?branch=master
-[BuildMasterUrl]: https://travis-ci.org/keikoproj/addon-manager
+[BuildStatusImg]: https://github.com/keikoproj/addon-manager/actions/workflows/pr-gate.yml/badge.svg
+[BuildMasterUrl]: https://github.com/keikoproj/addon-manager/actions/workflows/pr-gate.yml
 
 [CodecovImg]: https://codecov.io/gh/keikoproj/addon-manager/branch/master/graph/badge.svg
 [CodecovUrl]: https://codecov.io/gh/keikoproj/addon-manager
