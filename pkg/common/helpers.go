@@ -22,6 +22,7 @@ import (
 	"time"
 
 	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
+	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -66,6 +67,16 @@ func NewWFClient(cfg *rest.Config) wfv1versioned.Interface {
 	cli, err := wfv1versioned.NewForConfig(cfg)
 	if err != nil {
 		fmt.Printf("error while creating wfv1 client %v ", err)
+		return nil
+	}
+	return cli
+}
+
+// NewAddonClient - declare new addon client
+func NewAddonClient(cfg *rest.Config) addonv1versioned.Interface {
+	cli, err := addonv1versioned.NewForConfig(cfg)
+	if err != nil {
+		fmt.Printf("error while creating addonv1 client %v", err)
 		return nil
 	}
 	return cli

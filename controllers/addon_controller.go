@@ -134,11 +134,11 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
-	// defer func() {
-	// 	if err := recover(); err != nil {
-	// 		log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
-	// 	}
-	// }()
+	defer func() {
+		if err := recover(); err != nil {
+			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
+		}
+	}()
 
 	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
 
@@ -203,6 +203,7 @@ func New(mgr manager.Manager, config CtrlConfig, stopChan <-chan struct{}) (cont
 	}
 
 	// register worflow informers with manager
+
 	wfInforms := NewWfInformers(sharedInforms, config, stopChan)
 	go wfInforms.Start(context.TODO())
 
@@ -365,17 +366,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Also if workflow is in Pending state, execute it to update status to terminal state.
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Pending ||
 		instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
-		log.Info("Addon spec is updated, workflows should be updated.")
-
-		if prereqwfstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Prereqs)); len(prereqwfstatus) > 0 {
-			instance.Status.Lifecycle.Prereqs = addonmgrv1alpha1.ApplicationAssemblyPhase(prereqwfstatus)
-			fmt.Printf("\n hit prereq memory %s, avoid duplicate prereq \n", prereqwfstatus)
-		}
-
-		if wfinstallstatus := r.config.statusCache.Read(instance.GetNamespace(), instance.Name, string(addonmgrv1alpha1.Install)); len(wfinstallstatus) > 0 {
-			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ApplicationAssemblyPhase(wfinstallstatus)
-			fmt.Printf("\n hit install memory %s, avoid duplicate install. \n", wfinstallstatus)
-		}
+		log.Info("Addon Prereqs/Installed is on pending. Wait for workflow update.")
+		return reconcile.Result{}, nil
 	}
 
 	// Observe resources matching selector labels.
