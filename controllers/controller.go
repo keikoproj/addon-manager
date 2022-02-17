@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
+
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	informers "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions/workflow/v1alpha1"
@@ -22,6 +24,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 
 	addonwfutility "github.com/keikoproj/addon-manager/pkg/workflows"
 )
@@ -37,23 +40,25 @@ type WfInformers struct {
 	config       CtrlConfig
 	stopCh       <-chan struct{}
 	apiclientset addonv1versioned.Interface
+	log          logr.Logger
 }
 
-func NewWfInformers(nsInfo cache.SharedIndexInformer, ctrlConfig CtrlConfig, stopCh <-chan struct{}) *WfInformers {
+func NewWfInformers(nsInfo cache.SharedIndexInformer, ctrlConfig CtrlConfig, stopCh <-chan struct{}, log logr.Logger) *WfInformers {
 	return &WfInformers{
 		nsInformers: nsInfo,
 		config:      ctrlConfig,
 		stopCh:      stopCh,
+		log:         log,
 	}
 
 }
 
 func (wfinfo *WfInformers) Start(ctx context.Context) error {
-	cfg, err := common.InClusterConfig()
-	if err != nil {
-		return err
-	}
-	//cfg, _ := clientcmd.BuildConfigFromFlags("", "")
+	// cfg, err := common.InClusterConfig()
+	// if err != nil {
+	// 	return err
+	// }
+	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
 	wfcli := common.NewWFClient(cfg)
 	if wfcli == nil {
 		return fmt.Errorf("failed to create workflow client")
@@ -134,6 +139,7 @@ func InstanceIDRequirement(instanceID string) labels.Requirement {
 	return *instanceIDReq
 }
 
+// dedicated workflow add/update event handler
 func (wfinfo *WfInformers) handleWorkFlowUpdate(obj interface{}, informers v1alpha1.WorkflowInformer) {
 	if err := addonwfutility.IsValidV1WorkFlow(obj); err != nil {
 		fmt.Printf("not an expected workflow object %v", err)
@@ -141,24 +147,26 @@ func (wfinfo *WfInformers) handleWorkFlowUpdate(obj interface{}, informers v1alp
 	}
 	wfobj := &wfv1.Workflow{}
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.(*unstructured.Unstructured).UnstructuredContent(), wfobj)
-	if wfobj.Status.Phase.Completed() {
-		// check the associated addons and update its status
-		fmt.Printf("\n %s/%s  WorkFlowUpdate event status.phase <%s>\n",
-			wfobj.GetNamespace(),
-			wfobj.GetName(),
-			wfobj.Status.Phase)
 
-		// find the Addon from the namespace and update its status accordingly
-		addonName, lifecycle, err := addonwfutility.ExtractAddOnNameAndLifecycleStep(wfobj.GetName())
-		if err != nil {
-			return
-		}
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			wfinfo.updateAddonStatus(wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase, wg)
-		}()
+	// check the associated addons and update its status
+	msg := fmt.Sprintf("workflow %s/%s update status.phase %s", wfobj.GetNamespace(), wfobj.GetName(), wfobj.Status.Phase)
+	wfinfo.log.Info(msg)
+
+	if len(string(wfobj.Status.Phase)) == 0 {
+		wfinfo.log.Info("skip workflow %s/%s empty status update.", wfobj.GetNamespace(), wfobj.GetName())
+		return
 	}
+
+	// find the Addon from the namespace and update its status accordingly
+	addonName, lifecycle, err := addonwfutility.ExtractAddOnNameAndLifecycleStep(wfobj.GetName())
+	if err != nil {
+		return
+	}
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		wfinfo.updateAddonStatus(wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase, wg)
+	}()
 }
 
 func (wfinfo *WfInformers) handleWorkFlowAdd(obj interface{}, informers v1alpha1.WorkflowInformer) {
@@ -170,10 +178,14 @@ func (wfinfo *WfInformers) handleWorkFlowAdd(obj interface{}, informers v1alpha1
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.(*unstructured.Unstructured).UnstructuredContent(), wfobj)
 
 	// check the associated addons and update its status
-	fmt.Printf("\n %s/%s  WorkFlowAdd event status.phase <%s>\n",
-		wfobj.GetNamespace(),
-		wfobj.GetName(),
-		wfobj.Status.Phase)
+	msg := fmt.Sprintf("workflow %s/%s update status.phase %s", wfobj.GetNamespace(), wfobj.GetName(), wfobj.Status.Phase)
+	wfinfo.log.Info(msg)
+	if len(string(wfobj.Status.Phase)) == 0 {
+		msg := fmt.Sprintf("skip %s/%s workflow empty status.", wfobj.GetNamespace(),
+			wfobj.GetName())
+		wfinfo.log.Info(msg)
+		return
+	}
 	addonName, lifecycle, err := addonwfutility.ExtractAddOnNameAndLifecycleStep(wfobj.GetName())
 	if err != nil {
 		return
@@ -181,14 +193,15 @@ func (wfinfo *WfInformers) handleWorkFlowAdd(obj interface{}, informers v1alpha1
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		wfinfo.updateAddonStatus(wfobj.GetNamespace(), addonName, lifecycle, "Pending", wg)
+		wfinfo.updateAddonStatus(wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase, wg)
 	}()
 }
 
 func (wfinfo *WfInformers) updateAddonStatus(namespace, name, lifecycle string, lifecyclestatus wfv1.WorkflowPhase, wg *sync.WaitGroup) error {
 	defer wg.Done()
 
-	fmt.Printf("\n updating ns/addon %s/%s step %s status to %s\n", namespace, name, lifecycle, lifecyclestatus)
+	msg := fmt.Sprintf("updating addon %s/%s step %s status to %s\n", namespace, name, lifecycle, lifecyclestatus)
+	wfinfo.log.Info(msg)
 	// retry is needed
 	addonobj, err := wfinfo.apiclientset.AddonmgrV1alpha1().Addons(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -200,11 +213,14 @@ func (wfinfo *WfInformers) updateAddonStatus(namespace, name, lifecycle string, 
 		addonobj.Status.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 	} else if lifecycle == "install" {
 		addonobj.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
+	} else if lifecycle == "delete" {
+		addonobj.Status.Lifecycle.Delete = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 	}
 	_, err = wfinfo.apiclientset.AddonmgrV1alpha1().Addons(namespace).Update(context.TODO(), addonobj, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf(" failed to update ns/addon %s/%s status, err %v", namespace, name, err)
 	}
-	fmt.Printf("\n successfully update ns/addon %s/%s step %s status to %s\n", namespace, name, lifecycle, lifecyclestatus)
+	msg = fmt.Sprintf("successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
+	wfinfo.log.Info(msg)
 	return nil
 }

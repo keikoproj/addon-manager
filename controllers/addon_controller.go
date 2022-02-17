@@ -204,7 +204,7 @@ func New(mgr manager.Manager, config CtrlConfig, stopChan <-chan struct{}) (cont
 
 	// register worflow informers with manager
 
-	wfInforms := NewWfInformers(sharedInforms, config, stopChan)
+	wfInforms := NewWfInformers(sharedInforms, config, stopChan, r.Log)
 	go wfInforms.Start(context.TODO())
 
 	err = mgr.Add(wfInforms)
@@ -268,6 +268,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	changedStatus, instance.Status.Checksum = r.validateChecksum(instance)
 
 	if changedStatus {
+		msg := fmt.Sprintf("addon %s/%s spec changes trigger status reset.", instance.GetNamespace(), instance.GetName())
+		r.Log.Info(msg)
 		// ReSet ttl starttime if checksum has changed
 		instance.Status.StartTime = common.GetCurretTimestamp()
 
@@ -277,12 +279,25 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		instance.Status.Reason = ""
 	}
 
-	if instance.Status.Lifecycle.Prereqs == "" || instance.Status.Lifecycle.Installed == "" {
+	if instance.Status.Lifecycle.Prereqs == "" {
+		msg := fmt.Sprintf("addon %s/%s prereqs wf no status yet, trigger prereqs wf installation.", instance.GetNamespace(), instance.GetName())
+		r.Log.Info(msg)
 		err := r.executePrereq(ctx, log, instance, wfl)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
+
 		err = r.executeInstall(ctx, log, instance, wfl)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	fmt.Printf("\n\n prereqs status <%s> install status <%s> \n", instance.Status.Lifecycle.Prereqs, instance.Status.Lifecycle.Installed)
+	if instance.Status.Lifecycle.Installed == "" && instance.Status.Lifecycle.Prereqs.NotTriggered() {
+		msg := fmt.Sprintf("addon %s/%s install wf not installed yet, trigger install wf installation.", instance.GetNamespace(), instance.GetName())
+		r.Log.Info(msg)
+		err := r.executeInstall(ctx, log, instance, wfl)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -608,7 +623,8 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 	// Has Delete workflow defined, let's run it.
 	var removeFinalizer = true
 
-	if addon.Spec.Lifecycle.Delete.Template != "" {
+	fmt.Printf("\n addon <%s> deletion status <%s>\n", addon.Name, addon.Status.Lifecycle.Delete)
+	if addon.Spec.Lifecycle.Delete.Template != "" && len(addon.Status.Lifecycle.Delete) == 0 {
 
 		removeFinalizer = false
 
@@ -622,8 +638,6 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 			// Wait for workflow to succeed or fail.
 			removeFinalizer = true
 		}
-
-		r.config.statusCache.Delete(addon.GetNamespace(), addon.GetName())
 	}
 
 	// Remove version from cache

@@ -151,6 +151,8 @@ const (
 	Deleting ApplicationAssemblyPhase = "Deleting"
 	// DeleteFailed Used to indicate that delete failed.
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
+	// Error used to indicate system error
+	Error ApplicationAssemblyPhase = "error"
 )
 
 // DeploymentPhase represents the status of observed resources
@@ -255,6 +257,8 @@ type AddonSpec struct {
 type AddonStatusLifecycle struct {
 	Prereqs   ApplicationAssemblyPhase `json:"prereqs,omitempty"`
 	Installed ApplicationAssemblyPhase `json:"installed,omitempty"`
+	Delete    ApplicationAssemblyPhase `json:"delete,omitempty"`
+	Validate  ApplicationAssemblyPhase `json:"validate,omitempty"`
 }
 
 // ObjectStatus is a generic status holder for objects
@@ -379,4 +383,15 @@ func (a *Addon) CalculateChecksum() string {
 // GetInstallStatus returns the install phase for addon
 func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
+}
+
+// NotTriggered indicate the workflow not triggered
+// Pending,Running are triggered
+func (p ApplicationAssemblyPhase) NotTriggered() bool {
+	switch p {
+	case Succeeded, Failed, Error, "":
+		return true
+	default:
+		return false
+	}
 }
