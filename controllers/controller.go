@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 
@@ -59,13 +58,12 @@ type WfInformers struct {
 	addonInformers cache.SharedIndexInformer  // addon dynamic informer
 }
 
-func NewWfInformers(nsInfo cache.SharedIndexInformer, stopCh <-chan struct{}, log logr.Logger, k8scli client.Client, recorder record.EventRecorder, dynClient dynamic.Interface) *WfInformers {
+func NewWfInformers(nsInfo cache.SharedIndexInformer, stopCh <-chan struct{}, log logr.Logger, k8scli client.Client, dynClient dynamic.Interface) *WfInformers {
 	return &WfInformers{
 		nsInformers: nsInfo,
 		stopCh:      stopCh,
 		log:         log,
 		k8sclient:   k8scli,
-		recorder:    recorder,
 		dynClient:   dynClient,
 	}
 
@@ -89,7 +87,10 @@ func NewAddonInformer(dclient dynamic.Interface, ns string, resyncPeriod time.Du
 }
 
 func (wfinfo *WfInformers) startAddonInformers() {
-	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
+	cfg, err := common.InClusterConfig()
+	if err != nil {
+		panic(err)
+	}
 	addoncli := common.NewAddonClient(cfg)
 	if addoncli == nil {
 		panic("addon cli is empty")
@@ -108,11 +109,10 @@ func (wfinfo *WfInformers) startAddonInformers() {
 }
 
 func (wfinfo *WfInformers) Start(ctx context.Context) error {
-	// cfg, err := common.InClusterConfig()
-	// if err != nil {
-	// 	return err
-	// }
-	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
+	cfg, err := common.InClusterConfig()
+	if err != nil {
+		panic(err)
+	}
 
 	addoncli := common.NewAddonClient(cfg)
 	if addoncli == nil {

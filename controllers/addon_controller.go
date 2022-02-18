@@ -33,7 +33,6 @@ import (
 	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,6 +51,7 @@ import (
 
 const (
 	controllerName = "addon_manager_controller"
+
 	// addon ttl time
 	TTL = time.Duration(1) * time.Hour // 1 hour
 
@@ -79,7 +79,6 @@ type AddonReconciler struct {
 	versionCache    addon.VersionCacheClient
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
-	recorder        record.EventRecorder
 	//statusWGMap     map[string]*sync.WaitGroup
 }
 
@@ -92,8 +91,6 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		versionCache:    addon.NewAddonVersionCacheClient(),
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
-		recorder:        mgr.GetEventRecorderFor("addons"),
-		//statusWGMap:     map[string]*sync.WaitGroup{},
 	}
 }
 
@@ -135,7 +132,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		}
 	}()
 
-	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
+	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.Scheme)
 
 	// Resource is being deleted, run finalizers and exit.
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -150,7 +147,6 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		err := r.Finalize(ctx, instance, wfl, finalizerName)
 		if err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.DeleteFailed
 			instance.Status.Reason = reason
 			log.Error(err, "Failed to finalize addon.")
@@ -199,7 +195,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 
 	// register worflow informers with manager
 
-	wfInforms := NewWfInformers(sharedInforms, stopChan, r.Log, r.Client, r.recorder, r.dynClient)
+	wfInforms := NewWfInformers(sharedInforms, stopChan, r.Log, r.Client, r.dynClient)
 	go wfInforms.Start(context.TODO())
 
 	err = mgr.Add(wfInforms)
@@ -308,7 +304,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Check if addon installation expired.
 	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL.Milliseconds()) {
 		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, TTL.String())
-		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
 		log.Error(err, reason)
 
@@ -323,8 +318,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		// if an addons dependency is in a Pending state then make the parent addon Pending
 		if err != nil && strings.HasPrefix(err.Error(), addon.ErrDepPending) {
 			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be out of Pending state.", instance.Namespace, instance.Name)
-			// Record an event if addon is not valid
-			r.recorder.Event(instance, "Normal", "Pending", reason)
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Pending
 			instance.Status.Reason = reason
 
@@ -337,8 +330,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 			}, nil
 		} else if err != nil && strings.HasPrefix(err.Error(), addon.ErrDepNotInstalled) {
 			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be installed. %v", instance.Namespace, instance.Name, err)
-			// Record an event if addon is not valid
-			r.recorder.Event(instance, "Normal", "Failed", reason)
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ValidationFailed
 			instance.Status.Reason = reason
 
@@ -352,8 +343,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		}
 
 		reason := fmt.Sprintf("Addon %s/%s is not valid. %v", instance.Namespace, instance.Name, err)
-		// Record an event if addon is not valid
-		r.recorder.Event(instance, "Warning", "Failed", reason)
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.ValidationFailed
 		instance.Status.Reason = reason
 
@@ -362,13 +351,9 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		return reconcile.Result{}, err
 	}
 
-	// Record successful validation
-	r.recorder.Event(instance, "Normal", "Completed", fmt.Sprintf("Addon %s/%s is valid.", instance.Namespace, instance.Name))
-
 	// Set finalizer only after addon is valid
 	if err := r.SetFinalizer(ctx, instance, finalizerName); err != nil {
 		reason := fmt.Sprintf("Addon %s/%s could not add finalizer. %v", instance.Namespace, instance.Name, err)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Failed to add finalizer for addon.")
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.Reason = reason
@@ -388,7 +373,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	observed, err := r.observeResources(ctx, instance)
 	if err != nil {
 		reason := fmt.Sprintf("Addon %s/%s failed to find deployed resources. %v", instance.Namespace, instance.Name, err)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Addon failed to find deployed resources.")
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.Reason = reason
@@ -432,7 +416,6 @@ func (r *AddonReconciler) runWorkflow(lifecycleStep addonmgrv1alpha1.LifecycleSt
 	if err != nil {
 		return phase, err
 	}
-	r.recorder.Event(addon, "Normal", "Completed", fmt.Sprintf("Completed %s workflow %s/%s.", strings.Title(string(lifecycleStep)), addon.Namespace, wfIdentifierName))
 	return phase, nil
 }
 
@@ -462,7 +445,6 @@ func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger
 	})
 	if err != nil {
 		log.Error(err, "Addon status could not be updated.")
-		r.recorder.Event(addon, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", addon.Namespace, addon.Name, err))
 		return err
 	}
 
@@ -488,7 +470,6 @@ func (r *AddonReconciler) executePrereq(ctx context.Context, log logr.Logger, in
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	if err != nil {
 		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Addon prereqs workflow failed.")
 		// if prereqs failed, set install status to failed as well so that STATUS is updated
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
@@ -502,7 +483,6 @@ func (r *AddonReconciler) executePrereq(ctx context.Context, log logr.Logger, in
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Failed {
 		reason := fmt.Sprintf("Addon %s/%s Prereqs status is Failed", instance.Namespace, instance.Name)
 		log.Error(err, "Addon prereqs workflow failed.")
-		r.recorder.Event(instance, "Warning", "Failed", reason)
 		// if prereqs failed, set install status to failed as well so that STATUS is updated
 		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 		instance.Status.Reason = reason
@@ -519,7 +499,6 @@ func (r *AddonReconciler) executeInstall(ctx context.Context, log logr.Logger, i
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
 		if err := r.validateSecrets(ctx, instance); err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon could not validate secrets.")
 			instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
 			instance.Status.Reason = reason
@@ -531,7 +510,6 @@ func (r *AddonReconciler) executeInstall(ctx context.Context, log logr.Logger, i
 		instance.Status.Lifecycle.Installed = phase
 		if err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon install workflow failed.")
 			instance.Status.Reason = reason
 

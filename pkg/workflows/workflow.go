@@ -60,12 +60,11 @@ type workflowLifecycle struct {
 }
 
 // NewWorkflowLifecycle returns a AddonLifecycle object
-func NewWorkflowLifecycle(client client.Client, dynClient dynamic.Interface, addon *addonmgrv1alpha1.Addon, recorder record.EventRecorder, scheme *runtime.Scheme) AddonLifecycle {
+func NewWorkflowLifecycle(client client.Client, dynClient dynamic.Interface, addon *addonmgrv1alpha1.Addon, scheme *runtime.Scheme) AddonLifecycle {
 	return &workflowLifecycle{
 		Client:    client,
 		dynClient: dynClient,
 		addon:     addon,
-		recorder:  recorder,
 		scheme:    scheme,
 	}
 }

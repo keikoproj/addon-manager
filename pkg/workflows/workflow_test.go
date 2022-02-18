@@ -321,7 +321,7 @@ func TestNewWorkflowLifecycle(t *testing.T) {
 
 	a := &v1alpha1.Addon{}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfl := NewWorkflowLifecycle(fclient, dynClient, a, sch)
 
 	var expected AddonLifecycle = &workflowLifecycle{}
 	g.Expect(wfl).To(BeAssignableToTypeOf(expected))
@@ -377,7 +377,7 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, rcdr, sch)
+	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, sch)
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
@@ -520,7 +520,7 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, rcdr, sch)
+	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, sch)
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
@@ -625,7 +625,7 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowType(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfl := NewWorkflowLifecycle(fclient, dynClient, a, sch)
 
 	// Empty workflow type should fail
 	wt := &v1alpha1.WorkflowType{}
@@ -661,7 +661,7 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowTemplate(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfl := NewWorkflowLifecycle(fclient, dynClient, a, sch)
 
 	// Workflow missing "spec" should fail
 	wt := &v1alpha1.WorkflowType{
@@ -698,7 +698,7 @@ func TestWorkflowLifecycle_Delete_NotExists(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfl := NewWorkflowLifecycle(fclient, dynClient, a, sch)
 
 	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(HaveOccurred())
 }
@@ -727,7 +727,7 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfl := NewWorkflowLifecycle(fclient, dynClient, a, sch)
 
 	wf := &unstructured.Unstructured{}
 	wf.SetGroupVersionKind(schema.GroupVersionKind{
