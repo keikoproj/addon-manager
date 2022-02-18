@@ -66,8 +66,7 @@ func IsExpired(startTime int64, ttlTime int64) bool {
 func NewWFClient(cfg *rest.Config) wfv1versioned.Interface {
 	cli, err := wfv1versioned.NewForConfig(cfg)
 	if err != nil {
-		fmt.Printf("error while creating wfv1 client %v ", err)
-		return nil
+		panic(err)
 	}
 	return cli
 }
@@ -76,8 +75,7 @@ func NewWFClient(cfg *rest.Config) wfv1versioned.Interface {
 func NewAddonClient(cfg *rest.Config) addonv1versioned.Interface {
 	cli, err := addonv1versioned.NewForConfig(cfg)
 	if err != nil {
-		fmt.Printf("error while creating addonv1 client %v", err)
-		return nil
+		panic(err)
 	}
 	return cli
 }

@@ -29,9 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers/internalinterfaces"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -86,11 +86,7 @@ func NewAddonInformer(dclient dynamic.Interface, ns string, resyncPeriod time.Du
 	return informer
 }
 
-func (wfinfo *WfInformers) startAddonInformers() {
-	cfg, err := common.InClusterConfig()
-	if err != nil {
-		panic(err)
-	}
+func (wfinfo *WfInformers) startAddonInformers(cfg *rest.Config) {
 	addoncli := common.NewAddonClient(cfg)
 	if addoncli == nil {
 		panic("addon cli is empty")
@@ -100,7 +96,6 @@ func (wfinfo *WfInformers) startAddonInformers() {
 	wfinfo.addonInformers = NewAddonInformer(wfinfo.dynClient, addon.ManagedNameSpace,
 		addon.AddonResyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		internalinterfaces.TweakListOptionsFunc(func(x *metav1.ListOptions) {
-			return
 		}),
 	)
 
@@ -119,7 +114,7 @@ func (wfinfo *WfInformers) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create addon client")
 	}
 	wfinfo.apiclientset = addoncli
-	wfinfo.startAddonInformers()
+	wfinfo.startAddonInformers(cfg)
 
 	wfcli := common.NewWFClient(cfg)
 	if wfcli == nil {
@@ -290,16 +285,15 @@ func (wfinfo *WfInformers) updateAddonStatus(namespace, name, lifecycle string, 
 		wfinfo.log.Info(msg)
 		return nil
 	}
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return wfinfo.k8sclient.Status().Update(context.TODO(), updating, &client.UpdateOptions{})
-
-	})
+	updated, err := wfinfo.apiclientset.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(context.Background(), updating,
+		metav1.UpdateOptions{})
 	if err != nil {
-		msg := fmt.Sprintf("Addon status could not be updated. %v", err)
+		msg := fmt.Sprintf("Addon %s/%s status could not be updated. %v", updating.Namespace, updating.Name, err)
 		fmt.Print(msg)
-		wfinfo.recorder.Event(updating, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", updating.Namespace, updating.Name, err))
-		return err
 	}
+	cycle = updated.Status.Lifecycle
+	msg = fmt.Sprintf("addon %s/%s updated cycle %v", updating.Namespace, updating.Name, cycle)
+	wfinfo.log.Info(msg)
 	msg = fmt.Sprintf("successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
 	wfinfo.log.Info(msg)
 	return nil
