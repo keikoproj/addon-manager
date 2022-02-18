@@ -50,8 +50,7 @@ import (
 )
 
 const (
-	controllerName = "addon_manager_controller"
-
+	controllerName = "addon-manager-controller"
 	// addon ttl time
 	TTL = time.Duration(1) * time.Hour // 1 hour
 
@@ -83,10 +82,10 @@ type AddonReconciler struct {
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
+func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
 	return &AddonReconciler{
 		Client:          mgr.GetClient(),
-		Log:             log,
+		Log:             ctrl.Log.WithName(controllerName),
 		Scheme:          mgr.GetScheme(),
 		versionCache:    addon.NewAddonVersionCacheClient(),
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
@@ -172,7 +171,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 }
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
-	r := NewAddonReconciler(mgr, ctrl.Log.WithName(controllerName))
+	r := NewAddonReconciler(mgr)
 
 	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
