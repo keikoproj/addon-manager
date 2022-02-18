@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -81,7 +80,7 @@ type AddonReconciler struct {
 	dynClient       dynamic.Interface
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
-	statusWGMap     map[string]*sync.WaitGroup
+	//statusWGMap     map[string]*sync.WaitGroup
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -94,7 +93,7 @@ func NewAddonReconciler(mgr manager.Manager, log logr.Logger) *AddonReconciler {
 		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
-		statusWGMap:     map[string]*sync.WaitGroup{},
+		//statusWGMap:     map[string]*sync.WaitGroup{},
 	}
 }
 
@@ -289,10 +288,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		}
 	}
 
-	fmt.Printf("\n\n addon %s/%s prereqs status <%s> install status <%s> \n",
+	msg := fmt.Sprintf("addon %s/%s prereqs status <%s> install status <%s>",
 		instance.Namespace,
 		instance.Name,
 		instance.Status.Lifecycle.Prereqs, instance.Status.Lifecycle.Installed)
+	r.Log.Info(msg)
 	if instance.Status.Lifecycle.Installed == "" && instance.Status.Lifecycle.Prereqs.Completed() {
 		msg := fmt.Sprintf("addon %s/%s install wf not installed yet, trigger install wf installation.", instance.GetNamespace(), instance.GetName())
 		r.Log.Info(msg)
@@ -482,7 +482,8 @@ func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1a
 
 func (r *AddonReconciler) executePrereq(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
 	// Always reset reason when executing
-	fmt.Printf("\n execute workflow %s  prereqs\n", instance.Name)
+	msg := fmt.Sprintf("execute addon %s prereqs workflow.", instance.Name)
+	log.Info(msg)
 	instance.Status.Reason = ""
 	prereqsPhase, err := r.runWorkflow(addonmgrv1alpha1.Prereqs, instance, wfl)
 	if err != nil {
@@ -513,8 +514,8 @@ func (r *AddonReconciler) executePrereq(ctx context.Context, log logr.Logger, in
 }
 
 func (r *AddonReconciler) executeInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
-
-	fmt.Printf("\n execute workflow %s install \n", instance.Name)
+	msg := fmt.Sprintf("execute addon %s install workflow", instance.Name)
+	log.Info(msg)
 	if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded {
 		if err := r.validateSecrets(ctx, instance); err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", instance.Namespace, instance.Name, err)
@@ -622,11 +623,13 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 	// Has Delete workflow defined, let's run it.
 	var removeFinalizer = true
 
-	fmt.Printf("\n addon <%s> deletion status <%s>\n", addon.Name, addon.Status.Lifecycle.Delete)
-	if addon.Spec.Lifecycle.Delete.Template != "" && len(addon.Status.Lifecycle.Delete) == 0 {
-
+	msg := fmt.Sprintf("addon <%s/%s> deletion status <%s>", addon.Namespace, addon.Name, addon.Status.Lifecycle.Installed)
+	r.Log.Info(msg)
+	if addon.Spec.Lifecycle.Delete.Template != "" {
 		removeFinalizer = false
 
+		msg := fmt.Sprintf("deleting addon %s/%s", addon.Namespace, addon.Name)
+		r.Log.Info(msg)
 		// Run delete workflow
 		phase, err := r.runWorkflow(addonmgrv1alpha1.Delete, addon, wfl)
 		if err != nil {
@@ -637,6 +640,7 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 			// Wait for workflow to succeed or fail.
 			removeFinalizer = true
 		}
+
 	}
 
 	// Remove version from cache

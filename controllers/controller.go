@@ -3,20 +3,23 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	informers "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions/workflow/v1alpha1"
+
+	"github.com/keikoproj/addon-manager/pkg/apis/addon"
 	addonv1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 	addonv1informers "github.com/keikoproj/addon-manager/pkg/client/informers/externalversions"
 	addonv1listers "github.com/keikoproj/addon-manager/pkg/client/listers/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -29,6 +32,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	addonwfutility "github.com/keikoproj/addon-manager/pkg/workflows"
 )
@@ -39,15 +45,18 @@ const (
 )
 
 type WfInformers struct {
-	//nsInformers dynamicinformer.DynamicSharedInformerFactory
-	nsInformers  cache.SharedIndexInformer
-	stopCh       <-chan struct{}
-	apiclientset addonv1versioned.Interface
-	addonlister  addonv1listers.AddonLister
-	log          logr.Logger
-	k8sclient    client.Client
-	dynClient    dynamic.Interface
-	recorder     record.EventRecorder
+	stopCh <-chan struct{}
+	log    logr.Logger
+
+	k8sclient client.Client
+	dynClient dynamic.Interface
+	recorder  record.EventRecorder
+
+	nsInformers cache.SharedIndexInformer // workflow event
+
+	apiclientset   addonv1versioned.Interface //addon api client
+	addonlister    addonv1listers.AddonLister //addon lister
+	addonInformers cache.SharedIndexInformer  // addon dynamic informer
 }
 
 func NewWfInformers(nsInfo cache.SharedIndexInformer, stopCh <-chan struct{}, log logr.Logger, k8scli client.Client, recorder record.EventRecorder, dynClient dynamic.Interface) *WfInformers {
@@ -62,26 +71,48 @@ func NewWfInformers(nsInfo cache.SharedIndexInformer, stopCh <-chan struct{}, lo
 
 }
 
-func (wfinfo *WfInformers) startAddonInformers() error {
+func NewAddonInformer(dclient dynamic.Interface, ns string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+	resource := schema.GroupVersionResource{
+		Group:    addon.Group,
+		Version:  addon.Version,
+		Resource: addon.AddonPlural,
+	}
+	informer := NewFilteredUnstructuredInformer(
+		resource,
+		dclient,
+		ns,
+		resyncPeriod,
+		indexers,
+		tweakListOptions,
+	)
+	return informer
+}
+
+func (wfinfo *WfInformers) startAddonInformers() {
 	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
 	addoncli := common.NewAddonClient(cfg)
 	if addoncli == nil {
 		panic("addon cli is empty")
 	}
 	addonInformFactory := addonv1informers.NewSharedInformerFactory(addoncli, time.Second*30)
-
 	wfinfo.addonlister = addonInformFactory.Addonmgr().V1alpha1().Addons().Lister()
-	//addonInform := addonInformFactory.Addonmgr().V1alpha1().Addons().Informer()
+	wfinfo.addonInformers = NewAddonInformer(wfinfo.dynClient, addon.ManagedNameSpace,
+		addon.AddonResyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		internalinterfaces.TweakListOptionsFunc(func(x *metav1.ListOptions) {
+			return
+		}),
+	)
+
+	go wfinfo.addonInformers.Run(wfinfo.stopCh)
 	addonInformFactory.Start(wfinfo.stopCh)
-	return nil
 }
 
 func (wfinfo *WfInformers) Start(ctx context.Context) error {
-	cfg, err := common.InClusterConfig()
-	if err != nil {
-		return err
-	}
-	//cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
+	// cfg, err := common.InClusterConfig()
+	// if err != nil {
+	// 	return err
+	// }
+	cfg, _ := clientcmd.BuildConfigFromFlags("", "/Users/jiminh/.kube/config")
 
 	addoncli := common.NewAddonClient(cfg)
 	if addoncli == nil {
@@ -234,28 +265,40 @@ func (wfinfo *WfInformers) updateAddonStatus(namespace, name, lifecycle string, 
 	msg := fmt.Sprintf("updating addon %s/%s step %s status to %s\n", namespace, name, lifecycle, lifecyclestatus)
 	wfinfo.log.Info(msg)
 
-	// retry is needed
 	addonobj, err := wfinfo.addonlister.Addons(namespace).Get(name)
 	if err != nil || addonobj == nil {
-		msg := fmt.Sprintf("\n\n failed getting addon %s/%s, err %v", namespace, name, err)
+		msg := fmt.Sprintf("failed getting addon %s/%s, err %v", namespace, name, err)
 		fmt.Print(msg)
 		return fmt.Errorf(msg)
 
 	}
-
+	updating := addonobj.DeepCopy()
+	cycle := updating.Status.Lifecycle
+	msg = fmt.Sprintf("addon %s/%s cycle %v", updating.Namespace, updating.Name, cycle)
+	wfinfo.log.Info(msg)
+	updating.Status.Lifecycle = addonv1.AddonStatusLifecycle{}
 	if lifecycle == "prereqs" {
-		addonobj.Status.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
+		updating.Status.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
+		updating.Status.Lifecycle.Installed = addonobj.Status.Lifecycle.Installed
 	} else if lifecycle == "install" {
-		addonobj.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
-	} else if lifecycle == "delete" {
-		addonobj.Status.Lifecycle.Delete = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
+		updating.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
+		updating.Status.Lifecycle.Prereqs = addonobj.Status.Lifecycle.Prereqs
 	}
 
-	addonobj, err = wfinfo.apiclientset.AddonmgrV1alpha1().Addons(namespace).Update(context.TODO(), addonobj, metav1.UpdateOptions{})
-	if err != nil || addonobj == nil {
-		msg := fmt.Sprintf("\n failed updating addon %s/%s, err %v\n", namespace, name, err)
+	if reflect.DeepEqual(updating.Status.Lifecycle, addonobj.Status.Lifecycle) {
+		msg := fmt.Sprintf("addon %s/%s lifecycle the same. skip update.", updating.Namespace, updating.Name)
+		wfinfo.log.Info(msg)
+		return nil
+	}
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		return wfinfo.k8sclient.Status().Update(context.TODO(), updating, &client.UpdateOptions{})
+
+	})
+	if err != nil {
+		msg := fmt.Sprintf("Addon status could not be updated. %v", err)
 		fmt.Print(msg)
-		return fmt.Errorf(msg)
+		wfinfo.recorder.Event(updating, "Warning", "Failed", fmt.Sprintf("Addon %s/%s status could not be updated. %v", updating.Namespace, updating.Name, err))
+		return err
 	}
 	msg = fmt.Sprintf("successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
 	wfinfo.log.Info(msg)

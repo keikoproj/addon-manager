@@ -25,6 +25,7 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/keikoproj/addon-manager/controllers"
+	"github.com/keikoproj/addon-manager/pkg/apis/addon"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/version"
@@ -61,7 +62,7 @@ func main() {
 		Scheme:                common.GetAddonMgrScheme(),
 		MetricsBindAddress:    metricsAddr,
 		LeaderElection:        enableLeaderElection,
-		LeaderElectionID:      "addonmgr.keikoproj.io",
+		LeaderElectionID:      addon.Group,
 		ClientDisableCacheFor: nonCached, // if any cache is used, to bypass it for the given objects
 	})
 	if err != nil {
@@ -70,15 +71,13 @@ func main() {
 	}
 
 	stopChan := make(chan struct{})
-	cfg := controllers.NewCtrlConfig()
-	_, err = controllers.New(mgr, cfg, stopChan)
+	_, err = controllers.New(mgr, stopChan)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Addon")
 		os.Exit(1)
 	}
 
 	// +kubebuilder:scaffold:builder
-
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")

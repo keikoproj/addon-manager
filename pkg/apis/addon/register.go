@@ -1,5 +1,7 @@
 package addon
 
+import "time"
+
 // Addon constants
 const (
 	Group          string = "addonmgr.keikoproj.io"
@@ -10,4 +12,8 @@ const (
 	AddonPlural    string = "addons"
 	AddonShortName string = "addon"
 	AddonFullName  string = AddonPlural + "." + Group
+
+	ManagedNameSpace string = "addon-manager-system"
+
+	AddonResyncPeriod = 20 * time.Minute
 )

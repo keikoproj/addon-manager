@@ -257,8 +257,6 @@ type AddonSpec struct {
 type AddonStatusLifecycle struct {
 	Prereqs   ApplicationAssemblyPhase `json:"prereqs,omitempty"`
 	Installed ApplicationAssemblyPhase `json:"installed,omitempty"`
-	Delete    ApplicationAssemblyPhase `json:"delete,omitempty"`
-	Validate  ApplicationAssemblyPhase `json:"validate,omitempty"`
 }
 
 // ObjectStatus is a generic status holder for objects
