@@ -385,16 +385,17 @@ func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 
 // NotTriggered indicate the workflow not triggered
 // Pending,Running are triggered
-func (p ApplicationAssemblyPhase) NotTriggered() bool {
+
+func (p ApplicationAssemblyPhase) Completed() bool {
 	switch p {
-	case Succeeded, Failed, Error, "":
+	case Succeeded, Failed, DeleteFailed, Error, ValidationFailed:
 		return true
 	default:
 		return false
 	}
 }
 
-func (p ApplicationAssemblyPhase) Completed() bool {
+func (p ApplicationAssemblyPhase) Succeeded() bool {
 	switch p {
 	case Succeeded:
 		return true

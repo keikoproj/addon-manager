@@ -13,6 +13,8 @@ const (
 	AddonShortName string = "addon"
 	AddonFullName  string = AddonPlural + "." + Group
 
+	LabelKeyCompleted string = AddonFullName + "/completed"
+
 	ManagedNameSpace string = "addon-manager-system"
 
 	AddonResyncPeriod = 20 * time.Minute

@@ -15,6 +15,7 @@
 package common
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -22,7 +23,11 @@ import (
 	"time"
 
 	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
+	addonv1api "github.com/keikoproj/addon-manager/pkg/apis/addon"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -119,4 +124,38 @@ func NewK8sClient(kubeconfigPath string) (kubernetes.Interface, error) {
 		return nil, fmt.Errorf("unable to create a client: %v", err)
 	}
 	return client, nil
+}
+
+func FromUnstructured(un *unstructured.Unstructured) (*addonmgrv1alpha1.Addon, error) {
+	addon := addonmgrv1alpha1.Addon{}
+	err := FromUnstructuredObj(un, &addon)
+	return &addon, err
+}
+
+func FromUnstructuredObj(un *unstructured.Unstructured, v interface{}) error {
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(un.Object, v)
+	if err != nil {
+		if err.Error() == "cannot convert int64 to v1alpha1.AnyString" {
+			data, err := json.Marshal(un)
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(data, v)
+		}
+		return err
+	}
+	return nil
+}
+
+// ToUnstructured converts an workflow to an Unstructured object
+func ToUnstructured(addon *addonmgrv1alpha1.Addon) (*unstructured.Unstructured, error) {
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(addon)
+	if err != nil {
+		return nil, err
+	}
+	un := &unstructured.Unstructured{Object: obj}
+	// we need to add these values so that the `EventRecorder` does not error
+	un.SetKind(addonv1api.AddonKind)
+	un.SetAPIVersion(addonv1api.APIVersion)
+	return un, nil
 }
