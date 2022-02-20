@@ -151,6 +151,8 @@ const (
 	Deleting ApplicationAssemblyPhase = "Deleting"
 	// DeleteFailed Used to indicate that delete failed.
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
+	// Error used to indicate system error
+	Error ApplicationAssemblyPhase = "error"
 )
 
 // DeploymentPhase represents the status of observed resources
@@ -281,8 +283,8 @@ type AddonStatus struct {
 	StartTime int64                `json:"starttime"`
 }
 
+// AddonList contains a list of Addon
 // +kubebuilder:object:root=true
-
 // Addon is the Schema for the addons API
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
@@ -292,6 +294,8 @@ type AddonStatus struct {
 // +kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.lifecycle.installed"
 // +kubebuilder:printcolumn:name="REASON",type="string",JSONPath=".status.reason"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type Addon struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -301,16 +305,11 @@ type Addon struct {
 }
 
 // +kubebuilder:object:root=true
-
-// AddonList contains a list of Addon
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AddonList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Addon `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&Addon{}, &AddonList{})
 }
 
 // GetPackageSpec returns the addon package details from addon spec
@@ -382,4 +381,24 @@ func (a *Addon) CalculateChecksum() string {
 // GetInstallStatus returns the install phase for addon
 func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
+}
+
+// NotTriggered indicate the workflow not triggered
+// Pending,Running are triggered
+func (p ApplicationAssemblyPhase) NotTriggered() bool {
+	switch p {
+	case Succeeded, Failed, Error, "":
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) Completed() bool {
+	switch p {
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
 }

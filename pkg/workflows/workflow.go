@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
