@@ -1,4 +1,4 @@
-name: pr-gate
+name: build
 
 on:
   push:
