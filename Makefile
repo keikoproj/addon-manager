@@ -131,19 +131,9 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
-
-# generate client code
-ifeq (, $(shell which code-generator))
-	@{ \
-	set -e ;\
-	code_generator_TMP_DIR=$$(mkdir ~/go/src/k8s.io/) ;\
-	cd $$code_generator_TMP_DIR ;\
-	go mod init code_generator_TMP_DIR ;\
-	go get k8s.io/code-generator@v0.21.5 ;\
-	}
-CONTROLLER_GEN=$(GOSRC)/code-generator/generate-groups.sh \
-	 "deepcopy,client,informer,lister" \
-      pkg/client pkg/apis\
-      addon:v1alpha1 \
-      --go-header-file ./hack/boilerplate.go.txt   
-endif
+code-generator:
+bash $(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
+	"deepcopy,client,informer,lister" \
+	github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/pkg/apis\
+	addon:v1alpha1 \
+	--go-header-file ./hack/custom.go.txt
