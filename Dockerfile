@@ -12,7 +12,6 @@ ADD go.sum .
 RUN go mod download
 
 COPY pkg/ pkg/
-COPY api/ api/
 COPY cmd/ cmd/
 COPY controllers/ controllers/
 COPY main.go main.go
