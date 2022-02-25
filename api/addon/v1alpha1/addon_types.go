@@ -258,6 +258,7 @@ type AddonStatusLifecycle struct {
 }
 
 // ObjectStatus is a generic status holder for objects
+// +k8s:deepcopy-gen=true
 type ObjectStatus struct {
 	// Link to object
 	Link string `json:"link,omitempty"`
@@ -309,10 +310,6 @@ type AddonList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Addon `json:"items"`
 }
-
-// func init() {
-// 	SchemeBuilder.Register(&Addon{}, &AddonList{})
-// }
 
 // GetPackageSpec returns the addon package details from addon spec
 func (a *Addon) GetPackageSpec() PackageSpec {

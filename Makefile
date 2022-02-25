@@ -27,7 +27,20 @@ all: test manager addonctl
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./api/... ./controllers/... ./pkg/... ./cmd/... -coverprofile cover.out
+	go test ./api/... ./controllers/... ./pkg/... ./cmd/... -v -coverprofile cover.out
+
+# tests both controllers and api
+.PHONY: test.controllers
+test.controllers:
+	go test -v -race ./controllers/... -coverprofile cover.out
+
+.PHONY: test.pkg
+test.pkg:
+	go test -v -race ./pkg/... -coverprofile cover.out
+
+.PHONY: test.cmd
+test.pkg:
+	go test -v -race ./cmd/... -coverprofile cover.out
 
 # Run E2E tests
 bdd: fmt vet deploy

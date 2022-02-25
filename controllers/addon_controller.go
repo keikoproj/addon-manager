@@ -46,7 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"

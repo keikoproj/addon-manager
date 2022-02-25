@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/controllers"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/version"

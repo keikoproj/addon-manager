@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 )
 
