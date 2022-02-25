@@ -27,11 +27,15 @@ all: test manager addonctl
 
 # Run tests
 .PHONY: test
-test: test.controllers test.pkg test.cmd
+test: test.controllers test.e2e test.pkg test.cmd
 
 .PHONY: test.controllers
 test.controllers:
 	go test -v -race ./controllers/... -coverprofile cover.out
+
+.PHONY: test.e2e
+test.e2e:
+	go test -v -race ./e2e/... -coverprofile cover.out
 
 .PHONY: test.pkg
 test.pkg:
