@@ -27,15 +27,16 @@ all: test manager addonctl
 
 # Run tests
 .PHONY: test
-test: test.controllers test.e2e test.pkg test.cmd
+test:
+	go test -v -race ./controllers/... ./apis/addon/... ./pkg/... ./cmd/... -coverprofile cover.out
 
 .PHONY: test.controllers
 test.controllers:
 	go test -v -race ./controllers/... -coverprofile cover.out
 
-.PHONY: test.e2e
-test.e2e:
-	go test -v -race ./e2e/... -coverprofile cover.out
+.PHONY: test.api
+test.api:
+	go test -v -race ./apis/addon/... -coverprofile cover.out
 
 .PHONY: test.pkg
 test.pkg:
@@ -148,7 +149,17 @@ CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
 code-generator:
-  bash $(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
+ifeq (, $(shell which code-generator))
+	@{ \
+	set -e ;\
+	CODE_GENERATOR_DIR=$$(mkdir -p $(GOPATH)/src/k8s.io/) ;\
+	cd $$CODE_GENERATOR_DIR ;\
+	go get github.com/kubernetes/code-generator@v0.21.5 ;\
+	}
+endif
+
+code-generator:
+	bash $(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
 	"deepcopy,client,informer,lister" \
 	github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/apis\
 	addon:v1alpha1 \

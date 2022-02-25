@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package e2e
+package v1alpha1
 
 import (
 	"fmt"
@@ -23,46 +23,44 @@ import (
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	addonv1 "github.com/keikoproj/addon-manager/apis/addon/v1alpha1"
 )
 
 var wfSpecTemplate = `
-apiVersion: argoproj.io/v1alpha1
-kind: Workflow
-metadata:
-  generateName: scripts-python-
-spec:
-  entrypoint: python-script-example
-  templates:
-    - name: python-script-example
-      steps:
-        - - name: generate
-            template: gen-random-int
-        - - name: print
-            template: print-message
-            arguments:
-              parameters:
-                - name: message
-                  value: "{{steps.generate.outputs.result}}"
-
-    - name: gen-random-int
-      script:
-        image: python:alpine3.6
-        command: [python]
-        source: |
-          import random
-          i = random.randint(1, 100)
-          print(i)
-    - name: print-message
-      inputs:
-        parameters:
-          - name: message
-      container:
-        image: alpine:latest
-        command: [sh, -c]
-        args: ["echo result was: {{inputs.parameters.message}}"]
-`
+ apiVersion: argoproj.io/v1alpha1
+ kind: Workflow
+ metadata:
+   generateName: scripts-python-
+ spec:
+   entrypoint: python-script-example
+   templates:
+	 - name: python-script-example
+	   steps:
+		 - - name: generate
+			 template: gen-random-int
+		 - - name: print
+			 template: print-message
+			 arguments:
+			   parameters:
+				 - name: message
+				   value: "{{steps.generate.outputs.result}}"
+ 
+	 - name: gen-random-int
+	   script:
+		 image: python:alpine3.6
+		 command: [python]
+		 source: |
+		   import random
+		   i = random.randint(1, 100)
+		   print(i)
+	 - name: print-message
+	   inputs:
+		 parameters:
+		   - name: message
+	   container:
+		 image: alpine:latest
+		 command: [sh, -c]
+		 args: ["echo result was: {{inputs.parameters.message}}"]
+ `
 
 // These tests are written in BDD-style using Ginkgo framework. Refer to
 // http://onsi.github.io/ginkgo to learn more.
@@ -70,7 +68,7 @@ spec:
 var _ = Describe("Addon", func() {
 	var (
 		key              types.NamespacedName
-		created, fetched *addonv1.Addon
+		created, fetched *Addon
 	)
 
 	BeforeEach(func() {
@@ -93,16 +91,16 @@ var _ = Describe("Addon", func() {
 				Name:      "foo",
 				Namespace: "default",
 			}
-			created = &addonv1.Addon{
+			created = &Addon{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
 				},
-				Spec: addonv1.AddonSpec{
-					PackageSpec: addonv1.PackageSpec{
+				Spec: AddonSpec{
+					PackageSpec: PackageSpec{
 						PkgName:        "my-addon",
 						PkgVersion:     "1.0.0",
-						PkgType:        addonv1.HelmPkg,
+						PkgType:        HelmPkg,
 						PkgDescription: "",
 						PkgDeps:        map[string]string{"core/A": "*", "core/B": "v1.0.0"},
 					},
@@ -111,28 +109,28 @@ var _ = Describe("Addon", func() {
 							"app": "my-app",
 						},
 					},
-					Params: addonv1.AddonParams{
+					Params: AddonParams{
 						Namespace: "foo-ns",
-						Context: addonv1.ClusterContext{
+						Context: ClusterContext{
 							ClusterName:   "foo-cluster",
 							ClusterRegion: "foo-region",
-							AdditionalConfigs: map[string]addonv1.FlexString{
+							AdditionalConfigs: map[string]FlexString{
 								"additional": "config",
 							},
 						},
-						Data: map[string]addonv1.FlexString{
+						Data: map[string]FlexString{
 							"foo-param": "val",
 						},
 					},
-					Lifecycle: addonv1.LifecycleWorkflowSpec{
-						Prereqs: addonv1.WorkflowType{
+					Lifecycle: LifecycleWorkflowSpec{
+						Prereqs: WorkflowType{
 							NamePrefix: "my-prereqs",
 							Template:   wfSpecTemplate,
 						},
-						Install: addonv1.WorkflowType{
+						Install: WorkflowType{
 							Template: wfSpecTemplate,
 						},
-						Delete: addonv1.WorkflowType{
+						Delete: WorkflowType{
 							Template: wfSpecTemplate,
 						},
 					},
@@ -142,7 +140,7 @@ var _ = Describe("Addon", func() {
 			By("creating an API obj")
 			Expect(k8sClient.Create(context.TODO(), created)).To(Succeed())
 
-			fetched = &addonv1.Addon{}
+			fetched = &Addon{}
 			Expect(k8sClient.Get(context.TODO(), key, fetched)).To(Succeed())
 			Expect(fetched).To(Equal(created))
 
@@ -170,7 +168,7 @@ var _ = Describe("Addon", func() {
 			// Update status checksum
 			fetched.Status.Checksum = checksum
 
-			wfName := fetched.GetFormattedWorkflowName(addonv1.Install)
+			wfName := fetched.GetFormattedWorkflowName(Install)
 			Expect(wfName).To(Equal(fmt.Sprintf("foo-install-%s-wf", checksum)))
 
 			By("updating labels")
