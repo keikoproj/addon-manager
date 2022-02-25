@@ -27,7 +27,7 @@ all: test manager addonctl
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./pkg/apis/addon/... ./controllers/... ./pkg/... ./cmd/... -coverprofile cover.out
+	go test ./apis/addon/... ./controllers/... ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Run E2E tests
 bdd: fmt vet deploy
@@ -96,7 +96,7 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./pkg/apis/addon/...
+	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./apis/addon/...
 
 # Build the docker image
 docker-build: manager
