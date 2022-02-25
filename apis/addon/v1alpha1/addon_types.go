@@ -382,23 +382,3 @@ func (a *Addon) CalculateChecksum() string {
 func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
 }
-
-// NotTriggered indicate the workflow not triggered
-// Pending,Running are triggered
-func (p ApplicationAssemblyPhase) NotTriggered() bool {
-	switch p {
-	case Succeeded, Failed, Error, "":
-		return true
-	default:
-		return false
-	}
-}
-
-func (p ApplicationAssemblyPhase) Completed() bool {
-	switch p {
-	case Succeeded:
-		return true
-	default:
-		return false
-	}
-}
