@@ -114,6 +114,11 @@ vet:
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./apis/addon/...
+	$(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
+	"deepcopy,client,informer,lister" \
+	github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/apis\
+	addon:v1alpha1 \
+	--go-header-file ./hack/custom-boilerplate.go.txt
 
 # Build the docker image
 docker-build: manager
@@ -158,9 +163,4 @@ ifeq (, $(shell which code-generator))
 	}
 endif
 
-code-generator:
-	bash $(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
-	"deepcopy,client,informer,lister" \
-	github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/apis\
-	addon:v1alpha1 \
-	--go-header-file ./hack/custom.go.txt
+
