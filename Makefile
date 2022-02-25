@@ -112,9 +112,9 @@ vet:
 	go vet ./...
 
 # Generate code
-generate: controller-gen
+generate: controller-gen code-generator
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./apis/addon/...
-	$(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
+	bash $(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
 	"deepcopy,client,informer,lister" \
 	github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/apis\
 	addon:v1alpha1 \
