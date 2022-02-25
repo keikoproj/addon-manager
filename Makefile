@@ -26,8 +26,24 @@ GO111MODULE=on
 all: test manager addonctl
 
 # Run tests
-test: generate fmt vet manifests
-	go test ./apis/addon/... ./controllers/... ./pkg/... ./cmd/... -coverprofile cover.out
+.PHONY: test.all
+test.all: test.controllers test.apis test.pkg test.cmd
+
+.PHONY: test.controllers
+test.controllers:
+  @go test -v -race ./controllers/... -coverprofile cover.out
+
+.PHONY: test.apis
+test.controllers:
+  @go test -v -race ./apis/addon/... -coverprofile cover.out
+
+.PHONY: test.pkg
+test.pkg:
+  @go test -v -race ./pkg/... -coverprofile cover.out
+
+.PHONY: test.cmd
+test.pkg:
+  @go test -v -race ./cmd/... -coverprofile cover.out
 
 # Run E2E tests
 bdd: fmt vet deploy
@@ -132,7 +148,7 @@ CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
 code-generator:
-bash $(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
+  bash $(GOPATH)/src/k8s.io/code-generator@v0.21.5/generate-groups.sh \
 	"deepcopy,client,informer,lister" \
 	github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/apis\
 	addon:v1alpha1 \
