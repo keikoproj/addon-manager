@@ -108,8 +108,14 @@ vet:
 	go vet ./...
 
 # Generate code
-generate: controller-gen
+generate: controller-gen code-generator
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
+
+	$(CODE_GENERATOR_GEN)/generate-groups.sh \
+			"deepcopy,client,informer,lister" \
+			github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/api\
+            addon:v1alpha1 \
+            --go-header-file ./hack/custom-boilerplate.go.txt
 
 # Build the docker image
 docker-build: manager
@@ -142,4 +148,17 @@ ifeq (, $(shell which controller-gen))
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
+endif
+
+code-generator:
+ifeq (, $(shell which code-generator))
+	@{ \
+	cd $(GOBIN) ;\
+	curl -L -o code-generator.zip https://github.com/kubernetes/code-generator/archive/refs/tags/v0.21.5.zip ;\
+	unzip code-generator.zip ;\
+	rm -rf code-generator.zip ;\
+	}
+CODE_GENERATOR_GEN=$(GOBIN)/code-generator-0.21.5
+else
+CODE_GENERATOR_GEN=$(shell which code-generator)
 endif
