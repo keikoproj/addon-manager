@@ -26,24 +26,24 @@ GO111MODULE=on
 all: test manager addonctl
 
 # Run tests
-.PHONY: test.all
-test.all: test.controllers test.apis test.pkg test.cmd
+.PHONY: test
+test: test.controllers test.apis test.pkg test.cmd
 
 .PHONY: test.controllers
 test.controllers:
-  @go test -v -race ./controllers/... -coverprofile cover.out
+	go test -v -race ./controllers/... -coverprofile cover.out
 
 .PHONY: test.apis
 test.controllers:
-  @go test -v -race ./apis/addon/... -coverprofile cover.out
+	go test -v -race ./apis/addon/... -coverprofile cover.out
 
 .PHONY: test.pkg
 test.pkg:
-  @go test -v -race ./pkg/... -coverprofile cover.out
+	go test -v -race ./pkg/... -coverprofile cover.out
 
 .PHONY: test.cmd
 test.pkg:
-  @go test -v -race ./cmd/... -coverprofile cover.out
+	go test -v -race ./cmd/... -coverprofile cover.out
 
 # Run E2E tests
 bdd: fmt vet deploy
