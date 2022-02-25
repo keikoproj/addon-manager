@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package v1alpha1
+package controllers
 
 import (
 	"fmt"
@@ -23,6 +23,8 @@ import (
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	addonv1 "github.com/keikoproj/addon-manager/apis/addon/v1alpha1"
 )
 
 var wfSpecTemplate = `
@@ -68,7 +70,7 @@ spec:
 var _ = Describe("Addon", func() {
 	var (
 		key              types.NamespacedName
-		created, fetched *Addon
+		created, fetched *addonv1.Addon
 	)
 
 	BeforeEach(func() {
@@ -91,16 +93,16 @@ var _ = Describe("Addon", func() {
 				Name:      "foo",
 				Namespace: "default",
 			}
-			created = &Addon{
+			created = &addonv1.Addon{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
 				},
-				Spec: AddonSpec{
-					PackageSpec: PackageSpec{
+				Spec: addonv1.AddonSpec{
+					PackageSpec: addonv1.PackageSpec{
 						PkgName:        "my-addon",
 						PkgVersion:     "1.0.0",
-						PkgType:        HelmPkg,
+						PkgType:        addonv1.HelmPkg,
 						PkgDescription: "",
 						PkgDeps:        map[string]string{"core/A": "*", "core/B": "v1.0.0"},
 					},
@@ -109,28 +111,28 @@ var _ = Describe("Addon", func() {
 							"app": "my-app",
 						},
 					},
-					Params: AddonParams{
+					Params: addonv1.AddonParams{
 						Namespace: "foo-ns",
-						Context: ClusterContext{
+						Context: addonv1.ClusterContext{
 							ClusterName:   "foo-cluster",
 							ClusterRegion: "foo-region",
-							AdditionalConfigs: map[string]FlexString{
+							AdditionalConfigs: map[string]addonv1.FlexString{
 								"additional": "config",
 							},
 						},
-						Data: map[string]FlexString{
+						Data: map[string]addonv1.FlexString{
 							"foo-param": "val",
 						},
 					},
-					Lifecycle: LifecycleWorkflowSpec{
-						Prereqs: WorkflowType{
+					Lifecycle: addonv1.LifecycleWorkflowSpec{
+						Prereqs: addonv1.WorkflowType{
 							NamePrefix: "my-prereqs",
 							Template:   wfSpecTemplate,
 						},
-						Install: WorkflowType{
+						Install: addonv1.WorkflowType{
 							Template: wfSpecTemplate,
 						},
-						Delete: WorkflowType{
+						Delete: addonv1.WorkflowType{
 							Template: wfSpecTemplate,
 						},
 					},
@@ -140,7 +142,7 @@ var _ = Describe("Addon", func() {
 			By("creating an API obj")
 			Expect(k8sClient.Create(context.TODO(), created)).To(Succeed())
 
-			fetched = &Addon{}
+			fetched = &addonv1.Addon{}
 			Expect(k8sClient.Get(context.TODO(), key, fetched)).To(Succeed())
 			Expect(fetched).To(Equal(created))
 
@@ -168,7 +170,7 @@ var _ = Describe("Addon", func() {
 			// Update status checksum
 			fetched.Status.Checksum = checksum
 
-			wfName := fetched.GetFormattedWorkflowName(Install)
+			wfName := fetched.GetFormattedWorkflowName(addonv1.Install)
 			Expect(wfName).To(Equal(fmt.Sprintf("foo-install-%s-wf", checksum)))
 
 			By("updating labels")
