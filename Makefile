@@ -113,7 +113,7 @@ generate: controller-gen types
 
 # generates many other files (listers, informers, client etc).
 api/addon/v1alpha1/zz_generated.deepcopy.go: $(TYPES)
-	ln -s v1
+	ln -s . v1
 	$(CODE_GENERATOR_GEN)/generate-groups.sh \
 			"deepcopy,client,informer,lister" \
 			github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/api\
@@ -160,9 +160,12 @@ endif
 code-generator:
 ifeq (, $(shell which code-generator))
 	@{ \
-	cd $(GOBIN) ;\
+	set -e ;\
+	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	curl -L -o code-generator.zip https://github.com/kubernetes/code-generator/archive/refs/tags/v0.21.5.zip ;\
 	unzip code-generator.zip ;\
+	mv code-generator-0.21.5 $(GOPATH)/bin/ ;\
 	rm -rf code-generator.zip ;\
 	}
 CODE_GENERATOR_GEN=$(GOBIN)/code-generator-0.21.5
