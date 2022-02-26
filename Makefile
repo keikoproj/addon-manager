@@ -39,7 +39,7 @@ test.pkg:
 	go test -v -race ./pkg/... -coverprofile cover.out
 
 .PHONY: test.cmd
-test.pkg:
+test.cmd:
 	go test -v -race ./cmd/... -coverprofile cover.out
 
 # Run E2E tests
@@ -108,16 +108,18 @@ vet:
 	go vet ./...
 
 # Generate code
-generate: controller-gen
+generate: controller-gen types
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
 
 # generates many other files (listers, informers, client etc).
 api/addon/v1alpha1/zz_generated.deepcopy.go: $(TYPES)
+	ln -s v1
 	$(CODE_GENERATOR_GEN)/generate-groups.sh \
 			"deepcopy,client,informer,lister" \
 			github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/api\
             addon:v1alpha1 \
             --go-header-file ./hack/custom-boilerplate.go.txt
+	rm -rf v1
 
 .PHONY: types
 types: api/addon/v1alpha1/zz_generated.deepcopy.go
