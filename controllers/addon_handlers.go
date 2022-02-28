@@ -75,7 +75,6 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 
 	var changedStatus bool
 	changedStatus, addon.Status.Checksum = c.validateChecksum(addon)
-
 	if changedStatus {
 		c.logger.Info("addon ", addon.Namespace, "/", addon.Name, " spec checksum changes.")
 		// Set ttl starttime if checksum has changed
@@ -133,11 +132,7 @@ func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Add
 }
 
 func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
-
 	errors := []error{}
-
-	_, addon.Status.Checksum = c.validateChecksum(addon)
-	c.logger.Info(" init addon ", addon.Namespace, "/", addon.Name, " status")
 	addon.Status = addonv1.AddonStatus{
 		StartTime: common.GetCurretTimestamp(),
 		Lifecycle: addonv1.AddonStatusLifecycle{
@@ -147,6 +142,8 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		Reason:    "",
 		Resources: make([]addonv1.ObjectStatus, 0),
 	}
+	_, addon.Status.Checksum = c.validateChecksum(addon)
+	c.logger.Info(" init addon ", addon.Namespace, "/", addon.Name, " status")
 
 	// Set finalizer only after addon is valid
 	if err := c.SetFinalizer(ctx, addon, addonapiv1.FinalizerName); err != nil {

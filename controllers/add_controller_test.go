@@ -157,13 +157,6 @@ func TestAddonInstall(t *testing.T) {
 	instance.SetNamespace(addonNamespace)
 	Expect(instance).To(BeAssignableToTypeOf(&addonapiv1.Addon{}))
 
-	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(instance)
-	Expect(err).To(BeNil())
-	un := &unstructured.Unstructured{Object: obj}
-	un.SetAPIVersion("addonmgr.keikoproj.io/v1alpha1")
-	un.SetKind("Addon")
-	Expect(un.GetName()).To(Equal(addonName))
-	Expect(un.GetNamespace()).To(Equal(addonNamespace))
 	// install addon
 	fmt.Printf("\ninstalling addon\n")
 	addonController := newController(instance)
@@ -183,9 +176,10 @@ func TestAddonInstall(t *testing.T) {
 	fetchedAddon, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(fetchedAddon).NotTo(BeNil())
+
 	fmt.Printf("\nverifying Addon\n")
 	// verify finalizer is set
-	Expect(fetchedAddon.ObjectMeta.Finalizers).To(BeZero())
+	Expect(fetchedAddon.ObjectMeta.Finalizers).NotTo(BeZero())
 	// verify checksum
 	Expect(fetchedAddon.Status.Checksum).ShouldNot(BeEmpty())
 
@@ -193,6 +187,9 @@ func TestAddonInstall(t *testing.T) {
 	//Update instance params for checksum validation
 	fetchedAddon.Spec.Params.Context.ClusterRegion = "us-east-2"
 	updated, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Update(ctx, fetchedAddon, metav1.UpdateOptions{})
+	//addonController.processNextItem(ctx)
+
+	//fetchedAddon1, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(updated).NotTo(BeNil())
 	Expect(updated.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
