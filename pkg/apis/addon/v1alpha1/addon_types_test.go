@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package controllers
+package v1alpha1
 
 import (
 	"fmt"
@@ -20,54 +20,56 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
-	fakeAddonCli "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/fake"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var wfSpecTemplate = `
- apiVersion: argoproj.io/v1alpha1
- kind: Workflow
- metadata:
-   generateName: scripts-python-
- spec:
-   entrypoint: python-script-example
-   templates:
-	 - name: python-script-example
-	   steps:
-		 - - name: generate
-			 template: gen-random-int
-		 - - name: print
-			 template: print-message
-			 arguments:
-			   parameters:
-				 - name: message
-				   value: "{{steps.generate.outputs.result}}"
- 
-	 - name: gen-random-int
-	   script:
-		 image: python:alpine3.6
-		 command: [python]
-		 source: |
-		   import random
-		   i = random.randint(1, 100)
-		   print(i)
-	 - name: print-message
-	   inputs:
-		 parameters:
-		   - name: message
-	   container:
-		 image: alpine:latest
-		 command: [sh, -c]
-		 args: ["echo result was: {{inputs.parameters.message}}"]
- `
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: scripts-python-
+spec:
+  entrypoint: python-script-example
+  templates:
+    - name: python-script-example
+      steps:
+        - - name: generate
+            template: gen-random-int
+        - - name: print
+            template: print-message
+            arguments:
+              parameters:
+                - name: message
+                  value: "{{steps.generate.outputs.result}}"
+
+    - name: gen-random-int
+      script:
+        image: python:alpine3.6
+        command: [python]
+        source: |
+          import random
+          i = random.randint(1, 100)
+          print(i)
+    - name: print-message
+      inputs:
+        parameters:
+          - name: message
+      container:
+        image: alpine:latest
+        command: [sh, -c]
+        args: ["echo result was: {{inputs.parameters.message}}"]
+`
 
 // These tests are written in BDD-style using Ginkgo framework. Refer to
 // http://onsi.github.io/ginkgo to learn more.
 
 var _ = Describe("Addon", func() {
+	var (
+		key              types.NamespacedName
+		created, fetched *Addon
+	)
 
 	BeforeEach(func() {
 		// Add any setup steps that needs to be executed before each test
@@ -84,18 +86,21 @@ var _ = Describe("Addon", func() {
 	Context("Create API", func() {
 
 		It("should create an object successfully", func() {
-			namespace := "default"
-			adddonName := "foo"
-			created := &addonmgrv1alpha1.Addon{
+
+			key = types.NamespacedName{
+				Name:      "foo",
+				Namespace: "default",
+			}
+			created = &Addon{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      adddonName,
-					Namespace: namespace,
+					Name:      "foo",
+					Namespace: "default",
 				},
-				Spec: addonmgrv1alpha1.AddonSpec{
-					PackageSpec: addonmgrv1alpha1.PackageSpec{
+				Spec: AddonSpec{
+					PackageSpec: PackageSpec{
 						PkgName:        "my-addon",
 						PkgVersion:     "1.0.0",
-						PkgType:        addonmgrv1alpha1.HelmPkg,
+						PkgType:        HelmPkg,
 						PkgDescription: "",
 						PkgDeps:        map[string]string{"core/A": "*", "core/B": "v1.0.0"},
 					},
@@ -104,43 +109,39 @@ var _ = Describe("Addon", func() {
 							"app": "my-app",
 						},
 					},
-					Params: addonmgrv1alpha1.AddonParams{
+					Params: AddonParams{
 						Namespace: "foo-ns",
-						Context: addonmgrv1alpha1.ClusterContext{
+						Context: ClusterContext{
 							ClusterName:   "foo-cluster",
 							ClusterRegion: "foo-region",
-							AdditionalConfigs: map[string]addonmgrv1alpha1.FlexString{
+							AdditionalConfigs: map[string]FlexString{
 								"additional": "config",
 							},
 						},
-						Data: map[string]addonmgrv1alpha1.FlexString{
+						Data: map[string]FlexString{
 							"foo-param": "val",
 						},
 					},
-					Lifecycle: addonmgrv1alpha1.LifecycleWorkflowSpec{
-						Prereqs: addonmgrv1alpha1.WorkflowType{
+					Lifecycle: LifecycleWorkflowSpec{
+						Prereqs: WorkflowType{
 							NamePrefix: "my-prereqs",
 							Template:   wfSpecTemplate,
 						},
-						Install: addonmgrv1alpha1.WorkflowType{
+						Install: WorkflowType{
 							Template: wfSpecTemplate,
 						},
-						Delete: addonmgrv1alpha1.WorkflowType{
+						Delete: WorkflowType{
 							Template: wfSpecTemplate,
 						},
 					},
 				},
 			}
 
-			apiCli := fakeAddonCli.NewSimpleClientset([]runtime.Object{}...)
-			ctx := context.TODO()
 			By("creating an API obj")
-			created, err := apiCli.AddonmgrV1alpha1().Addons(namespace).Create(ctx, created, metav1.CreateOptions{})
-			Expect(err).To(BeNil())
-			Expect(created).NotTo(BeNil())
+			Expect(k8sClient.Create(context.TODO(), created)).To(Succeed())
 
-			fetched, err := apiCli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, adddonName, metav1.GetOptions{})
-			Expect(err).To(BeNil())
+			fetched = &Addon{}
+			Expect(k8sClient.Get(context.TODO(), key, fetched)).To(Succeed())
 			Expect(fetched).To(Equal(created))
 
 			By("Checking expected fetched values")
@@ -167,23 +168,20 @@ var _ = Describe("Addon", func() {
 			// Update status checksum
 			fetched.Status.Checksum = checksum
 
-			wfName := fetched.GetFormattedWorkflowName(addonmgrv1alpha1.Install)
+			wfName := fetched.GetFormattedWorkflowName(Install)
 			Expect(wfName).To(Equal(fmt.Sprintf("foo-install-%s-wf", checksum)))
 
 			By("updating labels")
 			updated := fetched.DeepCopy()
 			updated.Labels = map[string]string{"hello": "world"}
-			updated, err = apiCli.AddonmgrV1alpha1().Addons(namespace).Update(ctx, updated, metav1.UpdateOptions{})
-			Expect(err).To(BeNil())
-			Expect(updated).NotTo(BeNil())
+			Expect(k8sClient.Update(context.TODO(), updated)).To(Succeed())
 
-			fetched, err = apiCli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, adddonName, metav1.GetOptions{})
-			Expect(err).To(BeNil())
+			Expect(k8sClient.Get(context.TODO(), key, fetched)).To(Succeed())
 			Expect(fetched).To(Equal(updated))
 
 			By("deleting the created object")
-			err = apiCli.AddonmgrV1alpha1().Addons(namespace).Delete(ctx, adddonName, metav1.DeleteOptions{})
-			Expect(err).To(BeNil())
+			Expect(k8sClient.Delete(context.TODO(), fetched)).To(Succeed())
+			Expect(k8sClient.Get(context.TODO(), key, fetched)).ToNot(Succeed())
 		})
 
 	})

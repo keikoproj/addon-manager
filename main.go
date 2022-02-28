@@ -15,22 +15,26 @@
 package main
 
 import (
-	"context"
 	"flag"
+	"os"
 
-	"github.com/keikoproj/addon-manager/controllers"
-	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/pkg/utils"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/keikoproj/addon-manager/controllers"
+	"github.com/keikoproj/addon-manager/pkg/apis/addon"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/pkg/version"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
+	setupLog             = ctrl.Log.WithName("setup")
 	debug                bool
 	metricsAddr          string
 	enableLeaderElection bool
@@ -47,28 +51,37 @@ func init() {
 func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
-	var kubeClient kubernetes.Interface
-	var cfg *rest.Config
-	cfg, err := rest.InClusterConfig()
+	setupLog.Info(version.ToString())
+
+	nonCached := []client.Object{
+		&wfv1.Workflow{},
+		&addonmgrv1alpha1.Addon{},
+		&apiextensionsv1.CustomResourceDefinition{},
+	}
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:                common.GetAddonMgrScheme(),
+		MetricsBindAddress:    metricsAddr,
+		LeaderElection:        enableLeaderElection,
+		LeaderElectionID:      addon.Group,
+		ClientDisableCacheFor: nonCached, // if any cache is used, to bypass it for the given objects
+	})
 	if err != nil {
-		kubeClient = utils.GetClientOutOfCluster()
-	} else {
-		kubeClient = utils.GetClient()
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
 	}
 
-	dynCli, err := dynamic.NewForConfig(cfg)
+	stopChan := make(chan struct{})
+	_, err = controllers.New(mgr, stopChan)
 	if err != nil {
-		panic(err)
+		setupLog.Error(err, "unable to create controller", "controller", "Addon")
+		os.Exit(1)
 	}
 
-	wfcli := common.NewWFClient(cfg)
-	if wfcli == nil {
-		panic("workflow client could not be nil")
+	// +kubebuilder:scaffold:builder
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	addoncli := common.NewAddonClient(cfg)
-	controllers.Start(ctx, "addon-manager-system", kubeClient, dynCli, addoncli, wfcli)
+	close(stopChan)
 }

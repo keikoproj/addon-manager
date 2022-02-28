@@ -15,7 +15,6 @@
 package common
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -24,14 +23,9 @@ import (
 
 	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 )
 
 // ContainsString helper function to check string in a slice of strings.
@@ -72,7 +66,8 @@ func IsExpired(startTime int64, ttlTime int64) bool {
 func NewWFClient(cfg *rest.Config) wfv1versioned.Interface {
 	cli, err := wfv1versioned.NewForConfig(cfg)
 	if err != nil {
-		panic(err)
+		fmt.Printf("error while creating wfv1 client %v ", err)
+		return nil
 	}
 	return cli
 }
@@ -81,7 +76,8 @@ func NewWFClient(cfg *rest.Config) wfv1versioned.Interface {
 func NewAddonClient(cfg *rest.Config) addonv1versioned.Interface {
 	cli, err := addonv1versioned.NewForConfig(cfg)
 	if err != nil {
-		panic(err)
+		fmt.Printf("error while creating addonv1 client %v", err)
+		return nil
 	}
 	return cli
 }
@@ -125,31 +121,4 @@ func NewK8sClient(kubeconfigPath string) (kubernetes.Interface, error) {
 		return nil, fmt.Errorf("unable to create a client: %v", err)
 	}
 	return client, nil
-}
-
-func WorkFlowFromUnstructured(un *unstructured.Unstructured) (*wfv1.Workflow, error) {
-	var wf wfv1.Workflow
-	err := FromUnstructuredObj(un, &wf)
-	return &wf, err
-}
-
-func FromUnstructured(un *unstructured.Unstructured) (*addonv1.Addon, error) {
-	var addon addonv1.Addon
-	err := FromUnstructuredObj(un, &addon)
-	return &addon, err
-}
-
-func FromUnstructuredObj(un *unstructured.Unstructured, v interface{}) error {
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(un.Object, v)
-	if err != nil {
-		if err.Error() == "cannot convert int64 to v1alpha1.AnyString" {
-			data, err := json.Marshal(un)
-			if err != nil {
-				return err
-			}
-			return json.Unmarshal(data, v)
-		}
-		return err
-	}
-	return nil
 }

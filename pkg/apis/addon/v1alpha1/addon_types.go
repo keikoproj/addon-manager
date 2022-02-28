@@ -123,8 +123,6 @@ const (
 	CnabPkg PackageType = "cnab"
 	// CompositePkg is a package type representing a composite package structure, just yamls
 	CompositePkg PackageType = "composite"
-	// Error used to indicate system error
-	Error ApplicationAssemblyPhase = "error"
 )
 
 // CmdType represents a function that can be performed with arguments
@@ -153,6 +151,8 @@ const (
 	Deleting ApplicationAssemblyPhase = "Deleting"
 	// DeleteFailed Used to indicate that delete failed.
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
+	// Error used to indicate system error
+	Error ApplicationAssemblyPhase = "error"
 )
 
 // DeploymentPhase represents the status of observed resources
@@ -283,8 +283,8 @@ type AddonStatus struct {
 	StartTime int64                `json:"starttime"`
 }
 
+// AddonList contains a list of Addon
 // +kubebuilder:object:root=true
-
 // Addon is the Schema for the addons API
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
@@ -306,7 +306,6 @@ type Addon struct {
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// AddonList contains a list of Addon
 type AddonList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -384,9 +383,11 @@ func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
 }
 
-func (p ApplicationAssemblyPhase) Succeeded() bool {
+// NotTriggered indicate the workflow not triggered
+// Pending,Running are triggered
+func (p ApplicationAssemblyPhase) NotTriggered() bool {
 	switch p {
-	case Succeeded:
+	case Succeeded, Failed, Error, "":
 		return true
 	default:
 		return false
@@ -395,7 +396,7 @@ func (p ApplicationAssemblyPhase) Succeeded() bool {
 
 func (p ApplicationAssemblyPhase) Completed() bool {
 	switch p {
-	case Succeeded, Failed, Error:
+	case Succeeded:
 		return true
 	default:
 		return false
