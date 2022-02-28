@@ -16,4 +16,13 @@ const (
 	ManagedNameSpace string = "addon-manager-system"
 
 	AddonResyncPeriod = 20 * time.Minute
+
+	FinalizerName = "delete.addonmgr.keikoproj.io"
+
+	ResourceDefaultManageByLabel = "app.kubernetes.io/managed-by"
+	ResourceDefaultManageByValue = "addonmgr.keikoproj.io"
+	ResourceDefaultOwnLabel      = "app.kubernetes.io/name"
+	ResourceDefaultPartLabel     = "app.kubernetes.io/part-of"
+
+	TTL = time.Duration(3) * time.Hour // 1 hour
 )

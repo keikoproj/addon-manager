@@ -3,7 +3,7 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
+	v1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
