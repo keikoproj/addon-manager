@@ -145,10 +145,11 @@ func TestAddonInstall(t *testing.T) {
 	RegisterFailHandler(Fail)
 	addonNamespace = "default"
 	addonName = "cluster-autoscaler"
+	logger := logrus.WithField("controller", "addon")
 
 	ctx := context.TODO()
 
-	addonYaml, err := ioutil.ReadFile("clusterautoscaler.yaml")
+	addonYaml, err := ioutil.ReadFile("test-data/clusterautoscaler.yaml")
 	Expect(err).To(BeNil())
 
 	instance, err := parseAddonYaml(addonYaml)
@@ -158,10 +159,10 @@ func TestAddonInstall(t *testing.T) {
 	Expect(instance).To(BeAssignableToTypeOf(&addonapiv1.Addon{}))
 
 	// install addon
-	fmt.Printf("\ninstalling addon\n")
+	logger.Info("installing addon")
 	addonController := newController(instance)
 
-	fmt.Printf("\nprcoessing addon\n")
+	logger.Info("prcoessing addon")
 	processed := addonController.processNextItem(ctx)
 	Expect(processed).To(BeTrue())
 
@@ -172,37 +173,41 @@ func TestAddonInstall(t *testing.T) {
 	Expect(err).To(BeNil())
 
 	// verify addon checksum
-	fmt.Printf("\nfetching Addon\n")
+	logger.Info("fetching Addon")
 	fetchedAddon, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(fetchedAddon).NotTo(BeNil())
 
-	fmt.Printf("\nverifying Addon\n")
+	logger.Info("verifying Addon checksum and finalizer")
 	// verify finalizer is set
 	Expect(fetchedAddon.ObjectMeta.Finalizers).NotTo(BeZero())
 	// verify checksum
 	Expect(fetchedAddon.Status.Checksum).ShouldNot(BeEmpty())
 
+	logger.Info("changing addon spec triggering checksum changes")
 	oldCheckSum := fetchedAddon.Status.Checksum
-	//Update instance params for checksum validation
 	fetchedAddon.Spec.Params.Context.ClusterRegion = "us-east-2"
-	updated, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Update(ctx, fetchedAddon, metav1.UpdateOptions{})
-	//addonController.processNextItem(ctx)
-
-	//fetchedAddon1, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
+	err = addonController.handleAddonUpdate(ctx, fetchedAddon)
 	Expect(err).To(BeNil())
-	Expect(updated).NotTo(BeNil())
-	Expect(updated.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
 
-	wfName := updated.GetFormattedWorkflowName(addonapiv1.Prereqs)
-	fetchedwf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(ctx, wfName, metav1.GetOptions{})
+	logger.Info("verifying checksum changes")
+	fetchedAddon, err = addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
+	Expect(err).To(BeNil())
+	Expect(err).To(BeNil())
+	Expect(fetchedAddon).NotTo(BeNil())
+	Expect(fetchedAddon.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
+
+	logger.Info("verifying workflow generated accordingly")
+	wfName := fetchedAddon.GetFormattedWorkflowName(addonapiv1.Prereqs)
+	fetchedwf, err := addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Get(ctx, wfName, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(fetchedwf.GetName()).Should(Equal(wfName))
 
-	err = wfcli.ArgoprojV1alpha1().Workflows("default").Delete(ctx, wfName, metav1.DeleteOptions{})
+	logger.Info("verifying workflow deletion")
+	err = addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Delete(ctx, wfName, metav1.DeleteOptions{})
 	Expect(err).To(BeNil())
-	wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(ctx, wfName, metav1.GetOptions{})
-	Expect(err).To(BeNil())
+	wf, err := addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Get(ctx, wfName, metav1.GetOptions{})
+	Expect(err).NotTo(BeNil())
 	Expect(wf).To(BeNil())
 }
 
