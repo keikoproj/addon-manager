@@ -6,12 +6,14 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
 	"io/ioutil"
 	"testing"
 
 	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
+	addoninternal "github.com/keikoproj/addon-manager/pkg/addon"
 	fakeAddonCli "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/fake"
 	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 	"github.com/keikoproj/addon-manager/pkg/common"
@@ -95,7 +97,10 @@ func newController(options ...interface{}) *Controller {
 		"addon", "default")
 
 	controller.queue = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "addon-controller")
-
+	controller.scheme = common.GetAddonMgrScheme()
+	logger := logrus.WithField("controllers", "addon")
+	controller.versionCache = addoninternal.NewAddonVersionCacheClient()
+	controller.recorder = createEventRecorder(controller.namespace, controller.clientset, logger)
 	controller.informer = newAddonInformer(ctx, controller.dynCli, controller.namespace)
 	controller.wfinformer = NewWorkflowInformer(controller.dynCli, controller.namespace, 0, cache.Indexers{}, tweakListOptions)
 	configureCRD(controller.dynCli)
@@ -161,7 +166,7 @@ func TestAddonInstall(t *testing.T) {
 	Expect(un.GetNamespace()).To(Equal(addonNamespace))
 	// install addon
 	fmt.Printf("\ninstalling addon\n")
-	addonController := newController(un)
+	addonController := newController(instance)
 
 	fmt.Printf("\nprcoessing addon\n")
 	processed := addonController.processNextItem(ctx)
