@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package controllers
+package apitests
 
 import (
 	"fmt"
