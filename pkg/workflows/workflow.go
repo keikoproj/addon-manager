@@ -24,19 +24,22 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
+
+	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 )
 
 const (
@@ -52,21 +55,24 @@ type AddonLifecycle interface {
 }
 
 type workflowLifecycle struct {
-	client.Client
 	dynClient dynamic.Interface
 	addon     *addonmgrv1alpha1.Addon
 	recorder  record.EventRecorder
 	scheme    *runtime.Scheme
+
+	wfclientset wfclientset.Interface
+	wfinformer  cache.SharedIndexInformer
 }
 
 // NewWorkflowLifecycle returns a AddonLifecycle object
-func NewWorkflowLifecycle(client client.Client, dynClient dynamic.Interface, addon *addonmgrv1alpha1.Addon, recorder record.EventRecorder, scheme *runtime.Scheme) AddonLifecycle {
+func NewWorkflowLifecycle(wfclientset wfclientset.Interface, wfinformer cache.SharedIndexInformer, dynClient dynamic.Interface, addon *addonmgrv1alpha1.Addon, scheme *runtime.Scheme, recorder record.EventRecorder) AddonLifecycle {
 	return &workflowLifecycle{
-		Client:    client,
-		dynClient: dynClient,
-		addon:     addon,
-		recorder:  recorder,
-		scheme:    scheme,
+		dynClient:   dynClient,
+		addon:       addon,
+		scheme:      scheme,
+		recorder:    recorder,
+		wfclientset: wfclientset,
+		wfinformer:  wfinformer,
 	}
 }
 
@@ -192,20 +198,17 @@ func (w *workflowLifecycle) Delete(ctx context.Context, name string) error {
 }
 
 func (w *workflowLifecycle) findWorkflowByName(ctx context.Context, name types.NamespacedName) (*unstructured.Unstructured, error) {
-	found := &unstructured.Unstructured{}
-	found.SetGroupVersionKind(schema.GroupVersionKind{
-		Kind:    "Workflow",
-		Group:   "argoproj.io",
-		Version: "v1alpha1",
-	})
-	err := w.Get(ctx, name, found)
+
+	wf, found, err := w.wfinformer.GetIndexer().GetByKey(name.Namespace + "/" + name.Name)
 	if err != nil && apierrors.IsNotFound(err) {
 		return nil, nil
 	} else if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed fiding wf err %v", err)
 	}
-
-	return found, nil
+	if found {
+		return wf.(*unstructured.Unstructured), nil
+	}
+	return nil, nil
 }
 
 func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstructured) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
@@ -249,10 +252,18 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 		if err := controllerutil.SetControllerReference(w.addon, wfv1, w.scheme); err != nil {
 			return addonmgrv1alpha1.Failed, err
 		}
-
-		err = w.Create(ctx, wfv1)
+		wf, err := common.WorkFlowFromUnstructured(wfv1)
 		if err != nil {
+			fmt.Printf("### failed convert unstructure to workflow")
 			return addonmgrv1alpha1.Failed, err
+		}
+		_, err = w.wfclientset.ArgoprojV1alpha1().Workflows(wp.GetNamespace()).Create(ctx, wf, metav1.CreateOptions{})
+		if apierrors.IsAlreadyExists(err) {
+			return addonmgrv1alpha1.Succeeded, nil
+		} else if err != nil {
+			msg := fmt.Sprintf("failed creating wf %s err %v", wp.GetName(), err)
+			fmt.Println(msg)
+			return addonmgrv1alpha1.Failed, fmt.Errorf(msg)
 		}
 		// Record an event for created workflow
 		w.recorder.Event(w.addon, "Normal", "Created", fmt.Sprintf("Created Workflow %s/%s", wp.GetName(), wp.GetNamespace()))
@@ -565,4 +576,36 @@ func (w *workflowLifecycle) injectActiveDeadlineSeconds(wf *unstructured.Unstruc
 	}
 
 	return nil
+}
+
+func IsValidV1WorkFlow(obj interface{}) error {
+	wf, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("error : unstructured type.")
+	}
+
+	if wf.GetKind() != "Workflow" || wf.GetAPIVersion() != "argoproj.io/v1alpha1" {
+		return fmt.Errorf("error : unsupported object from v1workflow update event %v", obj)
+	}
+	return nil
+}
+
+// extract addon-name and lifecyclestep from a workflow name string generated based on
+// api types
+func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string, error) {
+	if strings.Contains(addonworkflowname, "prereqs") {
+		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "prereqs")-1]), "prereqs", nil
+	}
+
+	if strings.Contains(addonworkflowname, "install") {
+		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "install")-1]), "install", nil
+
+	}
+	if strings.Contains(addonworkflowname, "delete") {
+		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "delete")-1]), "delete", nil
+	}
+	if strings.Contains(addonworkflowname, "validate") {
+		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "validate")-1]), "validate", nil
+	}
+	return "", "", fmt.Errorf("no recognized lifecyclestep within ")
 }

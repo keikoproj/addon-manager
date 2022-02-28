@@ -16,6 +16,7 @@ package workflows
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -27,13 +28,16 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	dynfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
+
+	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
+	wfinformers "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions"
 )
 
 var sch = runtime.NewScheme()
@@ -315,12 +319,21 @@ func init() {
 	metav1.AddToGroupVersion(sch, common.WorkflowGVR().GroupVersion())
 }
 
+func helper() (*wfclientsetfake.Clientset, cache.SharedIndexInformer) {
+	noResyncPeriodFunc := func() time.Duration { return 0 }
+	wfcli := wfclientsetfake.NewSimpleClientset([]runtime.Object{}...)
+	stopCh := make(chan struct{})
+	wfinformerfactory := wfinformers.NewSharedInformerFactory(wfcli, noResyncPeriodFunc())
+	wfinformer := wfinformerfactory.Argoproj().V1alpha1().Workflows().Informer()
+	wfinformerfactory.Start(stopCh)
+	return wfcli, wfinformer
+}
 func TestNewWorkflowLifecycle(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	a := &v1alpha1.Addon{}
-
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
 
 	var expected AddonLifecycle = &workflowLifecycle{}
 	g.Expect(wfl).To(BeAssignableToTypeOf(expected))
@@ -376,7 +389,9 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr)
+
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
@@ -393,9 +408,9 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 			Group:   "argoproj.io",
 			Version: "v1alpha1",
 		})
-		var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
-		g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
-			Should(Succeed())
+		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(wf).NotTo(BeNil())
 
 		// Verify default ttl injected
 		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
@@ -519,7 +534,8 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr)
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
@@ -536,17 +552,17 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 			Group:   "argoproj.io",
 			Version: "v1alpha1",
 		})
-		var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
-		g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
-			Should(Succeed())
+		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(wf).NotTo(BeNil())
 
 		// Verify default ttl injected
-		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
+		ttl, _, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(ttl).To(Equal(int64((72 * time.Hour).Seconds())))
 
 		// Verify activeDeadlineSeconds are kept
-		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+		active, _, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(active).To(Equal(int64(600)))
 
@@ -624,7 +640,8 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowType(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
 
 	// Empty workflow type should fail
 	wt := &v1alpha1.WorkflowType{}
@@ -660,7 +677,8 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowTemplate(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
 
 	// Workflow missing "spec" should fail
 	wt := &v1alpha1.WorkflowType{
@@ -697,7 +715,8 @@ func TestWorkflowLifecycle_Delete_NotExists(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
 
 	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(HaveOccurred())
 }
@@ -726,7 +745,8 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
 
 	wf := &unstructured.Unstructured{}
 	wf.SetGroupVersionKind(schema.GroupVersionKind{
@@ -743,4 +763,18 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 
 	// Now try to delete
 	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(Not(HaveOccurred()))
+}
+
+func TestExtractAddOnNameAndLifecycleStep(t *testing.T) {
+	testsString := []string{
+		"event-router-4-prereqs-2c13ee7f-wf",
+		"event-router-4-install-2c13ee7f-wf",
+	}
+	for _, testsString := range testsString {
+		name, step, err := ExtractAddOnNameAndLifecycleStep(testsString)
+		if err != nil {
+			fmt.Printf("failed extracting addon name and lifecycle step.")
+		}
+		fmt.Printf(" addon name %s step %s", name, step)
+	}
 }

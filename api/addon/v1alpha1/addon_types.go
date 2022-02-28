@@ -123,6 +123,8 @@ const (
 	CnabPkg PackageType = "cnab"
 	// CompositePkg is a package type representing a composite package structure, just yamls
 	CompositePkg PackageType = "composite"
+	// Error used to indicate system error
+	Error ApplicationAssemblyPhase = "error"
 )
 
 // CmdType represents a function that can be performed with arguments
@@ -292,6 +294,8 @@ type AddonStatus struct {
 // +kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.lifecycle.installed"
 // +kubebuilder:printcolumn:name="REASON",type="string",JSONPath=".status.reason"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type Addon struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -301,16 +305,12 @@ type Addon struct {
 }
 
 // +kubebuilder:object:root=true
-
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AddonList contains a list of Addon
 type AddonList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Addon `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&Addon{}, &AddonList{})
 }
 
 // GetPackageSpec returns the addon package details from addon spec
@@ -382,4 +382,22 @@ func (a *Addon) CalculateChecksum() string {
 // GetInstallStatus returns the install phase for addon
 func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
+}
+
+func (p ApplicationAssemblyPhase) Succeeded() bool {
+	switch p {
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) Completed() bool {
+	switch p {
+	case Succeeded, Failed, Error:
+		return true
+	default:
+		return false
+	}
 }
