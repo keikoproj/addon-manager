@@ -6,7 +6,7 @@ import (
 	"context"
 	time "time"
 
-	addonv1alpha1 "github.com/keikoproj/addon-manager/pkg/apis/addon/v1alpha1"
+	addonv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/keikoproj/addon-manager/pkg/client/informers/externalversions/internalinterfaces"
 	v1alpha1 "github.com/keikoproj/addon-manager/pkg/client/listers/addon/v1alpha1"
