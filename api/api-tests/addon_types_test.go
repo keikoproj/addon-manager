@@ -16,388 +16,176 @@ package apitests
 
 import (
 	"fmt"
-	"hash/adler32"
-	"strconv"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	fakeAddonCli "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/fake"
+	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// ClusterContext represents a minimal context that can be provided to an addon
-type ClusterContext struct {
-	// ClusterName name of the cluster
-	// +optional
-	ClusterName string `json:"clusterName,omitempty"`
-	// ClusterRegion region of the cluster
-	// +optional
-	ClusterRegion string `json:"clusterRegion,omitempty"`
-	// AdditionalConfigs are a map of string values that correspond to additional context data that can be passed along
-	// +optional
-	AdditionalConfigs map[string]FlexString `json:"additionalConfigs,omitempty" protobuf:"bytes,2,rep,name=data"`
-}
+var wfSpecTemplate = `
+ apiVersion: argoproj.io/v1alpha1
+ kind: Workflow
+ metadata:
+   generateName: scripts-python-
+ spec:
+   entrypoint: python-script-example
+   templates:
+	 - name: python-script-example
+	   steps:
+		 - - name: generate
+			 template: gen-random-int
+		 - - name: print
+			 template: print-message
+			 arguments:
+			   parameters:
+				 - name: message
+				   value: "{{steps.generate.outputs.result}}"
+ 
+	 - name: gen-random-int
+	   script:
+		 image: python:alpine3.6
+		 command: [python]
+		 source: |
+		   import random
+		   i = random.randint(1, 100)
+		   print(i)
+	 - name: print-message
+	   inputs:
+		 parameters:
+		   - name: message
+	   container:
+		 image: alpine:latest
+		 command: [sh, -c]
+		 args: ["echo result was: {{inputs.parameters.message}}"]
+ `
 
-// AddonParams are the parameters which will be available to the template workflows
-type AddonParams struct {
-	// +kubebuilder:validation:MinLength=1
-	Namespace string `json:"namespace,omitempty"`
-	// Context values passed directly to the addon
-	// +optional
-	Context ClusterContext `json:"context,omitempty"`
-	// Data values that will be parameters injected into workflows
-	// +optional
-	Data map[string]FlexString `json:"data,omitempty"`
-}
+// These tests are written in BDD-style using Ginkgo framework. Refer to
+// http://onsi.github.io/ginkgo to learn more.
 
-// FlexString is a ptr to string type that is used to provide additional configs
-type FlexString string
+var _ = Describe("Addon", func() {
 
-// UnmarshalJSON overrides unmarshaler.UnmarshalJSON in converter
-func (fs *FlexString) UnmarshalJSON(b []byte) error {
-	var out string
-	if b[0] == '"' {
-		if err := json.Unmarshal(b, &out); err != nil {
-			return err
-		}
-		*fs = FlexString(out)
-		return nil
-	}
+	BeforeEach(func() {
+		// Add any setup steps that needs to be executed before each test
+	})
 
-	var bo bool
-	if err := json.Unmarshal(b, &bo); err == nil {
-		if bo == true {
-			out = "true"
-		} else {
-			out = "false"
-		}
-		*fs = FlexString(out)
-		return nil
-	}
+	AfterEach(func() {
+		// Add any teardown steps that needs to be executed after each test
+	})
 
-	var i int
-	if err := json.Unmarshal(b, &i); err == nil {
-		out = strconv.Itoa(i)
-		*fs = FlexString(out)
-		return nil
-	}
+	// Add Tests for OpenAPI validation (or additional CRD features) specified in
+	// your API definition.
+	// Avoid adding tests for vanilla CRUD operations because they would
+	// test Kubernetes API server, which isn't the goal here.
+	Context("Create API", func() {
 
-	return fmt.Errorf("unable to unmarshal from bool or int into string")
-}
+		It("should create an object successfully", func() {
+			namespace := "default"
+			adddonName := "foo"
+			created := &addonmgrv1alpha1.Addon{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      adddonName,
+					Namespace: namespace,
+				},
+				Spec: addonmgrv1alpha1.AddonSpec{
+					PackageSpec: addonmgrv1alpha1.PackageSpec{
+						PkgName:        "my-addon",
+						PkgVersion:     "1.0.0",
+						PkgType:        addonmgrv1alpha1.HelmPkg,
+						PkgDescription: "",
+						PkgDeps:        map[string]string{"core/A": "*", "core/B": "v1.0.0"},
+					},
+					Selector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "my-app",
+						},
+					},
+					Params: addonmgrv1alpha1.AddonParams{
+						Namespace: "foo-ns",
+						Context: addonmgrv1alpha1.ClusterContext{
+							ClusterName:   "foo-cluster",
+							ClusterRegion: "foo-region",
+							AdditionalConfigs: map[string]addonmgrv1alpha1.FlexString{
+								"additional": "config",
+							},
+						},
+						Data: map[string]addonmgrv1alpha1.FlexString{
+							"foo-param": "val",
+						},
+					},
+					Lifecycle: addonmgrv1alpha1.LifecycleWorkflowSpec{
+						Prereqs: addonmgrv1alpha1.WorkflowType{
+							NamePrefix: "my-prereqs",
+							Template:   wfSpecTemplate,
+						},
+						Install: addonmgrv1alpha1.WorkflowType{
+							Template: wfSpecTemplate,
+						},
+						Delete: addonmgrv1alpha1.WorkflowType{
+							Template: wfSpecTemplate,
+						},
+					},
+				},
+			}
 
-// KustomizeTemplate is used to specify override patch templates in Kustomize format
-type KustomizeTemplate struct {
-	// Template patch yamls as per Kustomize spec
-	// +optional
-	Template map[string]string `json:"template,omitempty" protobuf:"bytes,2,rep,name=template"`
-}
+			apiCli := fakeAddonCli.NewSimpleClientset([]runtime.Object{}...)
+			ctx := context.TODO()
+			By("creating an API obj")
+			created, err := apiCli.AddonmgrV1alpha1().Addons(namespace).Create(ctx, created, metav1.CreateOptions{})
+			Expect(err).To(BeNil())
+			Expect(created).NotTo(BeNil())
 
-// KustomizeSpec is used to specify common Kustomize spec features
-type KustomizeSpec struct {
-	// Common labels as per Kustomize spec
-	// +optional
-	Labels map[string]string `json:"labels,omitempty" protobuf:"bytes,1,rep,name=labels"`
+			fetched, err := apiCli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, adddonName, metav1.GetOptions{})
+			Expect(err).To(BeNil())
+			Expect(fetched).To(Equal(created))
 
-	// Common annotations as per Kustomize spec
-	// +optional
-	Annotations map[string]string `json:"annotations,omitempty" protobuf:"bytes,1,rep,name=annotations"`
+			By("Checking expected fetched values")
+			pkgSpec := fetched.GetPackageSpec()
+			Expect(pkgSpec).To(Equal(fetched.Spec.PackageSpec))
 
-	// List of resource kinds
-	// +optional
-	Resources []string `json:"resources,omitempty"`
+			addonParams := fetched.GetAllAddonParameters()
+			paramsMap := map[string]string{
+				"namespace":     "foo-ns",
+				"clusterName":   "foo-cluster",
+				"clusterRegion": "foo-region",
+				"additional":    "config",
+				"foo-param":     "val",
+			}
 
-	// Overlay templates, these are patch objects as per kustomize spec
-	// +optional
-	Overlay KustomizeTemplate `json:"overlay,omitempty"`
-}
+			Expect(addonParams).To(HaveLen(len(paramsMap)))
+			for name := range paramsMap {
+				Expect(addonParams[name]).To(Equal(paramsMap[name]))
+			}
 
-// PackageType is a specific deployer type that will be used for deploying templates
-type PackageType string
+			checksum := fetched.CalculateChecksum()
+			Expect(checksum).To(Equal("af4c585"))
 
-const (
-	// HelmPkg is a deployer package type representing Helm package structure
-	HelmPkg PackageType = "helm"
-	// ShipPkg is a deployer package type representing Ship package structure
-	ShipPkg PackageType = "ship"
-	// KustomizePkg is a deployer package type representing Kustomize package structure
-	KustomizePkg PackageType = "kustomize"
-	// CnabPkg is a deployer package type representing CNAB package structure
-	CnabPkg PackageType = "cnab"
-	// CompositePkg is a package type representing a composite package structure, just yamls
-	CompositePkg PackageType = "composite"
-	// Error used to indicate system error
-	Error ApplicationAssemblyPhase = "error"
-)
+			// Update status checksum
+			fetched.Status.Checksum = checksum
 
-// CmdType represents a function that can be performed with arguments
-type CmdType int
+			wfName := fetched.GetFormattedWorkflowName(addonmgrv1alpha1.Install)
+			Expect(wfName).To(Equal(fmt.Sprintf("foo-install-%s-wf", checksum)))
 
-const (
-	cert CmdType = iota
-	random
-)
+			By("updating labels")
+			updated := fetched.DeepCopy()
+			updated.Labels = map[string]string{"hello": "world"}
+			updated, err = apiCli.AddonmgrV1alpha1().Addons(namespace).Update(ctx, updated, metav1.UpdateOptions{})
+			Expect(err).To(BeNil())
+			Expect(updated).NotTo(BeNil())
 
-// ApplicationAssemblyPhase tracks the Addon CRD phases: pending, succeeded, failed, deleting, deleteFailed
-type ApplicationAssemblyPhase string
+			fetched, err = apiCli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, adddonName, metav1.GetOptions{})
+			Expect(err).To(BeNil())
+			Expect(fetched).To(Equal(updated))
 
-// Constants
-const (
-	// Pending Used to indicate that not all of application's components have been deployed yet.
-	Pending ApplicationAssemblyPhase = "Pending"
-	// Succeeded Used to indicate that all of application's components have already been deployed.
-	Succeeded ApplicationAssemblyPhase = "Succeeded"
-	// Failed Used to indicate that deployment of application's components failed. Some components
-	// might be present, but deployment of the remaining ones will not be re-attempted.
-	Failed ApplicationAssemblyPhase = "Failed"
-	// ValidationFailed Used to indicate validation failed
-	ValidationFailed ApplicationAssemblyPhase = "Validation Failed"
-	// Deleting Used to indicate that all application's components are being deleted.
-	Deleting ApplicationAssemblyPhase = "Deleting"
-	// DeleteFailed Used to indicate that delete failed.
-	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
-)
+			By("deleting the created object")
+			err = apiCli.AddonmgrV1alpha1().Addons(namespace).Delete(ctx, adddonName, metav1.DeleteOptions{})
+			Expect(err).To(BeNil())
+		})
 
-// DeploymentPhase represents the status of observed resources
-type DeploymentPhase string
+	})
 
-const (
-	// InProgress deployment phase for resources in addon
-	InProgress DeploymentPhase = "InProgress"
-	// Ready deployment phase for resources in addon
-	Ready DeploymentPhase = "Ready"
-	// Unknown deployment phase for resources in addon
-	Unknown DeploymentPhase = "Unknown"
-)
-
-// LifecycleStep is a string representation of the lifecycle steps available in Addon spec: prereqs, install, delete, validate
-type LifecycleStep string
-
-const (
-	// Prereqs constant
-	Prereqs LifecycleStep = "prereqs"
-	// Install constant
-	Install LifecycleStep = "install"
-	// Delete constant
-	Delete LifecycleStep = "delete"
-	// Validate constant
-	Validate LifecycleStep = "validate"
-)
-
-// AddonOverridesSpec represents a template of the resources that can be deployed or patched alongside the main deployment
-type AddonOverridesSpec struct {
-	// Kustomize specs
-	// +optional
-	Kustomize KustomizeSpec `json:"kustomize,omitempty"`
-	// Template specs
-	// +optional
-	Template map[string]string `json:"template,omitempty" protobuf:"bytes,2,rep,name=template"`
-}
-
-// SecretCmdSpec is a secret list and/or generator for secrets using the available commands: random, cert.
-type SecretCmdSpec struct {
-	Name string   `json:"name"`
-	Cmd  CmdType  `json:"cmd,omitempty"`
-	Args []string `json:"args,omitempty" protobuf:"bytes,4,rep,name=args"`
-}
-
-// WorkflowType allows user to specify workflow templates with optional namePrefix, workflowRole or role.
-type WorkflowType struct {
-	// NamePrefix is a prefix for the name of workflow
-	// +kubebuilder:validation:MaxLength=10
-	// +optional
-	NamePrefix string `json:"namePrefix,omitempty"`
-	// Role used to denote the role annotation that should be used by the deployment resource
-	// +optional
-	Role string `json:"role,omitempty"`
-	// WorkflowRole used to denote the role annotation that should be used by the workflow
-	// +optional
-	WorkflowRole string `json:"workflowRole,omitempty"`
-	// Template is used to provide the workflow spec
-	Template string `json:"template"`
-}
-
-// LifecycleWorkflowSpec is where all of the lifecycle workflow templates will be specified under
-type LifecycleWorkflowSpec struct {
-	Prereqs  WorkflowType `json:"prereqs,omitempty"`
-	Install  WorkflowType `json:"install,omitempty"`
-	Delete   WorkflowType `json:"delete,omitempty"`
-	Validate WorkflowType `json:"validate,omitempty"`
-}
-
-// PackageSpec is the package level details needed by addon
-type PackageSpec struct {
-	PkgChannel     string            `json:"pkgChannel,omitempty"`
-	PkgName        string            `json:"pkgName"`
-	PkgVersion     string            `json:"pkgVersion"`
-	PkgType        PackageType       `json:"pkgType"`
-	PkgDescription string            `json:"pkgDescription"`
-	PkgDeps        map[string]string `json:"pkgDeps,omitempty"`
-}
-
-// AddonSpec defines the desired state of Addon
-type AddonSpec struct {
-	PackageSpec `json:",inline"`
-
-	// Parameters that will be injected into the workflows for addon
-	// +optional
-	Params AddonParams `json:"params,omitempty"`
-	// Selector that is used to filter the resource watching
-	// +optional
-	Selector metav1.LabelSelector `json:"selector,omitempty"`
-	// Overrides are kustomize patches that can be applied to templates
-	// +optional
-	Overrides AddonOverridesSpec `json:"overrides,omitempty"`
-	// Secrets is a list of secret names expected to exist in the target namespace
-	// +optional
-	Secrets []SecretCmdSpec `json:"secrets,omitempty"`
-
-	// +optional
-	Lifecycle LifecycleWorkflowSpec `json:"lifecycle,omitempty"`
-}
-
-// AddonStatusLifecycle defines the lifecycle status for steps.
-type AddonStatusLifecycle struct {
-	Prereqs   ApplicationAssemblyPhase `json:"prereqs,omitempty"`
-	Installed ApplicationAssemblyPhase `json:"installed,omitempty"`
-}
-
-// ObjectStatus is a generic status holder for objects
-// +k8s:deepcopy-gen=true
-type ObjectStatus struct {
-	// Link to object
-	Link string `json:"link,omitempty"`
-	// Name of object
-	Name string `json:"name,omitempty"`
-	// Kind of object
-	Kind string `json:"kind,omitempty"`
-	// Object group
-	Group string `json:"group,omitempty"`
-	// Status. Values: InProgress, Ready, Unknown
-	Status string `json:"status,omitempty"`
-}
-
-// AddonStatus defines the observed state of Addon
-type AddonStatus struct {
-	Checksum  string               `json:"checksum"`
-	Lifecycle AddonStatusLifecycle `json:"lifecycle"`
-	Resources []ObjectStatus       `json:"resources"`
-	Reason    string               `json:"reason"`
-	StartTime int64                `json:"starttime"`
-}
-
-// +kubebuilder:object:root=true
-
-// Addon is the Schema for the addons API
-// +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
-// +kubebuilder:resource:path=addons
-// +kubebuilder:printcolumn:name="PACKAGE",type="string",JSONPath=".spec.pkgName"
-// +kubebuilder:printcolumn:name="VERSION",type="string",JSONPath=".spec.pkgVersion"
-// +kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.lifecycle.installed"
-// +kubebuilder:printcolumn:name="REASON",type="string",JSONPath=".status.reason"
-// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type Addon struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   AddonSpec   `json:"spec,omitempty"`
-	Status AddonStatus `json:"status,omitempty"`
-}
-
-// +kubebuilder:object:root=true
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// AddonList contains a list of Addon
-type AddonList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Addon `json:"items"`
-}
-
-// GetPackageSpec returns the addon package details from addon spec
-func (a *Addon) GetPackageSpec() PackageSpec {
-	return PackageSpec{
-		PkgName:        a.Spec.PkgName,
-		PkgVersion:     a.Spec.PkgVersion,
-		PkgDeps:        a.Spec.PkgDeps,
-		PkgChannel:     a.Spec.PkgChannel,
-		PkgDescription: a.Spec.PkgDescription,
-		PkgType:        a.Spec.PkgType,
-	}
-}
-
-// GetAllAddonParameters returns an object copying the params submitted as part of the addon spec
-func (a *Addon) GetAllAddonParameters() map[string]string {
-	params := make(map[string]string)
-	params["namespace"] = a.Spec.Params.Namespace
-	params["clusterName"] = a.Spec.Params.Context.ClusterName
-	params["clusterRegion"] = a.Spec.Params.Context.ClusterRegion
-	for k, v := range a.Spec.Params.Context.AdditionalConfigs {
-		params[k] = string(v)
-	}
-	for k, v := range a.Spec.Params.Data {
-		params[k] = string(v)
-	}
-	return params
-}
-
-// GetWorkflowType returns the WorkflowType under the addon lifecycle spec
-func (a *Addon) GetWorkflowType(step LifecycleStep) (*WorkflowType, error) {
-	var wt *WorkflowType
-	switch step {
-	case Install:
-		wt = &a.Spec.Lifecycle.Install
-	case Prereqs:
-		wt = &a.Spec.Lifecycle.Prereqs
-	case Delete:
-		wt = &a.Spec.Lifecycle.Delete
-	case Validate:
-		wt = &a.Spec.Lifecycle.Validate
-	default:
-		return nil, fmt.Errorf("no WorkflowType of type %s exists", step)
-	}
-
-	return wt, nil
-}
-
-// GetFormattedWorkflowName used the addon name, workflow prefix, addon checksum, and lifecycle step to compose the workflow name
-func (a *Addon) GetFormattedWorkflowName(lifecycleStep LifecycleStep) string {
-	wt, err := a.GetWorkflowType(lifecycleStep)
-	if err != nil {
-		return ""
-	}
-
-	prefix := a.GetName()
-	if wt.NamePrefix != "" {
-		prefix = fmt.Sprintf("%s-%s", prefix, wt.NamePrefix)
-	}
-	wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", prefix, lifecycleStep, a.CalculateChecksum())
-	return wfIdentifierName
-}
-
-// CalculateChecksum converts the AddonSpec into a hash string (using Alder32 algo)
-func (a *Addon) CalculateChecksum() string {
-	return fmt.Sprintf("%x", adler32.Checksum([]byte(fmt.Sprintf("%+v", a.Spec))))
-}
-
-// GetInstallStatus returns the install phase for addon
-func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
-	return a.Status.Lifecycle.Installed
-}
-
-func (p ApplicationAssemblyPhase) Succeeded() bool {
-	switch p {
-	case Succeeded:
-		return true
-	default:
-		return false
-	}
-}
-
-func (p ApplicationAssemblyPhase) Completed() bool {
-	switch p {
-	case Succeeded, Failed, Error:
-		return true
-	default:
-		return false
-	}
-}
+})
