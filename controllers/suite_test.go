@@ -33,7 +33,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/v1alpha1"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

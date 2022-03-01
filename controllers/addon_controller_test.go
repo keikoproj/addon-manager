@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	"github.com/keikoproj/addon-manager/api/v1alpha1"
+	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 )
 
 var (

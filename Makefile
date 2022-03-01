@@ -27,7 +27,20 @@ all: test manager addonctl
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./api/... ./controllers/... ./pkg/... ./cmd/... -coverprofile cover.out
+	go test ./api/... ./controllers/... ./pkg/... ./cmd/... -v -coverprofile cover.out
+
+# tests both controllers and api
+.PHONY: test.controllers
+test.controllers:
+	go test -v -race ./controllers/... -coverprofile cover.out
+
+.PHONY: test.pkg
+test.pkg:
+	go test -v -race ./pkg/... -coverprofile cover.out
+
+.PHONY: test.cmd
+test.cmd:
+	go test -v -race ./cmd/... -coverprofile cover.out
 
 # Run E2E tests
 bdd: fmt vet deploy
@@ -95,8 +108,21 @@ vet:
 	go vet ./...
 
 # Generate code
-generate: controller-gen
+generate: controller-gen types
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
+
+# generates many other files (listers, informers, client etc).
+api/addon/v1alpha1/zz_generated.deepcopy.go: $(TYPES)
+	ln -s . v1
+	$(CODE_GENERATOR_GEN)/generate-groups.sh \
+			"deepcopy,client,informer,lister" \
+			github.com/keikoproj/addon-manager/pkg/client github.com/keikoproj/addon-manager/api\
+            addon:v1alpha1 \
+            --go-header-file ./hack/custom-boilerplate.go.txt
+	rm -rf v1
+
+.PHONY: types
+types: api/addon/v1alpha1/zz_generated.deepcopy.go
 
 # Build the docker image
 docker-build: manager
@@ -129,4 +155,20 @@ ifeq (, $(shell which controller-gen))
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
+endif
+
+code-generator:
+ifeq (, $(shell which code-generator))
+	@{ \
+	set -e ;\
+	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CONTROLLER_GEN_TMP_DIR ;\
+	curl -L -o code-generator.zip https://github.com/kubernetes/code-generator/archive/refs/tags/v0.21.5.zip ;\
+	unzip code-generator.zip ;\
+	mv code-generator-0.21.5 $(GOPATH)/bin/ ;\
+	rm -rf code-generator.zip ;\
+	}
+CODE_GENERATOR_GEN=$(GOBIN)/code-generator-0.21.5
+else
+CODE_GENERATOR_GEN=$(shell which code-generator)
 endif
