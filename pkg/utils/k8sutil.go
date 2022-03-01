@@ -1,18 +1,26 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/keikoproj/addon-manager/pkg/client/informers/externalversions/internalinterfaces"
 	"github.com/sirupsen/logrus"
-	apps_v1 "k8s.io/api/apps/v1"
-	batch_v1 "k8s.io/api/batch/v1"
-	api_v1 "k8s.io/api/core/v1"
-	ext_v1beta1 "k8s.io/api/extensions/v1beta1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic"
+
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 )
 
 // GetClient returns a k8s clientset to the request from inside of cluster
@@ -46,40 +54,64 @@ func GetClientOutOfCluster() kubernetes.Interface {
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
-
+	if err != nil {
+		return nil
+	}
 	return clientset
 }
 
-// GetObjectMetaData returns metadata of a given k8s object
-func GetObjectMetaData(obj interface{}) meta_v1.ObjectMeta {
-
-	var objectMeta meta_v1.ObjectMeta
-
-	switch object := obj.(type) {
-	case *apps_v1.Deployment:
-		objectMeta = object.ObjectMeta
-	case *api_v1.ReplicationController:
-		objectMeta = object.ObjectMeta
-	case *apps_v1.ReplicaSet:
-		objectMeta = object.ObjectMeta
-	case *apps_v1.DaemonSet:
-		objectMeta = object.ObjectMeta
-	case *api_v1.Service:
-		objectMeta = object.ObjectMeta
-	case *api_v1.Pod:
-		objectMeta = object.ObjectMeta
-	case *batch_v1.Job:
-		objectMeta = object.ObjectMeta
-	case *api_v1.PersistentVolume:
-		objectMeta = object.ObjectMeta
-	case *api_v1.Namespace:
-		objectMeta = object.ObjectMeta
-	case *api_v1.Secret:
-		objectMeta = object.ObjectMeta
-	case *ext_v1beta1.Ingress:
-		objectMeta = object.ObjectMeta
-	case *api_v1.Event:
-		objectMeta = object.ObjectMeta
+func NewWorkflowInformer(dclient dynamic.Interface, ns string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+	resource := schema.GroupVersionResource{
+		Group:    "argoproj.io",
+		Version:  "v1alpha1",
+		Resource: "workflows",
 	}
-	return objectMeta
+	informer := NewFilteredUnstructuredInformer(
+		resource,
+		dclient,
+		ns,
+		resyncPeriod,
+		indexers,
+		tweakListOptions,
+	)
+	return informer
+}
+
+func NewFilteredUnstructuredInformer(resource schema.GroupVersionResource, client dynamic.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+	ctx := context.Background()
+	return cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.Resource(resource).Namespace(namespace).List(ctx, options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.Resource(resource).Namespace(namespace).Watch(ctx, options)
+			},
+		},
+		&unstructured.Unstructured{},
+		resyncPeriod,
+		indexers,
+	)
+}
+
+func TweakListOptions(options *metav1.ListOptions) {
+}
+
+// ToUnstructured converts an workflow to an Unstructured object
+func ToUnstructured(wf *wfv1.Workflow) (*unstructured.Unstructured, error) {
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(wf)
+	if err != nil {
+		return nil, err
+	}
+	un := &unstructured.Unstructured{Object: obj}
+	// we need to add these values so that the `EventRecorder` does not error
+	un.SetKind("Workflow")
+	un.SetAPIVersion("argoproj.io/v1alpha1")
+	return un, nil
 }

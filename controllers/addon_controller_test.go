@@ -21,28 +21,25 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	dynamicFake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
 
-	"k8s.io/client-go/kubernetes/fake"
-
-	kubeinformers "k8s.io/client-go/informers"
-
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/utils"
 	wfutility "github.com/keikoproj/addon-manager/pkg/workflows"
 )
 
 var (
 	addonNamespace = "default"
 	addonName      = "cluster-autoscaler"
-	addonKey       = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
 )
 
 func configureCRD(dyCli dynamic.Interface) error {
@@ -102,7 +99,7 @@ func newController(options ...interface{}) *Controller {
 	controller.versionCache = addoninternal.NewAddonVersionCacheClient()
 	controller.recorder = createEventRecorder(controller.namespace, controller.clientset, logger)
 	controller.informer = newAddonInformer(ctx, controller.dynCli, controller.namespace)
-	controller.wfinformer = NewWorkflowInformer(controller.dynCli, controller.namespace, 0, cache.Indexers{}, tweakListOptions)
+	controller.wfinformer = utils.NewWorkflowInformer(controller.dynCli, controller.namespace, 0, cache.Indexers{}, utils.TweakListOptions)
 	configureCRD(controller.dynCli)
 
 	controller.nsinformer = k8sinformer.Core().V1().Namespaces().Informer()
@@ -143,12 +140,10 @@ func newController(options ...interface{}) *Controller {
 
 func TestAddonInstall(t *testing.T) {
 	RegisterFailHandler(Fail)
-	addonNamespace = "default"
-	addonName = "cluster-autoscaler"
-
+	logger := logrus.WithField("test-controllers", "addon")
 	ctx := context.TODO()
 
-	addonYaml, err := ioutil.ReadFile("clusterautoscaler.yaml")
+	addonYaml, err := ioutil.ReadFile("./tests/clusterautoscaler.yaml")
 	Expect(err).To(BeNil())
 
 	instance, err := parseAddonYaml(addonYaml)
@@ -158,10 +153,10 @@ func TestAddonInstall(t *testing.T) {
 	Expect(instance).To(BeAssignableToTypeOf(&addonapiv1.Addon{}))
 
 	// install addon
-	fmt.Printf("\ninstalling addon\n")
+	logger.Info("installing addon")
 	addonController := newController(instance)
 
-	fmt.Printf("\nprcoessing addon\n")
+	logger.Info("prcoessing addon")
 	processed := addonController.processNextItem(ctx)
 	Expect(processed).To(BeTrue())
 
@@ -172,37 +167,40 @@ func TestAddonInstall(t *testing.T) {
 	Expect(err).To(BeNil())
 
 	// verify addon checksum
-	fmt.Printf("\nfetching Addon\n")
+	logger.Info("fetching Addon")
 	fetchedAddon, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(fetchedAddon).NotTo(BeNil())
 
-	fmt.Printf("\nverifying Addon\n")
+	logger.Info("verifying Addon finalizer and checksum")
 	// verify finalizer is set
 	Expect(fetchedAddon.ObjectMeta.Finalizers).NotTo(BeZero())
 	// verify checksum
 	Expect(fetchedAddon.Status.Checksum).ShouldNot(BeEmpty())
 
+	logger.Info("verifying Addon checksum changes.")
 	oldCheckSum := fetchedAddon.Status.Checksum
 	//Update instance params for checksum validation
 	fetchedAddon.Spec.Params.Context.ClusterRegion = "us-east-2"
-	updated, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Update(ctx, fetchedAddon, metav1.UpdateOptions{})
-	//addonController.processNextItem(ctx)
+	err = addonController.handleAddonUpdate(ctx, fetchedAddon)
+	Expect(err).To(BeNil())
 
-	//fetchedAddon1, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
+	updated, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(updated).NotTo(BeNil())
 	Expect(updated.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
 
+	logger.Info("verifying workflow generated.")
 	wfName := updated.GetFormattedWorkflowName(addonapiv1.Prereqs)
-	fetchedwf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(ctx, wfName, metav1.GetOptions{})
+	fetchedwf, err := addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Get(ctx, wfName, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(fetchedwf.GetName()).Should(Equal(wfName))
 
-	err = wfcli.ArgoprojV1alpha1().Workflows("default").Delete(ctx, wfName, metav1.DeleteOptions{})
+	logger.Info("verifying workflow deleted.")
+	err = addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Delete(ctx, wfName, metav1.DeleteOptions{})
 	Expect(err).To(BeNil())
-	wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(ctx, wfName, metav1.GetOptions{})
-	Expect(err).To(BeNil())
+	wf, err := addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Get(ctx, wfName, metav1.GetOptions{})
+	Expect(err).NotTo(BeNil())
 	Expect(wf).To(BeNil())
 }
 
@@ -295,20 +293,4 @@ func parseAddonYaml(data []byte) (*addonapiv1.Addon, error) {
 	}
 
 	return a, nil
-}
-
-func parseUnAddonYaml(data []byte) (*unstructured.Unstructured, error) {
-	var err error
-	o := &unstructured.Unstructured{}
-	err = yaml.Unmarshal(data, &o.Object)
-	if err != nil {
-		return nil, err
-	}
-	a := &addonapiv1.Addon{}
-	err = scheme.Scheme.Convert(o, a, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	return o, nil
 }

@@ -28,41 +28,41 @@ import (
 )
 
 var wfSpecTemplate = `
- apiVersion: argoproj.io/v1alpha1
- kind: Workflow
- metadata:
-   generateName: scripts-python-
- spec:
-   entrypoint: python-script-example
-   templates:
-	 - name: python-script-example
-	   steps:
-		 - - name: generate
-			 template: gen-random-int
-		 - - name: print
-			 template: print-message
-			 arguments:
-			   parameters:
-				 - name: message
-				   value: "{{steps.generate.outputs.result}}"
- 
-	 - name: gen-random-int
-	   script:
-		 image: python:alpine3.6
-		 command: [python]
-		 source: |
-		   import random
-		   i = random.randint(1, 100)
-		   print(i)
-	 - name: print-message
-	   inputs:
-		 parameters:
-		   - name: message
-	   container:
-		 image: alpine:latest
-		 command: [sh, -c]
-		 args: ["echo result was: {{inputs.parameters.message}}"]
- `
+  apiVersion: argoproj.io/v1alpha1
+  kind: Workflow
+  metadata:
+	generateName: scripts-python-
+  spec:
+	entrypoint: python-script-example
+	templates:
+	  - name: python-script-example
+		steps:
+		  - - name: generate
+			  template: gen-random-int
+		  - - name: print
+			  template: print-message
+			  arguments:
+				parameters:
+				  - name: message
+					value: "{{steps.generate.outputs.result}}"
+  
+	  - name: gen-random-int
+		script:
+		  image: python:alpine3.6
+		  command: [python]
+		  source: |
+			import random
+			i = random.randint(1, 100)
+			print(i)
+	  - name: print-message
+		inputs:
+		  parameters:
+			- name: message
+		container:
+		  image: alpine:latest
+		  command: [sh, -c]
+		  args: ["echo result was: {{inputs.parameters.message}}"]
+  `
 
 // These tests are written in BDD-style using Ginkgo framework. Refer to
 // http://onsi.github.io/ginkgo to learn more.

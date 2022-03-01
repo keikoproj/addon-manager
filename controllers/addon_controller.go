@@ -13,6 +13,7 @@ import (
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 
+	"github.com/keikoproj/addon-manager/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,10 +48,8 @@ var serverStartTime time.Time
 
 // Event indicate the informerEvent
 type Event struct {
-	key          string
-	eventType    string
-	namespace    string
-	resourceType string
+	key       string
+	eventType string
 }
 
 // Controller object
@@ -674,7 +673,7 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	c.versionCache = addoninternal.NewAddonVersionCacheClient()
 
 	c.informer = newAddonInformer(ctx, c.dynCli, c.namespace)
-	c.wfinformer = NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, tweakListOptions)
+	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
 	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
 	c.nsinformer = resourceInformers["namespace"]
 	c.deploymentinformer = resourceInformers["deployment"]

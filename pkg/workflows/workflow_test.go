@@ -31,18 +31,16 @@ import (
 	dynfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/pkg/utils"
 
 	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
-	wfinformers "github.com/argoproj/argo-workflows/v3/pkg/client/informers/externalversions"
 )
 
 var sch = runtime.NewScheme()
-var fclient = runtimefake.NewFakeClientWithScheme(sch)
-var dynClient = dynfake.NewSimpleDynamicClient(sch)
+var dynClient = dynfake.NewSimpleDynamicClient(common.GetAddonMgrScheme())
 var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.EventSource{Component: "addons"})
 var ctx = context.TODO()
 
@@ -320,12 +318,10 @@ func init() {
 }
 
 func helper() (*wfclientsetfake.Clientset, cache.SharedIndexInformer) {
-	noResyncPeriodFunc := func() time.Duration { return 0 }
 	wfcli := wfclientsetfake.NewSimpleClientset([]runtime.Object{}...)
-	stopCh := make(chan struct{})
-	wfinformerfactory := wfinformers.NewSharedInformerFactory(wfcli, noResyncPeriodFunc())
-	wfinformer := wfinformerfactory.Argoproj().V1alpha1().Workflows().Informer()
-	wfinformerfactory.Start(stopCh)
+	wfinformer := utils.NewWorkflowInformer(dynClient, "default", 0, cache.Indexers{}, utils.TweakListOptions)
+	stopCh := make(<-chan struct{})
+	go wfinformer.Run(stopCh)
 	return wfcli, wfinformer
 }
 func TestNewWorkflowLifecycle(t *testing.T) {
@@ -402,23 +398,16 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		g.Expect(err).To(Not(HaveOccurred()))
 		g.Expect(phase).To(Equal(v1alpha1.Pending))
 
-		var wfv1 = &unstructured.Unstructured{}
-		wfv1.SetGroupVersionKind(schema.GroupVersionKind{
-			Kind:    "Workflow",
-			Group:   "argoproj.io",
-			Version: "v1alpha1",
-		})
 		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(wf).NotTo(BeNil())
 
 		// Verify default ttl injected
-		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
+		ttl := *wf.Spec.TTLStrategy.SecondsAfterCompletion
+		g.Expect(int64(ttl)).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
 
 		// Verify activeDeadlineSeconds are kept or injected
-		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+		active := *wf.Spec.ActiveDeadlineSeconds
 		g.Expect(err).NotTo(HaveOccurred())
 		if lifecycle == v1alpha1.Install {
 			g.Expect(active).To(Equal(int64(600)))
@@ -427,9 +416,10 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		}
 
 		// Verify workflow variables are injected from addon params
-		wfParams, found, err := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "arguments", "parameters")
+		un, err := utils.ToUnstructured(wf)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(found).To(BeTrue())
+		wfParams, _, err := unstructured.NestedSlice(un.UnstructuredContent(), "spec", "arguments", "parameters")
+		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(wfParams).To(ContainElements(map[string]interface{}{
 			"name":  "namespace",
 			"value": "my-addon-ns",
@@ -472,12 +462,12 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		}))
 
 		// Verify workflow labels are kept
-		labels := wfv1.GetLabels()
+		labels := un.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
 		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/component", "workflow-test"))
 
 		// Verify labels and annotations were added to resources
-		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
+		templates, found, _ := unstructured.NestedSlice(un.UnstructuredContent(), "spec", "templates")
 		g.Expect(found).To(BeTrue())
 
 		step := templates[1]
@@ -546,33 +536,35 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		g.Expect(err).To(Not(HaveOccurred()))
 		g.Expect(phase).To(Equal(v1alpha1.Pending))
 
-		var wfv1 = &unstructured.Unstructured{}
-		wfv1.SetGroupVersionKind(schema.GroupVersionKind{
-			Kind:    "Workflow",
-			Group:   "argoproj.io",
-			Version: "v1alpha1",
-		})
+		// var wfv1 = &unstructured.Unstructured{}
+		// wfv1.SetGroupVersionKind(schema.GroupVersionKind{
+		// 	Kind:    "Workflow",
+		// 	Group:   "argoproj.io",
+		// 	Version: "v1alpha1",
+		// })
 		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(wf).NotTo(BeNil())
 
 		// Verify default ttl injected
-		ttl, _, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
+		ttl := *wf.Spec.TTLStrategy.SecondsAfterCompletion
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(ttl).To(Equal(int64((72 * time.Hour).Seconds())))
+		g.Expect(int64(ttl)).To(Equal(int64((72 * time.Hour).Seconds())))
 
 		// Verify activeDeadlineSeconds are kept
-		active, _, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+		active := *wf.Spec.ActiveDeadlineSeconds
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(active).To(Equal(int64(600)))
 
 		// Verify workflow labels are kept
-		labels := wfv1.GetLabels()
+		un, err := utils.ToUnstructured(wf)
+		g.Expect(err).NotTo(HaveOccurred())
+		labels := un.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
 		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/component", "workflow-test"))
 
 		// Verify labels and annotations were added to resources
-		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
+		templates, found, _ := unstructured.NestedSlice(un.UnstructuredContent(), "spec", "templates")
 		g.Expect(found).To(BeTrue())
 		template := templates[0]
 		var manifest string
