@@ -18,7 +18,7 @@ func (c *Controller) getAddon(ctx context.Context, key string) (*addonv1.Addon, 
 	// optimize me trigger addon informer events
 	obj, exists, err := c.informer.GetIndexer().GetByKey(key)
 	if err != nil || !exists {
-		c.logger.Warnf("[getAddon] failed getting addon(key) ", key, " err ", err)
+		c.logger.Warnf("[getAddon] failed getting addon(key) %s err %#v", key, err)
 		info := strings.Split(key, "/")
 		ns, name := info[0], info[1]
 		addon, err := c.addoncli.AddonmgrV1alpha1().Addons(ns).Get(ctx, name, metav1.GetOptions{})
