@@ -153,6 +153,8 @@ const (
 	Deleting ApplicationAssemblyPhase = "Deleting"
 	// DeleteFailed Used to indicate that delete failed.
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
+	// Running indicating associated wf is running
+	Running ApplicationAssemblyPhase = "Running"
 )
 
 // DeploymentPhase represents the status of observed resources
@@ -396,6 +398,15 @@ func (p ApplicationAssemblyPhase) Succeeded() bool {
 func (p ApplicationAssemblyPhase) Completed() bool {
 	switch p {
 	case Succeeded, Failed, Error:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) Processing() bool {
+	switch p {
+	case Pending, Running:
 		return true
 	default:
 		return false

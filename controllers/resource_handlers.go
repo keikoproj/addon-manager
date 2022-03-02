@@ -39,7 +39,7 @@ func (c *Controller) handleNamespaceAdd(ctx context.Context, obj interface{}) er
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " resource status.  err : ", err)
+		c.logger.Error("failed updating ", key, " namespace resource status.  err : ", err)
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (c *Controller) handleDeploymentAdd(ctx context.Context, obj interface{}) e
 	key := fmt.Sprintf("%s/%s", c.namespace, addonName)
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " resource status. err:", err)
+		c.logger.Error("failed updating ", key, " deployment resource status. err:", err)
 	}
 	return nil
 }
@@ -117,7 +117,7 @@ func (c *Controller) handleServiceAccountAdd(ctx context.Context, obj interface{
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " resource status.  err : ", err)
+		c.logger.Error("failed updating ", key, " service account resource status.  err : ", err)
 	}
 	return nil
 }
@@ -157,7 +157,7 @@ func (c *Controller) handleConfigMapAdd(ctx context.Context, obj interface{}) er
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " resource status.  err : ", err)
+		c.logger.Error("failed updating ", key, " configmap resource status.  err : ", err)
 	}
 	return nil
 }
@@ -197,7 +197,7 @@ func (c *Controller) handleClusterRoleAdd(ctx context.Context, obj interface{}) 
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " resource status.  err : ", err)
+		c.logger.Error("failed updating ", key, " cluster role resource status.  err : ", err)
 	}
 	return nil
 }

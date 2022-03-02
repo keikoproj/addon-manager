@@ -67,8 +67,14 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	updating.Status = newStatus
 
 	if lifecycle == "delete" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
-		c.logger.Info("addon", namespace, "/", name, "deletion wf succeeded remove its finalizer for cleanup")
-		c.removeFinalizer(updating)
+
+		if updating.Status.Lifecycle.Installed.Completed() {
+			c.logger.Info("addon", namespace, "/", name, " installation completed previously. the deletion wf succeeded remove the addon finalizer for cleanup")
+			c.removeFinalizer(updating)
+		} else if updating.Status.Lifecycle.Installed.Processing() {
+			c.logger.Info("addon", namespace, "/", name, " deletion wf installation completed. ")
+		}
+
 		_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
 		if err != nil {
 			switch {
@@ -79,14 +85,15 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 			case strings.Contains(err.Error(), "the object has been modified"):
 				c.logger.Info("retry updating object for deleted addon.")
 				if _, err := c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).Update(ctx, updating, metav1.UpdateOptions{}); err != nil {
-					c.logger.Error("failed updating ", updating.Namespace, updating.Name, " err ", err)
+					c.logger.Error("failed retry updating ", updating.Namespace, updating.Name, " lifecycle status err ", err)
 					return err
 				}
 			default:
-				c.logger.Error("failed updating ", updating.Namespace, updating.Name, " err ", err)
+				c.logger.Error("failed updating ", updating.Namespace, updating.Name, " lifecycle status err ", err)
 				return err
 			}
 		}
+
 	} else {
 		if reflect.DeepEqual(prevStatus, updating.Status) {
 			msg := fmt.Sprintf("addon %s/%s status the same. skip update.", updating.Namespace, updating.Name)
@@ -104,7 +111,7 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 			case strings.Contains(err.Error(), "the object has been modified"):
 				c.logger.Info("retry updating object for workflow status change.")
 				if err := c.updateAddonStatusLifecycle(ctx, namespace, name, lifecycle, lifecyclestatus); err != nil {
-					c.logger.Error("retry failed updating ", updating.Namespace, "/", updating.Name, " status ", err)
+					c.logger.Error("failed updating ", updating.Namespace, "/", updating.Name, " lifecycle status ", err)
 					return err
 				}
 			default:
@@ -140,8 +147,9 @@ func (c *Controller) updateAddonStatus(ctx context.Context, updating *addonv1.Ad
 			if latest.Status.Lifecycle.Installed != addonv1.Deleting { // edge case: latest is in an error status, skip retry
 				c.logger.Info("retry updating ", updating.Namespace, "/", updating.Name, " object coz objects has been modified")
 				if err := c.updateAddonStatus(ctx, updating); err != nil {
-					c.logger.Error("failed updating ", updating.Namespace, updating.Name, " status ", err)
-					return err
+					c.logger.Error("failed retry updating ", updating.Namespace, updating.Name, " lifecycle status ", err)
+					// workaround
+					return nil
 				}
 			}
 		default:
@@ -180,7 +188,7 @@ func (c *Controller) updateAddonStatusOnly(ctx context.Context, updated *addonv1
 	_, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).UpdateStatus(ctx, updated,
 		metav1.UpdateOptions{})
 	if err != nil {
-		msg := fmt.Sprintf("failed updating addon %s/%s status. err %v", updated.Namespace, updated.Name, err)
+		msg := fmt.Sprintf("failed updating addon %s/%s status only. err %v", updated.Namespace, updated.Name, err)
 		c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
