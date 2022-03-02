@@ -14,12 +14,20 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func (c *Controller) getAddon(key string) (*addonv1.Addon, error) {
+func (c *Controller) getAddon(ctx context.Context, key string) (*addonv1.Addon, error) {
+	// optimize me trigger addon informer events
 	obj, exists, err := c.informer.GetIndexer().GetByKey(key)
 	if err != nil || !exists {
-		msg := fmt.Sprintf("failed getting addon %s, err %v", key, err)
-		c.logger.Error(msg)
-		return nil, fmt.Errorf(msg)
+		c.logger.Warnf("[getAddon] failed getting addon(key) ", key, " err ", err)
+		info := strings.Split(key, "/")
+		ns, name := info[0], info[1]
+		addon, err := c.addoncli.AddonmgrV1alpha1().Addons(ns).Get(ctx, name, metav1.GetOptions{})
+		if err != nil || addon == nil {
+			msg := fmt.Sprintf("[getAddon] failed getting addon(namespace/name) %s, err %v", key, err)
+			c.logger.Error(msg)
+			return nil, fmt.Errorf(msg)
+		}
+		return addon, nil
 	}
 	latest, err := common.FromUnstructured(obj.(*unstructured.Unstructured))
 	if err != nil {
@@ -36,7 +44,7 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	key := fmt.Sprintf("%s/%s", namespace, name)
 	obj, exists, err := c.informer.GetIndexer().GetByKey(key)
 	if err != nil || !exists {
-		msg := fmt.Sprintf("failed getting addon %s/%s, err %v", namespace, name, err)
+		msg := fmt.Sprintf("[updateAddonStatusLifecycle] failed getting addon taged namespace/name %s/%s, err %v", namespace, name, err)
 		c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
@@ -67,69 +75,66 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	updating.Status = newStatus
 
 	if lifecycle == "delete" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
-
-		if updating.Status.Lifecycle.Installed.Completed() {
+		if prevStatus.Lifecycle.Installed.Completed() {
 			c.logger.Info("addon", namespace, "/", name, " installation completed previously. the deletion wf succeeded remove the addon finalizer for cleanup")
 			c.removeFinalizer(updating)
-		} else if updating.Status.Lifecycle.Installed.Processing() {
-			c.logger.Info("addon", namespace, "/", name, " deletion wf installation completed. ")
-		}
-
-		_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
-		if err != nil {
-			switch {
-			case errors.IsNotFound(err):
-				msg := fmt.Sprintf("Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
-				c.logger.Error(msg)
-				return fmt.Errorf(msg)
-			case strings.Contains(err.Error(), "the object has been modified"):
-				c.logger.Info("retry updating object for deleted addon.")
-				if _, err := c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).Update(ctx, updating, metav1.UpdateOptions{}); err != nil {
-					c.logger.Error("failed retry updating ", updating.Namespace, updating.Name, " lifecycle status err ", err)
+			_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
+			if err != nil {
+				switch {
+				case errors.IsNotFound(err):
+					msg := fmt.Sprintf("Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
+					c.logger.Error(msg)
+					return fmt.Errorf(msg)
+				case strings.Contains(err.Error(), "the object has been modified"):
+					c.logger.Info("retry updating object for deleted addon.")
+					if _, err := c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).Update(ctx, updating, metav1.UpdateOptions{}); err != nil {
+						c.logger.Error("failed retry updating ", updating.Namespace, updating.Name, " lifecycle status err ", err)
+						return err
+					}
+				default:
+					c.logger.Error("failed updating ", updating.Namespace, updating.Name, " lifecycle status err ", err)
 					return err
 				}
-			default:
-				c.logger.Error("failed updating ", updating.Namespace, updating.Name, " lifecycle status err ", err)
-				return err
 			}
-		}
-
-	} else {
-		if reflect.DeepEqual(prevStatus, updating.Status) {
-			msg := fmt.Sprintf("addon %s/%s status the same. skip update.", updating.Namespace, updating.Name)
-			c.logger.Info(msg)
 			return nil
 		}
+	}
 
-		_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
-		if err != nil {
-			switch {
-			case errors.IsNotFound(err):
-				msg := fmt.Sprintf("Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
-				c.logger.Error(msg)
-				return fmt.Errorf(msg)
-			case strings.Contains(err.Error(), "the object has been modified"):
-				c.logger.Info("retry updating object for workflow status change.")
-				if err := c.updateAddonStatusLifecycle(ctx, namespace, name, lifecycle, lifecyclestatus); err != nil {
-					c.logger.Error("failed updating ", updating.Namespace, "/", updating.Name, " lifecycle status ", err)
-					return err
-				}
-			default:
-				c.logger.Error("failed updating ", updating.Namespace, "/", updating.Name, " status ", err)
+	if reflect.DeepEqual(prevStatus, updating.Status) {
+		msg := fmt.Sprintf("addon %s/%s status the same. skip update.", updating.Namespace, updating.Name)
+		c.logger.Info(msg)
+		return nil
+	}
+
+	_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
+	if err != nil {
+		switch {
+		case errors.IsNotFound(err):
+			msg := fmt.Sprintf("Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
+			c.logger.Error(msg)
+			return fmt.Errorf(msg)
+		case strings.Contains(err.Error(), "the object has been modified"):
+			c.logger.Info("retry updating object for workflow status change.")
+			if err := c.updateAddonStatusLifecycle(ctx, namespace, name, lifecycle, lifecyclestatus); err != nil {
+				c.logger.Error("failed updating ", updating.Namespace, "/", updating.Name, " lifecycle status ", err)
 				return err
 			}
+		default:
+			c.logger.Error("failed updating ", updating.Namespace, "/", updating.Name, " status ", err)
+			return err
 		}
-		msg := fmt.Sprintf("successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
-		c.logger.Info(msg)
 	}
+	msg := fmt.Sprintf("successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
+	c.logger.Info(msg)
+
 	return nil
 }
 
 func (c *Controller) updateAddonStatus(ctx context.Context, updating *addonv1.Addon) error {
 	key := fmt.Sprintf("%s/%s", updating.Namespace, updating.Name)
-	latest, err := c.getAddon(key)
+	latest, err := c.getAddon(ctx, key)
 	if err != nil {
-		c.logger.Error("failed getting addon ", key, " err ", key, err)
+		c.logger.Error("[updateAddonStatus] failed getting addon key", key, " err ", key, err)
 		return err
 	}
 	if reflect.DeepEqual(latest.Status, updating.Status) {
@@ -165,7 +170,7 @@ func (c *Controller) updateAddonStatus(ctx context.Context, updating *addonv1.Ad
 func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) error {
 	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
 	if err != nil {
-		msg := fmt.Sprintf("failed getting addon %s err %#v", updated.Name, err)
+		msg := fmt.Sprintf("[updateAddon] failed getting addon(name) %s err %#v", updated.Name, err)
 		c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
@@ -196,7 +201,7 @@ func (c *Controller) updateAddonStatusOnly(ctx context.Context, updated *addonv1
 }
 
 func (c *Controller) updateAddonStatusResources(ctx context.Context, key string, resource addonv1.ObjectStatus) error {
-	addon, err := c.getAddon(key)
+	addon, err := c.getAddon(ctx, key)
 	if err != nil {
 		msg := fmt.Sprintf("failed finding addon %s err %v.", key, err)
 		c.logger.Error(msg)

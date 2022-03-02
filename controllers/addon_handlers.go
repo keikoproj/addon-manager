@@ -8,6 +8,7 @@ import (
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
@@ -103,9 +104,33 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 }
 
 func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Addon) error {
-	c.logger.Info("deleting addon ", addon.Namespace, "/", addon.Name)
+	c.logger.Info("[handleAddonDeletion] ", addon.Namespace, "/", addon.Name)
 	if !addon.ObjectMeta.DeletionTimestamp.IsZero() {
 		var wfl = workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
+
+		if addon.Spec.Lifecycle.Install.Template == "" {
+			c.logger.Info("[handleAddonDeletion] addon ", addon.GetNamespace(), "/", addon.GetName(), " does not have install template. remove finalizer directly.")
+			c.removeFinalizer(addon)
+			_, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{})
+			if err != nil {
+				switch {
+				case errors.IsNotFound(err):
+					msg := fmt.Sprintf("[handleAddonDeletion] Addon %s/%s is not found. %v", addon.Namespace, addon.Name, err)
+					c.logger.Error(msg)
+					return fmt.Errorf(msg)
+				case strings.Contains(err.Error(), "the object has been modified"):
+					c.logger.Info("[handleAddonDeletion] retry updating object for deleted addon.")
+					if _, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{}); err != nil {
+						c.logger.Error("[handleAddonDeletion] failed retry updating ", addon.Namespace, addon.Name, " lifecycle status err ", err)
+						return err
+					}
+				default:
+					c.logger.Error("[handleAddonDeletion] failed updating ", addon.Namespace, addon.Name, " lifecycle status err ", err)
+					return err
+				}
+			}
+			return nil
+		}
 
 		err := c.Finalize(ctx, addon, wfl)
 		if err != nil {

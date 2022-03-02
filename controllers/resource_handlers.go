@@ -25,7 +25,7 @@ func (c *Controller) handleNamespaceAdd(ctx context.Context, obj interface{}) er
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = ns.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleNamespaceAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -63,7 +63,7 @@ func (c *Controller) handleDeploymentAdd(ctx context.Context, obj interface{}) e
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = deploy.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleDeploymentAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -103,7 +103,7 @@ func (c *Controller) handleServiceAccountAdd(ctx context.Context, obj interface{
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = srvacnt.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleServiceAccountAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -143,7 +143,7 @@ func (c *Controller) handleConfigMapAdd(ctx context.Context, obj interface{}) er
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = configmap.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleConfigMapAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -183,7 +183,7 @@ func (c *Controller) handleClusterRoleAdd(ctx context.Context, obj interface{}) 
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = clsRole.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleClusterRoleAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -222,7 +222,7 @@ func (c *Controller) handleClusterRoleBindingAdd(ctx context.Context, obj interf
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = clsRoleBnd.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleClusterRoleBindingAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -262,7 +262,7 @@ func (c *Controller) handleJobAdd(ctx context.Context, obj interface{}) error {
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = job.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleJobAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -294,7 +294,7 @@ func (c *Controller) handleCronJobAdd(ctx context.Context, obj interface{}) erro
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = cjob.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleCronJobAdd] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -306,7 +306,6 @@ func (c *Controller) handleCronJobAdd(ctx context.Context, obj interface{}) erro
 		Name:  cjob.GetName(),
 		Link:  cjob.GetSelfLink(),
 	}
-	fmt.Printf("\n\n CronJob for addon %s status %#v\n\n", key, objStatus)
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
 		c.logger.Error("failed CronJob ", key, " resource status.  err : ", err)
@@ -326,7 +325,7 @@ func (c *Controller) handleReplicaSet(ctx context.Context, obj interface{}) erro
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = replicaSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleReplicaSet] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -338,7 +337,6 @@ func (c *Controller) handleReplicaSet(ctx context.Context, obj interface{}) erro
 		Name:  replicaSet.GetName(),
 		Link:  replicaSet.GetSelfLink(),
 	}
-	fmt.Printf("\n\n DaemonSet for addon %s status %#v\n\n", key, objStatus)
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
 		c.logger.Error("failed DaemonSet ", key, " resource status.  err : ", err)
@@ -358,7 +356,7 @@ func (c *Controller) handleDaemonSet(ctx context.Context, obj interface{}) error
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = daemonSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleDaemonSet] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -370,7 +368,7 @@ func (c *Controller) handleDaemonSet(ctx context.Context, obj interface{}) error
 		Name:  daemonSet.GetName(),
 		Link:  daemonSet.GetSelfLink(),
 	}
-	fmt.Printf("\n\n DaemonSet for addon %s status %#v\n\n", key, objStatus)
+
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
 		c.logger.Error("failed DaemonSet ", key, " resource status.  err : ", err)
@@ -390,7 +388,7 @@ func (c *Controller) handleStatefulSet(ctx context.Context, obj interface{}) err
 		c.logger.Info("owner is not set. checking part of")
 		addonName, ok = statefulSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "failed getting addon name, should not happen"
+			msg := "[handleStatefulSet] failed getting addon name, should not happen"
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
@@ -402,7 +400,7 @@ func (c *Controller) handleStatefulSet(ctx context.Context, obj interface{}) err
 		Name:  statefulSet.GetName(),
 		Link:  statefulSet.GetSelfLink(),
 	}
-	fmt.Printf("\n\n StatefulSet for addon %s status %#v\n\n", key, objStatus)
+
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
 		c.logger.Error("failed StatefulSet ", key, " resource status.  err : ", err)
