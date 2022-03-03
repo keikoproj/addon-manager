@@ -3,294 +3,213 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
-
-	"io/ioutil"
-	"testing"
-
-	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
-	addoninternal "github.com/keikoproj/addon-manager/pkg/addon"
-	fakeAddonCli "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/fake"
-	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
-	"github.com/keikoproj/addon-manager/pkg/common"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	dynamicFake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/pointer"
+	"k8s.io/apimachinery/pkg/types"
 
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-	addonv1 "github.com/keikoproj/addon-manager/api/addon"
-	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes/fake"
-
-	addonapiv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
-	"github.com/keikoproj/addon-manager/pkg/utils"
-	wfutility "github.com/keikoproj/addon-manager/pkg/workflows"
+	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 )
 
 var (
 	addonNamespace = "default"
 	addonName      = "cluster-autoscaler"
+	addonKey       = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
 )
 
-func configureCRD(dyCli dynamic.Interface) error {
-	var addonCRD = &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "apiextensions.k8s.io/v1beta1",
-			"kind":       "CustomResourceDefinition",
-			"metadata": map[string]interface{}{
-				"name": "addons.addonmgr.keikoproj.io",
-				"spec": map[string]interface{}{
-					"group": addonv1.Group,
-					"names": map[string]interface{}{
-						"kind":   addonv1.AddonKind,
-						"plural": addonv1.AddonPlural,
+const timeout = time.Second * 5
+
+var _ = Describe("AddonController", func() {
+
+	Describe("Addon CR can be reconciled", func() {
+		var instance *v1alpha1.Addon
+		var wfv1 = &unstructured.Unstructured{}
+		wfv1.SetGroupVersionKind(schema.GroupVersionKind{
+			Kind:    "Workflow",
+			Group:   "argoproj.io",
+			Version: "v1alpha1",
+		})
+
+		It("instance should be parsable", func() {
+			addonYaml, err := ioutil.ReadFile("../docs/examples/clusterautoscaler.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			instance, err = parseAddonYaml(addonYaml)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(instance).To(BeAssignableToTypeOf(&v1alpha1.Addon{}))
+			Expect(instance.GetName()).To(Equal(addonName))
+		})
+
+		It("instance should be reconciled", func() {
+			instance.SetNamespace(addonNamespace)
+			err := k8sClient.Create(context.TODO(), instance)
+			if apierrors.IsInvalid(err) {
+				Fail(fmt.Sprintf("failed to create object, got an invalid object error. %v", err))
+			}
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+
+				if len(instance.ObjectMeta.Finalizers) > 0 {
+					return nil
+				}
+				return fmt.Errorf("addon is not valid")
+			}, timeout).Should(Succeed())
+
+			By("Verify addon has been reconciled by checking for checksum status")
+			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
+
+			By("Verify addon has finalizers added which means it's valid")
+			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
+
+			oldCheckSum := instance.Status.Checksum
+
+			//Update instance params for checksum validation
+			instance.Spec.Params.Context.ClusterRegion = "us-east-2"
+			err = k8sClient.Update(context.TODO(), instance)
+
+			// This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
+			time.Sleep(5 * time.Second)
+
+			if apierrors.IsInvalid(err) {
+				log.Error(err, "failed to update object, got an invalid object error")
+				return
+			}
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+
+				if len(instance.ObjectMeta.Finalizers) > 0 {
+					return nil
+				}
+				return fmt.Errorf("addon is not valid")
+			}, timeout).Should(Succeed())
+
+			By("Verify changing addon spec generates new checksum")
+			Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
+
+			By("Verify addon has workflows generated with new checksum name")
+			wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
+			Eventually(func() error {
+				return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+			}, timeout).Should(Succeed())
+			Expect(wfv1.GetName()).Should(Equal(wfName))
+
+			By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
+			Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
+			Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
+		})
+
+		It("instance should be deleted w/ deleting state", func() {
+			By("Verify deleting instance should set Deleting state")
+			Expect(k8sClient.Delete(context.TODO(), instance)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+
+				if instance.ObjectMeta.DeletionTimestamp != nil && instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
+					return nil
+				}
+				return fmt.Errorf("addon is not being deleted")
+			}, timeout).Should(Succeed())
+
+			By("Verify delete workflow was generated")
+			wfName := instance.GetFormattedWorkflowName(v1alpha1.Delete)
+			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
+			Eventually(func() error {
+				return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+			}, timeout).Should(Succeed())
+			Expect(wfv1.GetName()).Should(Equal(wfName))
+		})
+
+		It("instance with dependencies should succeed", func() {
+			instance = &v1alpha1.Addon{
+				ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: addonNamespace},
+				Spec: v1alpha1.AddonSpec{
+					PackageSpec: v1alpha1.PackageSpec{
+						PkgType:    v1alpha1.CompositePkg,
+						PkgName:    "test/addon-1",
+						PkgVersion: "1.0.1",
 					},
-					"scope":   "Namespaced",
-					"version": "v1alpha1",
+					Params: v1alpha1.AddonParams{
+						Namespace: "addon-test-ns",
+					},
 				},
-			},
-		}}
+			}
+			var instanceKey = types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+			var instance2 = &v1alpha1.Addon{
+				ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: addonNamespace},
+				Spec: v1alpha1.AddonSpec{
+					PackageSpec: v1alpha1.PackageSpec{
+						PkgType:    v1alpha1.CompositePkg,
+						PkgName:    "test/addon-2",
+						PkgVersion: "1.0.0",
+						PkgDeps: map[string]string{
+							"test/addon-1": "*",
+						},
+					},
+					Params: v1alpha1.AddonParams{
+						Namespace: "addon-test-ns",
+					},
+				},
+			}
+			var instanceKey2 = types.NamespacedName{Namespace: instance2.Namespace, Name: instance2.Name}
 
-	CRDSchema := schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1beta1", Resource: "customresourcedefinitions"}
-	_, err := dyCli.Resource(CRDSchema).Create(context.Background(), addonCRD, metav1.CreateOptions{})
-	if err != nil {
-		fmt.Printf("failed creating Addon CRDs.")
-		return err
-	}
-	return nil
-}
+			By("Verify first addon-2 that depends on addon-1 is created and has validation failed state")
+			Expect(k8sClient.Create(context.TODO(), instance2)).NotTo(HaveOccurred())
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
+					return err
+				}
 
-func newController(options ...interface{}) *Controller {
-	ctx := context.TODO()
-	var objects []runtime.Object
-	wfcli := wfclientsetfake.NewSimpleClientset(objects...)
-	for _, opt := range options {
-		switch v := opt.(type) {
-		case *addonapiv1.Addon:
-			objects = append(objects, v)
-		case runtime.Object:
-			objects = append(objects, v)
-		}
-	}
+				if instance2.Status.Lifecycle.Installed == v1alpha1.ValidationFailed {
+					return nil
+				}
 
-	kubecli := fake.NewSimpleClientset()
-	addonCli := fakeAddonCli.NewSimpleClientset(objects...)
-	dynCli := dynamicFake.NewSimpleDynamicClient(common.GetAddonMgrScheme(), objects...)
-	k8sinformer := kubeinformers.NewSharedInformerFactory(kubecli, 0)
+				return fmt.Errorf("addon-2 is not in validation failed state")
+			}, timeout).Should(Succeed())
 
-	stopCh := make(<-chan struct{})
-	controller := newResourceController(
-		kubecli, dynCli, addonCli, wfcli,
-		"addon", "default")
+			By("Verify addon-1 is submitted and completes successfully")
+			Expect(k8sClient.Create(context.TODO(), instance)).NotTo(HaveOccurred())
+			defer k8sClient.Delete(context.TODO(), instance)
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), instanceKey, instance); err != nil {
+					return err
+				}
 
-	controller.queue = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "addon-controller")
-	controller.scheme = common.GetAddonMgrScheme()
-	logger := logrus.WithField("controllers", "addon")
-	controller.versionCache = addoninternal.NewAddonVersionCacheClient()
-	controller.recorder = createEventRecorder(controller.namespace, controller.clientset, logger)
-	controller.informer = newAddonInformer(ctx, controller.dynCli, controller.namespace)
-	controller.wfinformer = utils.NewWorkflowInformer(controller.dynCli, controller.namespace, 0, cache.Indexers{}, utils.TweakListOptions)
-	configureCRD(controller.dynCli)
+				if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+					return nil
+				}
 
-	controller.nsinformer = k8sinformer.Core().V1().Namespaces().Informer()
-	controller.deploymentinformer = k8sinformer.Apps().V1().Deployments().Informer()
-	controller.srvinformer = k8sinformer.Core().V1().Services().Informer()
-	controller.configMapinformer = k8sinformer.Core().V1().ConfigMaps().Informer()
-	controller.clusterRoleinformer = k8sinformer.Rbac().V1().ClusterRoles().Informer()
-	controller.clusterRoleBindingInformer = k8sinformer.Rbac().V1().ClusterRoleBindings().Informer()
-	controller.jobinformer = k8sinformer.Batch().V1().Jobs().Informer()
-	controller.cronjobinformer = k8sinformer.Core().V1().ServiceAccounts().Informer()
-	controller.cronjobinformer = k8sinformer.Batch().V1().CronJobs().Informer()
-	controller.daemonSetinformer = k8sinformer.Apps().V1().DaemonSets().Informer()
-	controller.replicaSetinformer = k8sinformer.Apps().V1().ReplicaSets().Informer()
-	controller.statefulSetinformer = k8sinformer.Apps().V1().StatefulSets().Informer()
+				return fmt.Errorf("addon-1 is not installed")
+			}, timeout).Should(Succeed())
 
-	controller.setupaddonhandlers()
-	controller.setupwfhandlers(ctx)
-	controller.setupwfhandlers(ctx)
+			By("Verify addon-2 succeeds after addon-1 completed")
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
+					return err
+				}
 
-	go controller.informer.Run(stopCh)
-	go controller.wfinformer.Run(stopCh)
-	go controller.nsinformer.Run(stopCh)
-	go controller.srvinformer.Run(stopCh)
-	go controller.configMapinformer.Run(stopCh)
-	go controller.clusterRoleinformer.Run(stopCh)
-	go controller.clusterRoleBindingInformer.Run(stopCh)
-	go controller.jobinformer.Run(stopCh)
-	go controller.cronjobinformer.Run(stopCh)
-	go controller.daemonSetinformer.Run(stopCh)
-	go controller.replicaSetinformer.Run(stopCh)
-	go controller.statefulSetinformer.Run(stopCh)
+				if instance2.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+					return nil
+				}
 
-	if !cache.WaitForCacheSync(stopCh, controller.HasSynced) {
-		fmt.Printf("failed wait for sync.")
-	}
-	return controller
-}
+				return fmt.Errorf("addon-2 is not valid")
+			}, timeout*10).Should(Succeed())
+		})
 
-func TestAddonInstall(t *testing.T) {
-	RegisterFailHandler(Fail)
-	logger := logrus.WithField("test-controllers", "addon")
-	ctx := context.TODO()
-
-	addonYaml, err := ioutil.ReadFile("./tests/clusterautoscaler.yaml")
-	Expect(err).To(BeNil())
-
-	instance, err := parseAddonYaml(addonYaml)
-	Expect(err).ToNot(HaveOccurred())
-	instance.SetName(addonName)
-	instance.SetNamespace(addonNamespace)
-	Expect(instance).To(BeAssignableToTypeOf(&addonapiv1.Addon{}))
-
-	// install addon
-	logger.Info("installing addon")
-	addonController := newController(instance)
-
-	logger.Info("prcoessing addon")
-	processed := addonController.processNextItem(ctx)
-	Expect(processed).To(BeTrue())
-
-	// generate workflow and update addon status
-	var objects []runtime.Object
-	wfcli := wfclientsetfake.NewSimpleClientset(objects...)
-	err = generateWorkflow(wfcli, addonNamespace)
-	Expect(err).To(BeNil())
-
-	// verify addon checksum
-	logger.Info("fetching Addon")
-	fetchedAddon, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
-	Expect(err).To(BeNil())
-	Expect(fetchedAddon).NotTo(BeNil())
-
-	logger.Info("verifying Addon finalizer and checksum")
-	// verify finalizer is set
-	Expect(fetchedAddon.ObjectMeta.Finalizers).NotTo(BeZero())
-	// verify checksum
-	Expect(fetchedAddon.Status.Checksum).ShouldNot(BeEmpty())
-
-	logger.Info("verifying Addon checksum changes.")
-	oldCheckSum := fetchedAddon.Status.Checksum
-	//Update instance params for checksum validation
-	fetchedAddon.Spec.Params.Context.ClusterRegion = "us-east-2"
-	err = addonController.handleAddonUpdate(ctx, fetchedAddon)
-	Expect(err).To(BeNil())
-
-	updated, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, addonName, metav1.GetOptions{})
-	Expect(err).To(BeNil())
-	Expect(updated).NotTo(BeNil())
-	Expect(updated.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
-
-	logger.Info("verifying workflow generated.")
-	wfName := updated.GetFormattedWorkflowName(addonapiv1.Prereqs)
-	fetchedwf, err := addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Get(ctx, wfName, metav1.GetOptions{})
-	Expect(err).To(BeNil())
-	Expect(fetchedwf.GetName()).Should(Equal(wfName))
-
-	logger.Info("verifying workflow deleted.")
-	err = addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Delete(ctx, wfName, metav1.DeleteOptions{})
-	Expect(err).To(BeNil())
-	wf, err := addonController.wfcli.ArgoprojV1alpha1().Workflows(addonNamespace).Get(ctx, wfName, metav1.GetOptions{})
-	Expect(err).NotTo(BeNil())
-	Expect(wf).To(BeNil())
-}
-
-func generateWorkflow(wfcli *wfclientsetfake.Clientset, namespace string) error {
-	prereqswf := &wfv1.Workflow{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "event-router-2-prereqs-5eecd98e-wf",
-			Namespace: namespace,
-			Annotations: map[string]string{
-				"annotation": "value",
-			},
-			Labels: map[string]string{
-				wfutility.WfInstanceIdLabelKey:    wfutility.WfInstanceId,
-				"workflows.argoproj.io/completed": "true",
-				"workflows.argoproj.io/phase":     "Succeeded",
-			},
-		},
-		TypeMeta: metav1.TypeMeta{},
-		Spec: wfv1.WorkflowSpec{
-			HostNetwork:        pointer.BoolPtr(true),
-			Entrypoint:         "good_entrypoint",
-			ServiceAccountName: "my_service_account",
-			TTLStrategy: &wfv1.TTLStrategy{
-				SecondsAfterCompletion: pointer.Int32Ptr(10),
-				SecondsAfterSuccess:    pointer.Int32Ptr(10),
-				SecondsAfterFailure:    pointer.Int32Ptr(10),
-			},
-		},
-		Status: wfv1.WorkflowStatus{
-			Phase: wfv1.WorkflowSucceeded,
-		},
-	}
-	wf, err := wfcli.ArgoprojV1alpha1().Workflows(namespace).Create(context.TODO(), prereqswf, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	if wf == nil {
-		return fmt.Errorf("failed creating prereqs wf")
-	}
-
-	installwf := &wfv1.Workflow{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "event-router-2-install-5eecd98e-wf",
-			Namespace: namespace,
-			Annotations: map[string]string{
-				"annotation": "value",
-			},
-			Labels: map[string]string{
-				wfutility.WfInstanceIdLabelKey:    wfutility.WfInstanceId,
-				"workflows.argoproj.io/completed": "true",
-				"workflows.argoproj.io/phase":     "Succeeded",
-			},
-		},
-		TypeMeta: metav1.TypeMeta{},
-		Spec: wfv1.WorkflowSpec{
-			HostNetwork:        pointer.BoolPtr(true),
-			Entrypoint:         "good_entrypoint",
-			ServiceAccountName: "my_service_account",
-			TTLStrategy: &wfv1.TTLStrategy{
-				SecondsAfterCompletion: pointer.Int32Ptr(10),
-				SecondsAfterSuccess:    pointer.Int32Ptr(10),
-				SecondsAfterFailure:    pointer.Int32Ptr(10),
-			},
-		},
-		Status: wfv1.WorkflowStatus{
-			Phase: wfv1.WorkflowSucceeded,
-		},
-	}
-	installwf, err = wfcli.ArgoprojV1alpha1().Workflows(namespace).Create(context.TODO(), installwf, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	if installwf == nil {
-		return fmt.Errorf("failed creating install wf")
-	}
-	return nil
-}
-
-func parseAddonYaml(data []byte) (*addonapiv1.Addon, error) {
-	var err error
-	o := &unstructured.Unstructured{}
-	err = yaml.Unmarshal(data, &o.Object)
-	if err != nil {
-		return nil, err
-	}
-	a := &addonapiv1.Addon{}
-	err = scheme.Scheme.Convert(o, a, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	return a, nil
-}
+	})
+})

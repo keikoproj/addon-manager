@@ -157,7 +157,7 @@ func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Add
 }
 
 func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
-	c.logger.Info("processing addon ", addon.Namespace, "/", addon.Name, " status")
+	c.logger.Info("processing addon ", addon.Namespace, "/", addon.Name)
 
 	errors := []error{}
 	addon.Status = addonv1.AddonStatus{
@@ -184,20 +184,30 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		}
 	}
 
+	if addon.Spec.Lifecycle.Prereqs.Template == "" && addon.Spec.Lifecycle.Install.Template == "" &&
+		addon.Spec.Lifecycle.Delete.Template == "" {
+		c.logger.Info("addon ", addon.Namespace, "/", addon.Name, " does not have any workflow template.")
+		addon.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(addonv1.Succeeded)
+		if err := c.updateAddonStatus(ctx, addon); err != nil {
+			c.logger.Error("[zero wf addon] failed updating ", addon.Namespace, "/", addon.Name, " status err ", err)
+			return err
+		}
+		return nil
+	}
+
 	if addon.Spec.Lifecycle.Prereqs.Template != "" || addon.Spec.Lifecycle.Install.Template != "" {
 		err := c.executePrereqAndInstall(ctx, addon, wfl)
 		if err != nil {
 			msg := fmt.Sprintf("failed installing addon %s/%s prereqs and instll err %v", addon.Namespace, addon.Name, err)
 			c.logger.Error(msg)
 			errors = append(errors, err)
+			return fmt.Errorf("%v", errors)
 		}
-		msg := fmt.Sprintf("failed install %s/%s err %v", addon.Namespace, addon.Name, errors)
-		c.logger.Error(msg)
-		return fmt.Errorf(msg)
 	} else {
 		c.logger.Info("addon ", addon.Namespace, "/", addon.Name, " does not need prereqs or install.")
 	}
 
+	// some addon have delete template only
 	if addon.Spec.Lifecycle.Delete.Template != "" {
 		c.logger.Info("addon ", addon.Namespace, "/", addon.Name, " has delete template.")
 		_, err := c.runWorkflow(addonv1.Delete, addon, wfl)
@@ -214,7 +224,6 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 }
 
 func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
-
 	prereqsPhase, err := c.runWorkflow(addonv1.Prereqs, addon, wfl)
 	if err != nil {
 		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", addon.Namespace, addon.Name, err)
@@ -226,7 +235,6 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 		return err
 	}
 	addon.Status.Lifecycle.Prereqs = prereqsPhase
-
 	if err := c.validateSecrets(ctx, addon); err != nil {
 		reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", addon.Namespace, addon.Name, err)
 		c.recorder.Event(addon, "Warning", "Failed", reason)
@@ -245,7 +253,6 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 		addon.Status.Reason = reason
 		return err
 	}
-
 	return nil
 }
 
