@@ -75,7 +75,7 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	updating.Status = newStatus
 
 	if lifecycle == "delete" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
-		if prevStatus.Lifecycle.Installed.Completed() {
+		if prevStatus.Lifecycle.Installed.Completed() || prevStatus.Lifecycle.Installed.Deleting() {
 			c.logger.Info("addon", namespace, "/", name, " installation completed previously. the deletion wf succeeded remove the addon finalizer for cleanup")
 			c.removeFinalizer(updating)
 			_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).Update(ctx, updating, metav1.UpdateOptions{})

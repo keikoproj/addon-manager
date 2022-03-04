@@ -412,3 +412,12 @@ func (p ApplicationAssemblyPhase) Processing() bool {
 		return false
 	}
 }
+
+func (p ApplicationAssemblyPhase) Deleting() bool {
+	switch p {
+	case Deleting:
+		return true
+	default:
+		return false
+	}
+}

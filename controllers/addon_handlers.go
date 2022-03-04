@@ -34,7 +34,7 @@ func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Add
 }
 
 func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon) error {
-	c.logger.Info("updating addon ", addon.Namespace, "/", addon.Name)
+	c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name)
 
 	if !addon.ObjectMeta.DeletionTimestamp.IsZero() && addon.Status.Lifecycle.Installed != addonv1.Deleting {
 		var wfl = workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
