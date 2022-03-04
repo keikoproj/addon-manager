@@ -234,7 +234,6 @@ func (c *Controller) handleClusterRoleBindingAdd(ctx context.Context, obj interf
 		Name:  clsRoleBnd.GetName(),
 		Link:  clsRoleBnd.GetSelfLink(),
 	}
-	fmt.Printf("\n\n clusterrole for addon %s status %#v\n\n", key, nsStatus)
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
 		c.logger.Error("failed ClusterRoleBinding ", key, " resource status.  err : ", err)
@@ -274,7 +273,6 @@ func (c *Controller) handleJobAdd(ctx context.Context, obj interface{}) error {
 		Name:  job.GetName(),
 		Link:  job.GetSelfLink(),
 	}
-	fmt.Printf("\n\n job for addon %s status %#v\n\n", key, objStatus)
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
 		c.logger.Error("failed job ", key, " resource status.  err : ", err)

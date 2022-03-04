@@ -536,12 +536,6 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		g.Expect(err).To(Not(HaveOccurred()))
 		g.Expect(phase).To(Equal(v1alpha1.Pending))
 
-		// var wfv1 = &unstructured.Unstructured{}
-		// wfv1.SetGroupVersionKind(schema.GroupVersionKind{
-		// 	Kind:    "Workflow",
-		// 	Group:   "argoproj.io",
-		// 	Version: "v1alpha1",
-		// })
 		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(wf).NotTo(BeNil())

@@ -13,6 +13,8 @@ import (
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addoninternal "github.com/keikoproj/addon-manager/pkg/addon"
+
+	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 )
 
 func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Addon) error {
@@ -100,6 +102,7 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 		}
 	}
 
+	c.handleDependencies(ctx, addon)
 	return nil
 }
 
@@ -184,8 +187,12 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		}
 	}
 
+	if err := c.handleValidation(ctx, addon); err != nil {
+		return fmt.Errorf("failed handle validation, %#v", err)
+	}
+
 	if addon.Spec.Lifecycle.Prereqs.Template == "" && addon.Spec.Lifecycle.Install.Template == "" &&
-		addon.Spec.Lifecycle.Delete.Template == "" {
+		addon.Spec.Lifecycle.Delete.Template == "" && len(addon.Status.Lifecycle.Installed) == 0 {
 		c.logger.Info("addon ", addon.Namespace, "/", addon.Name, " does not have any workflow template.")
 		addon.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(addonv1.Succeeded)
 		if err := c.updateAddonStatus(ctx, addon); err != nil {
@@ -359,4 +366,71 @@ func (c *Controller) removeFinalizer(addon *addonv1.Addon) {
 	if common.ContainsString(addon.ObjectMeta.Finalizers, addonapiv1.FinalizerName) {
 		addon.ObjectMeta.Finalizers = common.RemoveString(addon.ObjectMeta.Finalizers, addonapiv1.FinalizerName)
 	}
+}
+
+func (c *Controller) handleDependencies(ctx context.Context, addon *addonv1.Addon) {
+	a := pkgaddon.NewAddonValidator(addon, c.versionCache, c.dynCli)
+	if err := a.ValidateDependencies(); err != nil {
+		reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be installed. %v", addon.Namespace, addon.Name, err)
+		c.logger.Info("addon ", addon.Namespace, "/", addon.Name, " has pending dependencies.")
+		addon.Status.Lifecycle.Installed = addonv1.ValidationFailed
+		addon.Status.Reason = reason
+		if err := c.updateAddonStatus(ctx, addon); err != nil {
+			c.logger.Error("failed verifying dependencies ", addon.Namespace, "/", addon.Name, " waiting on dependencies ", err)
+		}
+	}
+	if addon.Status.Lifecycle.Installed == addonv1.ApplicationAssemblyPhase(addonv1.ValidationFailed) {
+		addon.Status.Lifecycle.Installed = addonv1.Succeeded
+		if err := c.updateAddonStatus(ctx, addon); err != nil {
+			c.logger.Error("failed removing dependencies ", addon.Namespace, "/", addon.Name, " ", err)
+		}
+	}
+
+}
+
+func (c *Controller) handleValidation(ctx context.Context, addon *addonv1.Addon) error {
+	// Validate Addon
+	if ok, err := pkgaddon.NewAddonValidator(addon, c.versionCache, c.dynCli).Validate(); !ok {
+		// if an addons dependency is in a Pending state then make the parent addon Pending
+		if err != nil && strings.HasPrefix(err.Error(), pkgaddon.ErrDepPending) {
+			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be out of Pending state.", addon.Namespace, addon.Name)
+			// Record an event if addon is not valid
+			c.recorder.Event(addon, "Normal", "Pending", reason)
+			addon.Status.Lifecycle.Installed = addonv1.Pending
+			addon.Status.Reason = reason
+			c.logger.Info(reason)
+
+			if err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("failed updating ", addon.Namespace, "/", addon.Name, " waiting on dependencies ", err)
+				return err
+			}
+			return nil
+		} else if err != nil && strings.HasPrefix(err.Error(), pkgaddon.ErrDepNotInstalled) {
+			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be installed. %v", addon.Namespace, addon.Name, err)
+			// Record an event if addon is not valid
+			c.recorder.Event(addon, "Normal", "Failed", reason)
+			addon.Status.Lifecycle.Installed = addonv1.ValidationFailed
+			addon.Status.Reason = reason
+			c.logger.Info(reason)
+			if err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("failed verifying dependencies ", addon.Namespace, "/", addon.Name, " waiting on dependencies ", err)
+				return err
+			}
+			return nil
+		}
+
+		reason := fmt.Sprintf("Addon %s/%s is not valid. %v", addon.Namespace, addon.Name, err)
+		// Record an event if addon is not valid
+		c.recorder.Event(addon, "Warning", "Failed", reason)
+		addon.Status.Lifecycle.Installed = addonv1.ValidationFailed
+		addon.Status.Reason = reason
+		c.logger.Error(err, "Failed to validate addon.")
+		if err := c.updateAddonStatus(ctx, addon); err != nil {
+			c.logger.Error("failed updating ", addon.Namespace, "/", addon.Name, " validation ", err)
+			return err
+		}
+		return nil
+	}
+
+	return nil
 }
