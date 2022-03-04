@@ -149,9 +149,16 @@ func (c *Controller) updateAddonStatus(ctx context.Context, updating *addonv1.Ad
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		case strings.Contains(err.Error(), "the object has been modified"):
+			latest, err := c.getAddon(ctx, key)
+			if err != nil {
+				c.logger.Error("[updateAddonStatus] failed getting addon key", key, " err ", key, err)
+				return err
+			}
+			newUpdating := latest.DeepCopy()
+			newUpdating.Status = updating.Status
 			if latest.Status.Lifecycle.Installed != addonv1.Deleting { // edge case: latest is in an error status, skip retry
-				c.logger.Info("retry updating ", updating.Namespace, "/", updating.Name, " object coz objects has been modified")
-				if err := c.updateAddonStatus(ctx, updating); err != nil {
+				c.logger.Info("retry updating ", newUpdating.Namespace, "/", newUpdating.Name, " object coz objects has been modified")
+				if err := c.updateAddonStatus(ctx, newUpdating); err != nil {
 					c.logger.Error("failed retry updating ", updating.Namespace, updating.Name, " lifecycle status ", err)
 					// workaround
 					return nil
