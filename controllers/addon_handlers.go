@@ -43,7 +43,7 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 		wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
 		err := c.createAddonHelper(ctx, addon, wfl)
 		if err != nil {
-			c.logger.Errorf("[handleAddonUpdate] failed kick off addon ", addon.Namespace, "/", addon.Name, " wf after resolving dependencies. err", err)
+			c.logger.Errorf("[handleAddonUpdate] failed kick off addon %s/%s wf after resolving dependencies. err %#v", addon.Namespace, addon.Name, err)
 			return err
 		}
 	}
