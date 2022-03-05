@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
-
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 )
 
@@ -416,12 +415,6 @@ func (c *Controller) isDependenciesReady(ctx context.Context, addon *addonv1.Add
 			return false, err
 		}
 	}
-	// if addon.Status.Lifecycle.Installed == addonv1.ApplicationAssemblyPhase(addonv1.ValidationFailed) {
-	// 	addon.Status.Lifecycle.Installed = addonv1.Succeeded
-	// 	if err := c.updateAddonStatus(ctx, addon); err != nil {
-	// 		c.logger.Error("failed removing dependencies ", addon.Namespace, "/", addon.Name, " ", err)
-	// 	}
-	// }
 	return true, nil
 }
 
