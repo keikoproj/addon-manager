@@ -37,7 +37,13 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 	ready, err := c.isDependenciesReady(ctx, addon)
 	if err != nil || !ready {
 		return fmt.Errorf("addon %s/%s dependency is not ready", addon.Namespace, addon.Name)
-	} else if len(addon.Status.Lifecycle.Installed) == 0 && len(addon.Status.Lifecycle.Prereqs) == 0 {
+	} else if addon.Status.Lifecycle.Installed.DepPending() {
+		addon.Status.Lifecycle.Installed = ""
+		addon.Status.Reason = ""
+		if err := c.updateAddonStatus(ctx, addon); err != nil {
+			c.logger.Error("after dependencies resolved, failed clean addon status ", addon.Namespace, "/", addon.Name, " err ", err)
+			return err
+		}
 		c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name, " resolves dependencies. ready to install")
 		wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
 		err := c.createAddonHelper(ctx, addon, wfl)
@@ -326,7 +332,7 @@ func (c *Controller) addAddonToCache(addon *addonv1.Addon) {
 		PkgPhase:    addon.GetInstallStatus(),
 	}
 	c.versionCache.AddVersion(version)
-	c.logger.Info("Adding version cache", "phase ", version.PkgPhase)
+	c.logger.Info("Adding ", addon.GetNamespace(), "/", addon.GetName(), " package ", addon.GetPackageSpec(), " version cache", "phase ", version.PkgPhase)
 }
 
 func (c *Controller) runWorkflow(lifecycleStep addonv1.LifecycleStep, addon *addonv1.Addon, wfl workflows.AddonLifecycle) (addonv1.ApplicationAssemblyPhase, error) {

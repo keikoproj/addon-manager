@@ -155,16 +155,21 @@ var _ = Describe("AddonController", func() {
 			}
 
 			By("Verify first addon-2 that depends on addon-1 is created and has validation failed state")
-			_, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Create(ctx, instance2, metav1.CreateOptions{})
-			err = addonController.handleAddonCreation(ctx, instance2)
+			createdInstance2, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Create(ctx, instance2, metav1.CreateOptions{})
 			Expect(err).To(BeNil())
+			Expect(createdInstance2).NotTo(BeNil())
+			err = addonController.handleAddonCreation(ctx, instance2)
+			Expect(err).NotTo(BeNil())
+
+			defer addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Delete(ctx, instance2.Name, metav1.DeleteOptions{})
+			var fetchedInstance2 *v1alpha1.Addon
 			Eventually(func() error {
-				_, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, instance2.Name, metav1.GetOptions{})
-				if err != nil {
+				fetchedInstance2, err = addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, instance2.Name, metav1.GetOptions{})
+				if err != nil || fetchedAddon == nil {
 					return err
 				}
 
-				if instance2.Status.Lifecycle.Installed == v1alpha1.ValidationFailed {
+				if fetchedInstance2.Status.Lifecycle.Installed == v1alpha1.ValidationFailed {
 					return nil
 				}
 
@@ -172,16 +177,18 @@ var _ = Describe("AddonController", func() {
 			}, timeout).Should(Succeed())
 
 			By("Verify addon-1 is submitted and completes successfully")
-			_, err = addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Create(ctx, instance, metav1.CreateOptions{})
+			createdInstance1, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Create(ctx, instance, metav1.CreateOptions{})
+			Expect(err).To(BeNil())
+			Expect(createdInstance1).NotTo(BeNil())
 			err = addonController.handleAddonCreation(ctx, instance)
 			Expect(err).To(BeNil())
 			defer addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Delete(ctx, instance.Name, metav1.DeleteOptions{})
 
 			Eventually(func() error {
-				_, err = addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, instance.Name, metav1.GetOptions{})
+				fetchedInstance, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, instance.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+				if fetchedInstance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
 					return nil
 				}
 
@@ -189,16 +196,17 @@ var _ = Describe("AddonController", func() {
 			}, timeout).Should(Succeed())
 
 			By("Verify addon-2 succeeds after addon-1 completed")
-			err = addonController.handleAddonUpdate(ctx, instance2)
+			err = addonController.handleAddonUpdate(ctx, fetchedInstance2)
+			Expect(err).To(BeNil())
 			Eventually(func() error {
-				if _, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, instance2.Name, metav1.GetOptions{}); err != nil {
-					return err
-				}
+				updatedInstance2, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, instance2.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fetchedInstance2).NotTo(BeNil())
 
-				if instance2.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+				if updatedInstance2.Status.Lifecycle.Installed == v1alpha1.Succeeded {
 					return nil
 				}
-				return fmt.Errorf("addon-2 is not valid")
+				return fmt.Errorf("addon-2 is not valid after resolving dependencies.")
 			}, timeout).Should(Succeed())
 		})
 
