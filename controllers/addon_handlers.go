@@ -45,8 +45,13 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 			return err
 		}
 		c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name, " resolves dependencies. ready to install")
-		wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
-		err := c.createAddonHelper(ctx, addon, wfl)
+		latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
+		if err != nil || latest == nil {
+			c.logger.Errorf("[handleAddonUpdate] failed getting addon %s/%s", addon.Namespace, addon.Name)
+			return err
+		}
+		wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, latest, c.scheme, c.recorder)
+		err = c.createAddonHelper(ctx, latest, wfl)
 		if err != nil {
 			c.logger.Errorf("[handleAddonUpdate] failed kick off addon %s/%s wf after resolving dependencies. err %#v", addon.Namespace, addon.Name, err)
 			return err
