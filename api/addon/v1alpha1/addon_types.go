@@ -147,7 +147,9 @@ const (
 	// Failed Used to indicate that deployment of application's components failed. Some components
 	// might be present, but deployment of the remaining ones will not be re-attempted.
 	Failed ApplicationAssemblyPhase = "Failed"
-	// ValidationFailed Used to indicate validation failed
+	// DepPending indicates Dep package is being pending
+	DepPending ApplicationAssemblyPhase = "DepPending"
+	// ValidationFailed Used to indicate validation failed: dep package not installed at all
 	ValidationFailed ApplicationAssemblyPhase = "Validation Failed"
 	// Deleting Used to indicate that all application's components are being deleted.
 	Deleting ApplicationAssemblyPhase = "Deleting"
@@ -416,6 +418,15 @@ func (p ApplicationAssemblyPhase) Processing() bool {
 func (p ApplicationAssemblyPhase) Deleting() bool {
 	switch p {
 	case Deleting:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) DepPending() bool {
+	switch p {
+	case DepPending, ValidationFailed:
 		return true
 	default:
 		return false
