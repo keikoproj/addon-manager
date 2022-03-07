@@ -34,27 +34,30 @@ func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Add
 func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon) error {
 	c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name)
 
-	ready, err := c.isDependenciesReady(ctx, addon)
-	if err != nil || !ready {
-		return fmt.Errorf("addon %s/%s dependency is not ready", addon.Namespace, addon.Name)
-	} else if addon.Status.Lifecycle.Installed.DepPending() {
-		addon.Status.Lifecycle.Installed = ""
-		addon.Status.Reason = ""
-		if err := c.updateAddonStatus(ctx, addon); err != nil {
-			c.logger.Error("after dependencies resolved, failed clean addon status ", addon.Namespace, "/", addon.Name, " err ", err)
-			return err
-		}
-		c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name, " resolves dependencies. ready to install")
-		latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
-		if err != nil || latest == nil {
-			c.logger.Errorf("[handleAddonUpdate] failed getting addon %s/%s", addon.Namespace, addon.Name)
-			return err
-		}
-		wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, latest, c.scheme, c.recorder)
-		err = c.createAddonHelper(ctx, latest, wfl)
-		if err != nil {
-			c.logger.Errorf("[handleAddonUpdate] failed kick off addon %s/%s wf after resolving dependencies. err %#v", addon.Namespace, addon.Name, err)
-			return err
+	// restrict check : re-do dependency check only if never completed
+	if !addon.Status.Lifecycle.Installed.Completed() {
+		ready, err := c.isDependenciesReady(ctx, addon)
+		if err != nil || !ready {
+			return fmt.Errorf("addon %s/%s dependency is not ready", addon.Namespace, addon.Name)
+		} else if addon.Status.Lifecycle.Installed.DepPending() {
+			addon.Status.Lifecycle.Installed = ""
+			addon.Status.Reason = ""
+			if err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("after dependencies resolved, failed clean addon status ", addon.Namespace, "/", addon.Name, " err ", err)
+				return err
+			}
+			c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name, " resolves dependencies. ready to install")
+			latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
+			if err != nil || latest == nil {
+				c.logger.Errorf("[handleAddonUpdate] failed getting addon %s/%s", addon.Namespace, addon.Name)
+				return err
+			}
+			wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, latest, c.scheme, c.recorder)
+			err = c.createAddonHelper(ctx, latest, wfl)
+			if err != nil {
+				c.logger.Errorf("[handleAddonUpdate] failed kick off addon %s/%s wf after resolving dependencies. err %#v", addon.Namespace, addon.Name, err)
+				return err
+			}
 		}
 	}
 
