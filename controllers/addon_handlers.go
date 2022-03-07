@@ -389,6 +389,24 @@ func (c *Controller) SetFinalizer(ctx context.Context, addon *addonv1.Addon, fin
 			addon.ObjectMeta.Finalizers = append(addon.ObjectMeta.Finalizers, finalizerName)
 			if err := c.updateAddon(ctx, addon); err != nil {
 				c.logger.Error("failed setting addon ", addon.Namespace, addon.Name, " finalizer, err :", err)
+				if strings.Contains(err.Error(), "the object has been modified") {
+					c.logger.Info("[SetFinalizer] retry updating object.")
+					latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
+					if err != nil {
+						c.logger.Error("[SetFinalizer] failed retrieving addon ", addon.Namespace, addon.Name, " err :", err)
+						return err
+					}
+					if common.ContainsString(addon.ObjectMeta.Finalizers, finalizerName) {
+						c.logger.Info("[SetFinalizer] addon ", addon.Namespace, "/", addon.Name, " already set finalizer.")
+						return nil
+					}
+					addon = latest.DeepCopy()
+					addon.ObjectMeta.Finalizers = append(addon.ObjectMeta.Finalizers, finalizerName)
+					if _, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{}); err != nil {
+						c.logger.Error("[handleAddonDeletion] failed retry updating ", addon.Namespace, addon.Name, " finalizer err ", err)
+						return err
+					}
+				}
 				return err
 			}
 		}
