@@ -485,7 +485,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 	})
 
 	resourceType = "ConfigMap"
-	c.srvAcntinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	c.configMapinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
 			newEvent.eventType = "create"

@@ -141,6 +141,8 @@ type ApplicationAssemblyPhase string
 // Constants
 const (
 	// Pending Used to indicate that not all of application's components have been deployed yet.
+	Init ApplicationAssemblyPhase = ""
+	// Pending Used to indicate that not all of application's components have been deployed yet.
 	Pending ApplicationAssemblyPhase = "Pending"
 	// Succeeded Used to indicate that all of application's components have already been deployed.
 	Succeeded ApplicationAssemblyPhase = "Succeeded"

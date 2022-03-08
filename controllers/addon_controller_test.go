@@ -5,12 +5,9 @@ import (
 	"io/ioutil"
 	"time"
 
-	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	wfv1api "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
@@ -50,23 +47,15 @@ var _ = Describe("AddonController", func() {
 
 			processed := addonController.processNextItem(ctx)
 			Expect(processed).To(BeTrue())
-			var objects []runtime.Object
-			wfcli := wfclientsetfake.NewSimpleClientset(objects...)
-			err := generateWorkflow(wfcli, testNamespace)
+			fetchedAddon, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, testAddon, metav1.GetOptions{})
 			Expect(err).To(BeNil())
+			Expect(fetchedAddon).NotTo(BeNil())
 
-			Eventually(func() error {
-				fetchedAddon, err = addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, testAddon, metav1.GetOptions{})
-				Expect(err).To(BeNil())
-				Expect(fetchedAddon).NotTo(BeNil())
+			By("Verify addon has been reconciled by checking for checksum status")
+			Expect(fetchedAddon.Status.Checksum).ShouldNot(BeEmpty())
 
-				By("Verify addon has been reconciled by checking for checksum status")
-				Expect(fetchedAddon.Status.Checksum).ShouldNot(BeEmpty())
-
-				By("Verify addon has finalizers added which means it's valid")
-				Expect(fetchedAddon.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
-				return nil
-			}, timeout).Should(Succeed())
+			By("Verify addon has finalizers added which means it's valid")
+			Expect(fetchedAddon.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
 			oldCheckSum := instance.Status.Checksum
 			//Update instance params for checksum validation
 			instance.Spec.Params.Context.ClusterRegion = "us-east-2"

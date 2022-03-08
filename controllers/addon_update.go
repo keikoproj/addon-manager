@@ -130,17 +130,22 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	return nil
 }
 
-func (c *Controller) updateAddonStatus(ctx context.Context, updating *addonv1.Addon) error {
-	key := fmt.Sprintf("%s/%s", updating.Namespace, updating.Name)
-	latest, err := c.getAddon(ctx, key)
+func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
+	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
 	if err != nil {
-		c.logger.Error("[updateAddonStatus] failed getting addon key", key, " err ", key, err)
-		return err
+		msg := fmt.Sprintf("failed finding addon %s err %v.", addon.Name, err)
+		c.logger.Error(msg)
+		return fmt.Errorf(msg)
 	}
-	if reflect.DeepEqual(latest.Status, updating.Status) {
-		c.logger.Info("addon ", key, " status is the same. skip updating.")
-		return nil
-	}
+	updating := latest.DeepCopy()
+
+	updating.Status.StartTime = common.GetCurretTimestamp()
+	updating.Status.Lifecycle.Prereqs = ""
+	updating.Status.Lifecycle.Installed = ""
+	updating.Status.Reason = ""
+	updating.Status.Resources = []addonv1.ObjectStatus{}
+	updating.Status.Checksum = addon.Status.Checksum
+
 	_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
 	if err != nil {
 		switch {
@@ -149,19 +154,10 @@ func (c *Controller) updateAddonStatus(ctx context.Context, updating *addonv1.Ad
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		case strings.Contains(err.Error(), "the object has been modified"):
-			latest, err := c.getAddon(ctx, key)
-			if err != nil {
-				c.logger.Error("[updateAddonStatus] failed getting addon key", key, " err ", key, err)
-				return err
-			}
-			newUpdating := latest.DeepCopy()
-			newUpdating.Status = updating.Status
 			if latest.Status.Lifecycle.Installed != addonv1.Deleting { // edge case: latest is in an error status, skip retry
-				c.logger.Info("retry updating ", newUpdating.Namespace, "/", newUpdating.Name, " object coz objects has been modified")
-				if err := c.updateAddonStatus(ctx, newUpdating); err != nil {
+				c.logger.Warnf("[resetAddonStatus] retry updating %s/%s coz objects has been modified", latest.Namespace, latest.Name)
+				if err := c.resetAddonStatus(ctx, addon); err != nil {
 					c.logger.Error("failed retry updating ", updating.Namespace, updating.Name, " lifecycle status ", err)
-					// workaround
-					return nil
 				}
 			}
 		default:
@@ -169,8 +165,52 @@ func (c *Controller) updateAddonStatus(ctx context.Context, updating *addonv1.Ad
 			return err
 		}
 	}
-	msg := fmt.Sprintf("successfully updated addon %s status", key)
+	msg := fmt.Sprintf("successfully updated addon %s status", updating.Name)
 	c.logger.Info(msg)
+	return nil
+}
+
+func (c *Controller) updateAddonLifeCycle(ctx context.Context, namespace, name string, prereqphase, installphase *addonv1.ApplicationAssemblyPhase, reason string) error {
+	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("[updateAddonLifeCycle] failed get addon %s/%s ", namespace, name)
+	}
+	updating := latest.DeepCopy()
+	if prereqphase != nil {
+		updating.Status.Lifecycle.Prereqs = *prereqphase
+	}
+	if installphase != nil {
+		updating.Status.Lifecycle.Installed = *installphase
+	}
+	if len(reason) > 0 {
+		updating.Status.Reason = reason
+	}
+
+	_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
+	if err != nil {
+		switch {
+		case errors.IsNotFound(err):
+			msg := fmt.Sprintf("Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
+			c.logger.Error(msg)
+			return fmt.Errorf(msg)
+		case strings.Contains(err.Error(), "the object has been modified"):
+			if latest.Status.Lifecycle.Installed != addonv1.Deleting { // edge case: latest is in an error status, skip retry
+				c.logger.Warnf("[updateAddonLifeCycle] retry updating %s/%s coz objects has been modified", latest.Namespace, latest.Name)
+				if err := c.updateAddonLifeCycle(ctx, namespace, name, prereqphase, installphase, reason); err != nil {
+					c.logger.Error("failed retry updating ", updating.Namespace, updating.Name, " lifecycle status ", err)
+				}
+			}
+		default:
+			c.logger.Error("failed updating ", updating.Namespace, updating.Name, " status err ", err)
+			return err
+		}
+	}
+
+	fetched, err := c.addoncli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("[updateAddonLifeCycle] failed get addon %s/%s ", namespace, name)
+	}
+	c.logger.Infof("successfully updated addon %s status %s", name, fetched.Status.Lifecycle.Installed)
 	return nil
 }
 
@@ -196,33 +236,54 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 	return nil
 }
 
-func (c *Controller) updateAddonStatusOnly(ctx context.Context, updated *addonv1.Addon) error {
-	_, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).UpdateStatus(ctx, updated,
-		metav1.UpdateOptions{})
-	if err != nil {
-		msg := fmt.Sprintf("failed updating addon %s/%s status only. err %v", updated.Namespace, updated.Name, err)
-		c.logger.Error(msg)
-		return fmt.Errorf(msg)
+func (c *Controller) mergeResources(res1, res2 []addonv1.ObjectStatus) []addonv1.ObjectStatus {
+	merged := []addonv1.ObjectStatus{}
+	check := make(map[string]addonv1.ObjectStatus)
+	mix := append(res1, res2...)
+	for _, obj := range mix {
+		id := fmt.Sprintf("%s-%s-%s", strings.TrimSpace(obj.Name), strings.TrimSpace(obj.Kind), strings.TrimSpace(obj.Group))
+		check[id] = obj
 	}
-	return nil
+	for _, obj := range check {
+		merged = append(merged, obj)
+	}
+	return merged
 }
 
 func (c *Controller) updateAddonStatusResources(ctx context.Context, key string, resource addonv1.ObjectStatus) error {
-	addon, err := c.getAddon(ctx, key)
+	info := strings.Split(key, "/")
+	ns, name := info[0], info[1]
+	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		msg := fmt.Sprintf("failed finding addon %s err %v.", key, err)
 		c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
+	updating := latest.DeepCopy()
 
-	// fix me : if the addon already completed, ignore resource update
-	updating := addon.DeepCopy()
-
-	c.logger.Info("existing resources --", addon.Status.Resources)
+	c.logger.Info(" addon ", updating.Namespace, "/", updating.Name, " new resources -- ", resource, " existing resources -- ", updating.Status.Resources)
 	newResources := []addonv1.ObjectStatus{resource}
-	newResources = append(newResources, addon.Status.Resources...)
-	updating.Status.Resources = newResources
+	updating.Status.Resources = c.mergeResources(newResources, updating.Status.Resources)
+	var errs []error
+	if _, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating,
+		metav1.UpdateOptions{}); err != nil {
+		switch {
+		case errors.IsNotFound(err):
+			return err
+		case strings.Contains(err.Error(), "the object has been modified"):
+			c.logger.Warnf("retry updateAddonStatusResources %s  coz the object has been modified", resource)
+			if err := c.updateAddonStatusResources(ctx, key, resource); err != nil {
+				errs = append(errs, fmt.Errorf("[updateAddonStatusResources] failed to update addon %s/%s status: %w", updating.Namespace,
+					updating.Name, err))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("[updateAddonStatusResources] default failed to update addon %s/%s status: %w", updating.Namespace,
+				updating.Name, err))
+		}
+	}
 
-	c.logger.Info("updated resources --", updating.Status.Resources)
-	return c.updateAddonStatusOnly(ctx, addon)
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("failed updating addon resources %#v", errs)
 }

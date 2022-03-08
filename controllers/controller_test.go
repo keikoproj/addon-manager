@@ -161,18 +161,11 @@ func TestAddonInstall(t *testing.T) {
 	processed := addonController.processNextItem(ctx)
 	Expect(processed).To(BeTrue())
 
-	// generate workflow and update addon status
-	var objects []runtime.Object
-	wfcli := wfclientsetfake.NewSimpleClientset(objects...)
-	err = generateWorkflow(wfcli, testNamespace)
-	Expect(err).To(BeNil())
-
 	// verify addon checksum
 	logger.Info("fetching Addon")
 	fetchedAddon, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, testAddon, metav1.GetOptions{})
 	Expect(err).To(BeNil())
 	Expect(fetchedAddon).NotTo(BeNil())
-
 	logger.Info("verifying Addon finalizer and checksum")
 	// verify finalizer is set
 	Expect(fetchedAddon.ObjectMeta.Finalizers).NotTo(BeZero())
