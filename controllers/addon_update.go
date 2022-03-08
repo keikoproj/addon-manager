@@ -206,11 +206,13 @@ func (c *Controller) updateAddonLifeCycle(ctx context.Context, namespace, name s
 		}
 	}
 
-	fetched, err := c.addoncli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("[updateAddonLifeCycle] failed get addon %s/%s ", namespace, name)
+	if prereqphase != nil {
+		c.logger.Infof("successfully updated addon %s prereqp to status  %s", name, *prereqphase)
 	}
-	c.logger.Infof("successfully updated addon %s status %s", name, fetched.Status.Lifecycle.Installed)
+	if installphase != nil {
+		c.logger.Infof("successfully updated addon %s install to status  %s", name, *installphase)
+	}
+
 	return nil
 }
 
