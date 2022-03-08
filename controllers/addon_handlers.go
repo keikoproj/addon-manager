@@ -16,7 +16,7 @@ import (
 )
 
 func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Addon) error {
-	c.logger.Info("creating addon ", addon.Namespace, "/", addon.Name)
+	c.logger.Info("[handleAddonCreation] addon ", addon.Namespace, "/", addon.Name)
 
 	var wfl = workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
 
@@ -167,8 +167,21 @@ func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Add
 	return nil
 }
 
+func (c *Controller) removeFromCache(addonName string) {
+	// Remove version from cache
+	if ok, v := c.versionCache.HasVersionName(addonName); ok {
+		c.versionCache.RemoveVersion(v.PkgName, v.PkgVersion)
+	}
+}
+
+func (c *Controller) namespacenameFromKey(key string) (string, string) {
+	info := strings.Split(key, "/")
+	ns, name := info[0], info[1]
+	return ns, name
+}
+
 func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
-	c.logger.Info("processing addon ", addon.Namespace, "/", addon.Name)
+	c.logger.Info("[createAddon]] addon ", addon.Namespace, "/", addon.Name)
 
 	addon.Status = addonv1.AddonStatus{
 		StartTime: common.GetCurretTimestamp(),
@@ -181,7 +194,7 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 	}
 	_, addon.Status.Checksum = c.validateChecksum(addon)
 
-	// Set finalizer only after addon is valid
+	// Set finalizer because it is from managed namespace
 	if err := c.SetFinalizer(ctx, addon, addonapiv1.FinalizerName); err != nil {
 		reason := fmt.Sprintf("Addon %s/%s could not add finalizer. %v", addon.Namespace, addon.Name, err)
 		c.recorder.Event(addon, "Warning", "Failed", reason)
@@ -375,20 +388,9 @@ func (c *Controller) SetFinalizer(ctx context.Context, addon *addonv1.Addon, fin
 			if err := c.updateAddon(ctx, addon); err != nil {
 				c.logger.Error("failed setting addon ", addon.Namespace, addon.Name, " finalizer, err :", err)
 				if strings.Contains(err.Error(), "the object has been modified") {
-					c.logger.Info("[SetFinalizer] retry updating object.")
-					latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
-					if err != nil {
-						c.logger.Error("[SetFinalizer] failed retrieving addon ", addon.Namespace, addon.Name, " err :", err)
-						return err
-					}
-					if common.ContainsString(addon.ObjectMeta.Finalizers, finalizerName) {
-						c.logger.Info("[SetFinalizer] addon ", addon.Namespace, "/", addon.Name, " already set finalizer.")
-						return nil
-					}
-					addon = latest.DeepCopy()
-					addon.ObjectMeta.Finalizers = append(addon.ObjectMeta.Finalizers, finalizerName)
-					if _, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{}); err != nil {
-						c.logger.Error("[handleAddonDeletion] failed retry updating ", addon.Namespace, addon.Name, " finalizer err ", err)
+					c.logger.Warn("[SetFinalizer] retry updating because the object has been modified.")
+					if err := c.SetFinalizer(ctx, addon, finalizerName); err != nil {
+						c.logger.Warnf("failed setting addon %s finalizer %v", addon.Name, err)
 						return err
 					}
 				}

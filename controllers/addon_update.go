@@ -14,30 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func (c *Controller) getAddon(ctx context.Context, key string) (*addonv1.Addon, error) {
-	// optimize me trigger addon informer events
-	obj, exists, err := c.informer.GetIndexer().GetByKey(key)
-	if err != nil || !exists {
-		c.logger.Warnf("[getAddon] failed getting addon(key) %s err %#v", key, err)
-		info := strings.Split(key, "/")
-		ns, name := info[0], info[1]
-		addon, err := c.addoncli.AddonmgrV1alpha1().Addons(ns).Get(ctx, name, metav1.GetOptions{})
-		if err != nil || addon == nil {
-			msg := fmt.Sprintf("[getAddon] failed getting addon(namespace/name) %s, err %v", key, err)
-			c.logger.Error(msg)
-			return nil, fmt.Errorf(msg)
-		}
-		return addon, nil
-	}
-	latest, err := common.FromUnstructured(obj.(*unstructured.Unstructured))
-	if err != nil {
-		msg := fmt.Sprintf("failed converting %s un to addon,  err %v", key, err)
-		c.logger.Error(msg)
-		return nil, fmt.Errorf(msg)
-	}
-	return latest, nil
-}
-
 func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, name string, lifecycle string, lifecyclestatus wfv1.WorkflowPhase) error {
 	c.logger.Info("updating addon ", namespace, "/", name, " ", lifecycle, " status to ", lifecyclestatus)
 
@@ -216,6 +192,7 @@ func (c *Controller) updateAddonLifeCycle(ctx context.Context, namespace, name s
 	return nil
 }
 
+// update the whole addon object, the apply should be cautious
 func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) error {
 	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
 	if err != nil {

@@ -748,7 +748,6 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 		c.logger.Errorf("Error processing %s (will retry): %v", newEvent.(Event).key, err)
 		c.queue.AddRateLimited(newEvent)
 	} else {
-		// err != nil and too many retries
 		c.logger.Errorf("Error processing %s (giving up): %v", newEvent.(Event).key, err)
 		c.queue.Forget(newEvent)
 		utilruntime.HandleError(err)
@@ -768,6 +767,8 @@ func (c *Controller) processItem(ctx context.Context, newEvent Event) error {
 			return nil
 		}
 		msg := fmt.Sprintf("event %s obj %s does not exist", newEvent.eventType, newEvent.key)
+		_, addonName := c.namespacenameFromKey(newEvent.key)
+		c.removeFromCache(addonName)
 		c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
