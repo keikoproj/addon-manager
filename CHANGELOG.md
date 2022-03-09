@@ -1,6 +1,21 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.5.0"></a>
+## [v0.5.0] - 2022-03-08
+### Fixed
+- Build Fix (#102)
+### Changed
+- Upgrade to Go 1.17+ (#116)
+- Upgrade Kubernetes APIs (apimachinery, api, etc.) to 0.21 (#116)
+- Upgrade Argo to v3.2.6 (#116)
+- move api/v1alpha1 to api/addon/v1alpha1; add "comment marker" (#116)
+- use code-generator generate API(s) clientset/informer/listers and put into pkg/client directory. (#116)
+- add code-generator into Makefile generate (#116)
+- update build badge to use GitHub Action status (#109)
+- Migrate to GitHub Actions to gate PRs. (#105)
+- bumps actions/checkout from 2 to 3 (#119)
+
 <a name="v0.4.3"></a>
 ## [v0.4.3] - 2021-07-15
 ### Fixed
