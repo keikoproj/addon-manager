@@ -6,7 +6,6 @@
 ### Fixed
 - Build Fix (#102)
 ### Changed
-- setup github actions as ci replacement.
 - Upgrade to Go 1.17+ (#116)
 - Upgrade Kubernetes APIs (apimachinery, api, etc.) to 0.21 (#116)
 - Upgrade Argo to v3.2.6 (#116)
