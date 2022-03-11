@@ -324,7 +324,7 @@ func Start(ctx context.Context, namespace string, kubeClient kubernetes.Interfac
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	go c.Run(ctx, stopCh)
+	c.Run(ctx, stopCh)
 
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, syscall.SIGTERM)
@@ -704,6 +704,8 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	go c.cronjobinformer.Run(stopCh)
 	go c.replicaSetinformer.Run(stopCh)
 	go c.daemonSetinformer.Run(stopCh)
+	go c.srvinformer.Run(ctx.Done())
+	go c.daemonSetinformer.Run(ctx.Done())
 
 	if !cache.WaitForCacheSync(stopCh, c.HasSynced, c.wfinformer.HasSynced) {
 		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
@@ -711,7 +713,10 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	}
 
 	c.logger.Info("Keiko addon-manager controller synced and ready")
-	wait.Until(c.runWorker, time.Second, stopCh)
+	for i := 0; i < 5; i++ {
+		go wait.Until(c.runWorker, time.Second, stopCh)
+	}
+	<-stopCh
 }
 
 // HasSynced is required for the cache.Controller interface.

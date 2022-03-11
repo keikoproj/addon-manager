@@ -23,19 +23,18 @@ func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Add
 	err := c.createAddon(ctx, addon, wfl)
 	if err != nil {
 		c.logger.Error("failed creating addon err :", err)
-		return err
 	}
 
 	c.addAddonToCache(addon)
 
-	return nil
+	return err
 }
 
 func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon) error {
 	c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name)
 
 	// restrict check : re-do dependency check only if never completed
-	if !addon.Status.Lifecycle.Installed.Completed() {
+	if addon.Status.Lifecycle.Installed.DepPending() {
 		ready, err := c.isDependenciesReady(ctx, addon)
 		if err != nil || !ready {
 			return fmt.Errorf("addon %s/%s dependency is not ready", addon.Namespace, addon.Name)

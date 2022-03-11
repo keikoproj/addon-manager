@@ -33,8 +33,15 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 		return fmt.Errorf(msg)
 	}
 	updating := latest.DeepCopy()
-
 	prevStatus := latest.Status
+
+	// addon being deletion, skip non-delete wf update
+	if lifecycle != "delete" &&
+		prevStatus.Lifecycle.Installed == addonv1.Deleting {
+		c.logger.Infof("[updateAddonStatusLifecycle] %s/%s is being deleting and delete wf not completed. skip update.", namespace, name)
+		return nil
+	}
+
 	newStatus := addonv1.AddonStatus{
 		Lifecycle: addonv1.AddonStatusLifecycle{},
 		Resources: []addonv1.ObjectStatus{},
