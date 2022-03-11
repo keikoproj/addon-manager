@@ -24,5 +24,5 @@ const (
 	ResourceDefaultOwnLabel      = "app.kubernetes.io/name"
 	ResourceDefaultPartLabel     = "app.kubernetes.io/part-of"
 
-	TTL = time.Duration(3) * time.Hour // 1 hour
+	TTL = time.Duration(1) * time.Hour // 1 hour
 )
