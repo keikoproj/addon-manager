@@ -827,7 +827,6 @@ func (c *Controller) initController(ctx context.Context) error {
 				if item.Status.Lifecycle.Installed.Succeeded() {
 					item.Status.Reason = ""
 				}
-
 				// mark complete label
 				if item.Status.Lifecycle.Installed.Completed() {
 					labels := item.GetLabels()
@@ -841,6 +840,14 @@ func (c *Controller) initController(ctx context.Context) error {
 			} else {
 				// error case the install wf does not exist
 				c.logger.Warnf("[initController] failed get addon %s/%s install wf", item.Namespace, item.Name)
+				if item.Status.Lifecycle.Installed.Completed() {
+					labels := item.GetLabels()
+					if labels == nil {
+						labels = map[string]string{}
+					}
+					labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
+					item.SetLabels(labels)
+				}
 			}
 		} else if item.Spec.Lifecycle.Prereqs.Template != "" {
 			wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", item.Name, "prereqs", item.CalculateChecksum())

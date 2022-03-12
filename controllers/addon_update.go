@@ -215,7 +215,7 @@ func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon
 	}
 
 	updated, err := c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
-	if err != nil {
+	if err != nil || updated == nil {
 		switch {
 		case errors.IsNotFound(err):
 			msg := fmt.Sprintf("[updateAddonStatus] Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
@@ -282,15 +282,17 @@ func (c *Controller) updateAddonLifeCycle(ctx context.Context, namespace, name s
 	return nil
 }
 
-func (c *Controller) mergeLabels(old, new map[string]string) map[string]string {
-	merged := map[string]string{}
-	for k, v := range old {
-		merged[k] = v
+func (c *Controller) mergeLabels(old, new map[string]string, merged map[string]string) {
+	if old != nil {
+		for k, v := range old {
+			merged[k] = v
+		}
 	}
-	for k, v := range new {
-		merged[k] = v
+	if new != nil {
+		for k, v := range new {
+			merged[k] = v
+		}
 	}
-	return merged
 }
 
 func (c *Controller) mergeFinlizer(old, new []string) []string {
@@ -328,7 +330,8 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) (*
 		// update object metata only
 		updating := latest.DeepCopy()
 		updating.ObjectMeta.Finalizers = c.mergeFinlizer(latest.Finalizers, updated.Finalizers)
-		updating.ObjectMeta.Labels = c.mergeLabels(latest.Labels, updated.Labels)
+		updating.ObjectMeta.Labels = map[string]string{}
+		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
 		_, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Update(ctx, updating,
 			metav1.UpdateOptions{})

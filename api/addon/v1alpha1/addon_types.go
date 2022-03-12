@@ -142,7 +142,8 @@ type ApplicationAssemblyPhase string
 const (
 	// Pending Used to indicate that not all of application's components have been deployed yet.
 	Init ApplicationAssemblyPhase = ""
-	// Pending Used to indicate that not all of application's components have been deployed yet.
+
+	// Pending Used to indicate that addon is pending - wf is pending etc.
 	Pending ApplicationAssemblyPhase = "Pending"
 	// Succeeded Used to indicate that all of application's components have already been deployed.
 	Succeeded ApplicationAssemblyPhase = "Succeeded"
@@ -154,7 +155,7 @@ const (
 	DepPending ApplicationAssemblyPhase = "DepPending"
 	// DepPending indicates Dep package is not installed
 	DepNotInstalled ApplicationAssemblyPhase = "DepNotInstalled"
-	// ValidationFailed Used to indicate validation failed: dep package not installed at all
+	// ValidationFailed Used to indicate validation failed: duplicate, invalid name etc
 	ValidationFailed ApplicationAssemblyPhase = "Validation Failed"
 
 	// Deleting Used to indicate that all application's components are being deleted.
