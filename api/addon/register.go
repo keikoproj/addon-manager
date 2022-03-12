@@ -25,4 +25,8 @@ const (
 	ResourceDefaultPartLabel     = "app.kubernetes.io/part-of"
 
 	TTL = time.Duration(1) * time.Hour // 1 hour
+
+	// complete status
+	AddonCompleteLabel   = "addons.addonmgr.keikoproj.io/completed"
+	AddonCompleteTrueKey = "true"
 )

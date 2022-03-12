@@ -505,6 +505,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 		DeleteFunc: func(obj interface{}) {
 			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			newEvent.eventType = "delete"
+			logrus.WithField("controllers", "ConfigMap").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
 			c.handleConfigMapDeletion(ctx, obj)
 		},
 	})
@@ -530,6 +531,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 		DeleteFunc: func(obj interface{}) {
 			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			newEvent.eventType = "delete"
+			logrus.WithField("controllers", "ClusterRole").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
 			c.handleClusterRoleDeletion(ctx, obj)
 		},
 	})
@@ -555,6 +557,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 		DeleteFunc: func(obj interface{}) {
 			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			newEvent.eventType = "delete"
+			logrus.WithField("controllers", "ClusterRoleBinding").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
 			c.handleClusterRoleBindingDeletion(ctx, obj)
 		},
 	})
@@ -674,6 +677,7 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 
 	c.informer = newAddonInformer(ctx, c.dynCli, c.namespace)
 	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
+
 	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
 	c.nsinformer = resourceInformers["namespace"]
 	c.deploymentinformer = resourceInformers["deployment"]
@@ -705,9 +709,12 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	go c.replicaSetinformer.Run(stopCh)
 	go c.daemonSetinformer.Run(stopCh)
 	go c.srvinformer.Run(ctx.Done())
-	go c.daemonSetinformer.Run(ctx.Done())
+	go c.replicaSetinformer.Run(stopCh)
+	go c.srvinformer.Run(stopCh)
 
-	if !cache.WaitForCacheSync(stopCh, c.HasSynced, c.wfinformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, c.HasSynced, c.wfinformer.HasSynced, c.nsinformer.HasSynced, c.deploymentinformer.HasSynced,
+		c.srvAcntinformer.HasSynced, c.configMapinformer.HasSynced, c.clusterRoleinformer.HasSynced, c.clusterRoleBindingInformer.HasSynced,
+		c.replicaSetinformer.HasSynced, c.daemonSetinformer.HasSynced) {
 		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 		return
 	}
