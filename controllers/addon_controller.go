@@ -86,6 +86,7 @@ type Controller struct {
 	versionCache addoninternal.VersionCacheClient
 }
 
+// compose addon informer
 func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string) cache.SharedIndexInformer {
 	resource := schema.GroupVersionResource{
 		Group:    addonapiv1.Group,
@@ -108,6 +109,7 @@ func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace s
 	return informer
 }
 
+// addon dependent resources informers
 func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, namespace string) map[string]cache.SharedIndexInformer {
 	resourceInformers := make(map[string]cache.SharedIndexInformer)
 	// addon resources namespace informers
@@ -356,8 +358,8 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
 			newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "addon").Infof("Processing add to %v: %s", resourceType, newEvent.key)
 			if err == nil {
+				logrus.WithField("controllers", "addon").Infof("Processing add to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
 		},
@@ -365,8 +367,8 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
 			newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "addon").Infof("Processing update to %v: %s", resourceType, newEvent.key)
 			if err == nil {
+				logrus.WithField("controllers", "addon").Infof("Processing update to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
 		},
@@ -374,8 +376,8 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			newEvent.eventType = "delete"
 
-			logrus.WithField("controllers", "addon").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
 			if err == nil {
+				logrus.WithField("controllers", "addon").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
 		},
@@ -384,281 +386,359 @@ func (c *Controller) setupaddonhandlers() {
 
 func (c *Controller) setupwfhandlers(ctx context.Context) {
 	var newEvent Event
-	var err error
 	resourceType := "workflow"
 
 	c.wfinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "workflow").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleWorkFlowAdd(ctx, obj)
+				logrus.WithField("controllers", "workflow").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleWorkFlowAdd(ctx, obj)
+			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "workflow").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleWorkFlowUpdate(ctx, new)
-
+				logrus.WithField("controllers", "workflow").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleWorkFlowUpdate(ctx, new)
+			}
 		},
 	})
-	fmt.Printf("%v", err)
 }
 
 func (c *Controller) setupresourcehandlers(ctx context.Context) {
 	var newEvent Event
-	var err error
-	resourceType := "namespace"
 
+	resourceType := "namespace"
 	c.nsinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-
-			logrus.WithField("controllers", "namespace").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleNamespaceAdd(ctx, obj)
-
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				logrus.WithField("controllers", "namespace").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleNamespaceAdd(ctx, obj)
+			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "namespace").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleNamespaceUpdate(ctx, new)
-
+				logrus.WithField("controllers", "namespace").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleNamespaceUpdate(ctx, new)
+			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "delete"
-			c.handleNamespaceDeletion(ctx, obj)
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "delete"
+				c.handleNamespaceDeletion(ctx, obj)
+			}
 		},
 	})
 
 	resourceType = "deployment"
 	c.deploymentinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "deployment").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleDeploymentAdd(ctx, obj)
-
+				logrus.WithField("controllers", "deployment").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleDeploymentAdd(ctx, obj)
+			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "deployment").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleDeploymentUpdate(ctx, new)
-
+				logrus.WithField("controllers", "deployment").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleDeploymentUpdate(ctx, new)
+			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "delete"
-			c.handleDeploymentDeletion(ctx, obj)
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "delete"
+				c.handleDeploymentDeletion(ctx, obj)
+			}
 		},
 	})
 
 	resourceType = "ServiceAccount"
 	c.srvAcntinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "ServiceAccount").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleServiceAccountAdd(ctx, obj)
+				logrus.WithField("controllers", "ServiceAccount").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleServiceAccountAdd(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "ServiceAccount").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleServiceAccountUpdate(ctx, new)
+				logrus.WithField("controllers", "ServiceAccount").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleServiceAccountUpdate(ctx, new)
+			}
 
 		},
 		DeleteFunc: func(obj interface{}) {
-			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "delete"
-			c.handleServiceAccountDeletion(ctx, obj)
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "delete"
+				c.handleServiceAccountDeletion(ctx, obj)
+			}
 		},
 	})
 
 	resourceType = "ConfigMap"
 	c.configMapinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "ConfigMap").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleConfigMapAdd(ctx, obj)
+				logrus.WithField("controllers", "ConfigMap").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleConfigMapAdd(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "ConfigMap").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleConfigMapUpdate(ctx, new)
+				logrus.WithField("controllers", "ConfigMap").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleConfigMapUpdate(ctx, new)
+			}
 
 		},
 		DeleteFunc: func(obj interface{}) {
-			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "delete"
-			logrus.WithField("controllers", "ConfigMap").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
-			c.handleConfigMapDeletion(ctx, obj)
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "delete"
+				logrus.WithField("controllers", "ConfigMap").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
+				c.handleConfigMapDeletion(ctx, obj)
+			}
 		},
 	})
 
 	resourceType = "ClusterRole"
 	c.clusterRoleinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "ClusterRole").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleClusterRoleAdd(ctx, obj)
-
+				logrus.WithField("controllers", "ClusterRole").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleClusterRoleAdd(ctx, obj)
+			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "ClusterRole").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleClusterRoleUpdate(ctx, new)
+				logrus.WithField("controllers", "ClusterRole").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleClusterRoleUpdate(ctx, new)
+			}
 
 		},
 		DeleteFunc: func(obj interface{}) {
-			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "delete"
-			logrus.WithField("controllers", "ClusterRole").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
-			c.handleClusterRoleDeletion(ctx, obj)
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "delete"
+				logrus.WithField("controllers", "ClusterRole").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
+				c.handleClusterRoleDeletion(ctx, obj)
+			}
 		},
 	})
 
 	resourceType = "ClusterRoleBinding"
 	c.clusterRoleBindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "ClusterRoleBinding").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleClusterRoleBindingAdd(ctx, obj)
+				logrus.WithField("controllers", "ClusterRoleBinding").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleClusterRoleBindingAdd(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "ClusterRoleBinding").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleClusterRoleBindingUpdate(ctx, new)
+				logrus.WithField("controllers", "ClusterRoleBinding").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleClusterRoleBindingUpdate(ctx, new)
+			}
 
 		},
 		DeleteFunc: func(obj interface{}) {
-			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "delete"
-			logrus.WithField("controllers", "ClusterRoleBinding").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
-			c.handleClusterRoleBindingDeletion(ctx, obj)
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "delete"
+				logrus.WithField("controllers", "ClusterRoleBinding").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
+				c.handleClusterRoleBindingDeletion(ctx, obj)
+			}
 		},
 	})
 
 	resourceType = "Job"
 	c.jobinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "Job").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleJobAdd(ctx, obj)
+				logrus.WithField("controllers", "Job").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleJobAdd(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "Job").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleJobAdd(ctx, new)
+				logrus.WithField("controllers", "Job").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleJobAdd(ctx, new)
+			}
 		},
 	})
 
 	resourceType = "CronJob"
 	c.cronjobinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "CronJob").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleCronJobAdd(ctx, obj)
+				logrus.WithField("controllers", "CronJob").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleCronJobAdd(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "CronJob").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleCronJobAdd(ctx, new)
+				logrus.WithField("controllers", "CronJob").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleCronJobAdd(ctx, new)
+			}
 		},
 	})
 
 	resourceType = "DaemonSet"
 	c.daemonSetinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "DaemonSet").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleDaemonSet(ctx, obj)
+				logrus.WithField("controllers", "DaemonSet").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleDaemonSet(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "DaemonSet").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleDaemonSet(ctx, new)
+				logrus.WithField("controllers", "DaemonSet").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleDaemonSet(ctx, new)
+			}
 		},
 	})
 
 	resourceType = "ReplicaSet"
 	c.replicaSetinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "ReplicaSet").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleReplicaSet(ctx, obj)
+				logrus.WithField("controllers", "ReplicaSet").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleReplicaSet(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "ReplicaSet").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleReplicaSet(ctx, new)
+				logrus.WithField("controllers", "ReplicaSet").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleReplicaSet(ctx, new)
+			}
 		},
 	})
 
 	resourceType = "StatefulSet"
 	c.statefulSetinformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
 
-			logrus.WithField("controllers", "StatefulSet").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-			c.handleStatefulSet(ctx, obj)
+				logrus.WithField("controllers", "StatefulSet").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleStatefulSet(ctx, obj)
+			}
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
+			key, err := cache.MetaNamespaceKeyFunc(old)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
 
-			logrus.WithField("controllers", "StatefulSet").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-			c.handleStatefulSet(ctx, new)
+				logrus.WithField("controllers", "StatefulSet").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleStatefulSet(ctx, new)
+			}
 		},
 	})
-
-	fmt.Print(err)
 }
 
 // Run starts the addon-controllers controller
@@ -734,11 +814,6 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 // HasSynced is required for the cache.Controller interface.
 func (c *Controller) HasSynced() bool {
 	return c.informer.HasSynced()
-}
-
-// LastSyncResourceVersion is required for the cache.Controller interface.
-func (c *Controller) LastSyncResourceVersion() string {
-	return c.informer.LastSyncResourceVersion()
 }
 
 func (c *Controller) runWorker() {

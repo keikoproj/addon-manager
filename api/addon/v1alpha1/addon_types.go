@@ -413,15 +413,6 @@ func (p ApplicationAssemblyPhase) Completed() bool {
 	}
 }
 
-func (p ApplicationAssemblyPhase) Processing() bool {
-	switch p {
-	case Pending, Running:
-		return true
-	default:
-		return false
-	}
-}
-
 func (p ApplicationAssemblyPhase) Deleting() bool {
 	switch p {
 	case Deleting:
