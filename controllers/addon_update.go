@@ -158,6 +158,39 @@ func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon)
 	return nil
 }
 
+func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
+	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
+	if err != nil {
+		msg := fmt.Sprintf("failed finding addon %s err %v.", addon.Name, err)
+		c.logger.Error(msg)
+		return fmt.Errorf(msg)
+	}
+	updating := latest.DeepCopy()
+	updating.Status = addon.Status
+
+	_, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
+	if err != nil {
+		switch {
+		case errors.IsNotFound(err):
+			msg := fmt.Sprintf("[updateAddonStatus] Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
+			c.logger.Error(msg)
+			return fmt.Errorf(msg)
+		case strings.Contains(err.Error(), "the object has been modified"):
+			c.logger.Warnf("[updateAddonStatus] retry updating %s/%s coz objects has been modified", latest.Namespace, latest.Name)
+			if err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("[updateAddonStatus] failed retry updating ", updating.Namespace, updating.Name, " lifecycle status ", err)
+			}
+
+		default:
+			c.logger.Error("[updateAddonStatus] failed updating ", updating.Namespace, updating.Name, " status err ", err)
+			return err
+		}
+	}
+	msg := fmt.Sprintf("[updateAddonStatus] successfully updated addon %s status", updating.Name)
+	c.logger.Info(msg)
+	return nil
+}
+
 func (c *Controller) updateAddonLifeCycle(ctx context.Context, namespace, name string, prereqphase, installphase *addonv1.ApplicationAssemblyPhase, reason string) error {
 	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -214,6 +247,7 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		c.logger.Error(msg)
 		return err
 	} else {
+
 		if reflect.DeepEqual(updated, latest) {
 			c.logger.Infof("latest and updated addon %s/%s is the same, skip updating", updated.Namespace, updated.Name)
 			return nil
