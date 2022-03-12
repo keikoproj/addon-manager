@@ -38,11 +38,12 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 		return fmt.Errorf(msg)
 	}
 	updating := latest.DeepCopy()
+	prevStatus := latest.Status
+	fmt.Printf(" prevStatus.Lifecycle.Installed %s", prevStatus.Lifecycle.Installed)
 	if c.isAddonCompleted(updating) {
-		c.logger.Infof("[updateAddonStatusLifecycle] addon %s/%s completed. skip.", namespace, name)
+		c.logger.Infof("[updateAddonStatusLifecycle] addon %s/%s completed, but not deleting. skip.", namespace, name)
 		return nil
 	}
-	prevStatus := latest.Status
 
 	// addon being deletion, skip non-delete wf update
 	if lifecycle != "delete" &&
@@ -56,6 +57,9 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 		Resources: []addonv1.ObjectStatus{},
 	}
 	newStatus.Reason = prevStatus.Reason
+	newStatus.Resources = append(newStatus.Resources, prevStatus.Resources...)
+	newStatus.Checksum = prevStatus.Checksum
+	newStatus.StartTime = prevStatus.StartTime
 	if lifecycle == "prereqs" {
 		newStatus.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 		newStatus.Lifecycle.Installed = prevStatus.Lifecycle.Installed
@@ -65,10 +69,26 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 		if addonv1.ApplicationAssemblyPhase(lifecyclestatus) == addonv1.Succeeded {
 			newStatus.Reason = ""
 		}
+
+		// check whether need patch complete
+		if lifecycle == "install" && newStatus.Lifecycle.Installed.Completed() {
+			c.logger.Infof("[updateAddonStatusLifecycle] %s/%s completed. patch complete label.",
+				updating.Namespace, updating.Name)
+			labels := updating.GetLabels()
+			if labels == nil {
+				labels = map[string]string{}
+			}
+			labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
+			updating.SetLabels(labels)
+
+			updating.Status = newStatus
+			if _, err := c.updateAddon(ctx, updating); err != nil {
+				c.logger.Errorf("updateAddonStatusLifecycle %s/%s update complete failed.", namespace, name)
+				return err
+			}
+			return nil
+		}
 	}
-	newStatus.Resources = append(newStatus.Resources, prevStatus.Resources...)
-	newStatus.Checksum = prevStatus.Checksum
-	newStatus.StartTime = prevStatus.StartTime
 	updating.Status = newStatus
 
 	if lifecycle == "delete" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {

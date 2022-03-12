@@ -924,7 +924,9 @@ func (c *Controller) initController(ctx context.Context) error {
 					item.SetLabels(labels)
 				}
 			}
-		} else if item.Spec.Lifecycle.Prereqs.Template != "" {
+		}
+
+		if item.Spec.Lifecycle.Prereqs.Template != "" {
 			wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", item.Name, "prereqs", item.CalculateChecksum())
 			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, meta_v1.GetOptions{})
 			if err == nil && wf != nil {

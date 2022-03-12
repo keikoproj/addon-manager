@@ -158,8 +158,11 @@ func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Add
 
 		c.logger.Info("[handleAddonDeletion] addon ", addon.GetNamespace(), "/", addon.GetName(), " does not have install template. remove finalizer directly.")
 		c.removeFinalizer(addon)
-		_, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{})
-		if err != nil {
+		c.unLabelComplete(addon)
+
+		retry := 1
+		for retry < 10 {
+			_, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{})
 			switch {
 			case errors.IsNotFound(err):
 				msg := fmt.Sprintf("[handleAddonDeletion] Addon %s/%s is not found. %v", addon.Namespace, addon.Name, err)
@@ -167,17 +170,14 @@ func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Add
 				return fmt.Errorf(msg)
 			case strings.Contains(err.Error(), "the object has been modified"):
 				c.logger.Info("[handleAddonDeletion] retry updating object for deleted addon.")
-				if _, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{}); err != nil {
-					c.logger.Error("[handleAddonDeletion] failed retry updating ", addon.Namespace, addon.Name, " lifecycle status err ", err)
-					return err
-				}
+				retry++
 			default:
 				c.logger.Error("[handleAddonDeletion] failed updating ", addon.Namespace, addon.Name, " lifecycle status err ", err)
 				return err
 			}
 		}
 
-		err = c.Finalize(ctx, addon, wfl)
+		err := c.Finalize(ctx, addon, wfl)
 		if err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", addon.Namespace, addon.Name, err)
 			c.recorder.Event(addon, "Warning", "Failed", reason)
@@ -461,6 +461,14 @@ func (c *Controller) Finalize(ctx context.Context, addon *addonv1.Addon, wfl wor
 func (c *Controller) removeFinalizer(addon *addonv1.Addon) {
 	if common.ContainsString(addon.ObjectMeta.Finalizers, addonapiv1.FinalizerName) {
 		addon.ObjectMeta.Finalizers = common.RemoveString(addon.ObjectMeta.Finalizers, addonapiv1.FinalizerName)
+	}
+}
+
+func (c *Controller) unLabelComplete(addon *addonv1.Addon) {
+	if _, ok := addon.GetLabels()[addonapiv1.AddonCompleteLabel]; ok {
+		labels := addon.GetLabels()
+		delete(labels, addonapiv1.AddonCompleteLabel)
+		addon.SetLabels(labels)
 	}
 }
 
