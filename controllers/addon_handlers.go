@@ -26,7 +26,13 @@ func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Add
 		return err
 	}
 	if deleting {
-		c.logger.Info("[handleAddonCreation]  ", addon.Namespace, "/", addon.Name, " being deletion.")
+		c.logger.Info("[handleAddonCreation]  ", addon.Namespace, "/", addon.Name, " being deletion. skip")
+		return nil
+	}
+
+	completed := c.isAddonCompleted(addon)
+	if completed {
+		c.logger.Info("[handleAddonCreation]  ", addon.Namespace, "/", addon.Name, " completed. skip")
 		return nil
 	}
 

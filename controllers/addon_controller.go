@@ -857,7 +857,7 @@ func (c *Controller) initController(ctx context.Context) error {
 			if item.Status.Lifecycle.Installed == addonv1.DepPending || item.Status.Lifecycle.Installed == addonv1.ValidationFailed {
 				c.logger.Warnf("[initController] addon %s/%s stuck on dependency.", item.Namespace, item.Name)
 			} else {
-				c.logger.Infof("[initController] addon %s/%s does not have prereqs/install.", item.Namespace, item.Name)
+				c.logger.Infof("[initController] addon %s/%s does not lifecycle.", item.Namespace, item.Name)
 				item.Status.Lifecycle.Installed = addonv1.Succeeded
 				item.Status.Reason = ""
 
@@ -871,11 +871,11 @@ func (c *Controller) initController(ctx context.Context) error {
 		}
 		_, err := c.updateAddon(ctx, &item)
 		if err != nil {
-			c.logger.Errorf("[initController] failed update addon %s/%s .", item.Namespace, item.Name)
+			c.logger.Errorf("[initController] failed patch addon %s/%s labels.", item.Namespace, item.Name)
 		}
-		c.logger.Infof("[initController] pre-press addon %s/%s successfully", item.Namespace, item.Name)
-		c.logger.Infof("[initController] add addon %s/%s into memory cache", item.Namespace, item.Name)
+		c.logger.Infof("[initController] pre-press addon %s/%s successfully. adding into cache.", item.Namespace, item.Name)
 		c.addAddonToCache(&item)
 	}
+	c.logger.Infof("initController pre-process end.")
 	return nil
 }
