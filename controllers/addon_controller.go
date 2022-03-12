@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
+	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 
 	"github.com/keikoproj/addon-manager/pkg/utils"
@@ -692,6 +693,10 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	c.replicaSetinformer = resourceInformers["replicaSet"]
 	c.statefulSetinformer = resourceInformers["statefulSet"]
 
+	if err := c.initController(ctx); err != nil {
+		c.logger.Errorf("[Run] pre-process addon(s) err %#v", err)
+	}
+
 	c.setupaddonhandlers()
 	c.setupwfhandlers(ctx)
 	c.setupresourcehandlers(ctx)
@@ -800,6 +805,77 @@ func (c *Controller) processItem(ctx context.Context, newEvent Event) error {
 		return c.handleAddonUpdate(ctx, addon)
 	case "delete":
 		return c.handleAddonDeletion(ctx, addon)
+	}
+	return nil
+}
+
+func (c *Controller) initController(ctx context.Context) error {
+	c.logger.Infof("initController pre-process addon every restart.")
+	addonList, err := c.addoncli.AddonmgrV1alpha1().Addons(c.namespace).List(ctx, meta_v1.ListOptions{})
+	if err != nil {
+		c.logger.Fatalf("failed list %s addons ", c.namespace)
+	}
+	for _, item := range addonList.Items {
+
+		// retrieve status from install wf
+		if item.Spec.Lifecycle.Install.Template != "" {
+			wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", item.Name, "install", item.CalculateChecksum())
+			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, meta_v1.GetOptions{})
+			if err == nil && wf != nil {
+				// align status
+				item.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(wf.Status.Phase)
+				if item.Status.Lifecycle.Installed.Succeeded() {
+					item.Status.Reason = ""
+				}
+
+				// mark complete label
+				if item.Status.Lifecycle.Installed.Completed() {
+					labels := item.GetLabels()
+					if labels == nil {
+						labels = map[string]string{}
+					}
+					labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
+					item.SetLabels(labels)
+				}
+				c.logger.Infof("[initController] addon %s/%s install status %s", item.Namespace, item.Name, item.Status.Lifecycle.Installed)
+			} else {
+				// error case the install wf does not exist
+				c.logger.Warnf("[initController] failed get addon %s/%s install wf", item.Namespace, item.Name)
+			}
+		} else if item.Spec.Lifecycle.Prereqs.Template != "" {
+			wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", item.Name, "prereqs", item.CalculateChecksum())
+			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, meta_v1.GetOptions{})
+			if err == nil && wf != nil {
+				// reset lifecycle status
+				item.Status.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(wf.Status.Phase)
+				c.logger.Infof("[initController] addon %s/%s prereqs status %s", item.Namespace, item.Name, item.Status.Lifecycle.Prereqs)
+			} else {
+				c.logger.Warnf("[initController] failed get addon %s/%s prereqs wf", item.Namespace, item.Name)
+			}
+		} else {
+			// might stuck on dependency
+			if item.Status.Lifecycle.Installed == addonv1.DepPending || item.Status.Lifecycle.Installed == addonv1.ValidationFailed {
+				c.logger.Warnf("[initController] addon %s/%s stuck on dependency.", item.Namespace, item.Name)
+			} else {
+				c.logger.Infof("[initController] addon %s/%s does not have prereqs/install.", item.Namespace, item.Name)
+				item.Status.Lifecycle.Installed = addonv1.Succeeded
+				item.Status.Reason = ""
+
+				labels := item.GetLabels()
+				if labels == nil {
+					labels = map[string]string{}
+				}
+				labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
+				item.SetLabels(labels)
+			}
+		}
+		_, err := c.updateAddon(ctx, &item)
+		if err != nil {
+			c.logger.Errorf("[initController] failed update addon %s/%s .", item.Namespace, item.Name)
+		}
+		c.logger.Infof("[initController] pre-press addon %s/%s successfully", item.Namespace, item.Name)
+		c.logger.Infof("[initController] add addon %s/%s into memory cache", item.Namespace, item.Name)
+		c.addAddonToCache(&item)
 	}
 	return nil
 }

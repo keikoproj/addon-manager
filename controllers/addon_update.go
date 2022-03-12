@@ -97,6 +97,8 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 		} // goes to branch line 114, update status only
 	}
 
+	var afterupdating *addonv1.Addon
+	patchLabel := false
 	if lifecycle == "install" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
 		c.logger.Infof("addon %s/%s completed. patch complete label.", namespace, name)
 		labels := updating.GetLabels()
@@ -105,15 +107,20 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 		}
 		labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
 		updating.SetLabels(labels)
-		if _, err := c.updateAddon(ctx, updating); err != nil {
+		afterupdating, err = c.updateAddon(ctx, updating)
+		if err != nil {
 			c.logger.Errorf("updateAddonStatusLifecycle failed label addon %s/%s completed err %#v", updating.Namespace, updating.Name, err)
 			return err
 		}
-		return nil
+		patchLabel = true
+	}
+
+	if patchLabel {
+		updating = afterupdating.DeepCopy()
 	}
 
 	if reflect.DeepEqual(prevStatus, updating.Status) {
-		msg := fmt.Sprintf("addon %s/%s status the same. skip update.", updating.Namespace, updating.Name)
+		msg := fmt.Sprintf("updateAddonStatusLifecycle addon %s/%s status the same. skip update.", updating.Namespace, updating.Name)
 		c.logger.Info(msg)
 		return nil
 	}
@@ -122,24 +129,23 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	if err != nil {
 		switch {
 		case errors.IsNotFound(err):
-			msg := fmt.Sprintf("Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
+			msg := fmt.Sprintf("updateAddonStatusLifecycle Addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
 			c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		case strings.Contains(err.Error(), "the object has been modified"):
-			c.logger.Info("retry updating object for workflow status change.")
+			c.logger.Warn("updateAddonStatusLifecycle retry updating object for workflow status change.")
 			if err := c.updateAddonStatusLifecycle(ctx, namespace, name, lifecycle, lifecyclestatus); err != nil {
-				c.logger.Error("failed updating ", updating.Namespace, "/", updating.Name, " lifecycle status ", err)
+				c.logger.Error("updateAddonStatusLifecycle failed updating ", updating.Namespace, "/", updating.Name, " lifecycle status ", err)
 				return err
 			}
 		default:
-			c.logger.Error("failed updating ", updating.Namespace, "/", updating.Name, " status ", err)
+			c.logger.Error("updateAddonStatusLifecycle failed updating ", updating.Namespace, "/", updating.Name, " status ", err)
 			return err
 		}
 	}
-	msg := fmt.Sprintf("successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
-	c.logger.Info(msg)
-
+	c.logger.Infof("updateAddonStatusLifecycle successfully update addon %s/%s step %s status to %s", namespace, name, lifecycle, lifecyclestatus)
 	return nil
+
 }
 
 func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
