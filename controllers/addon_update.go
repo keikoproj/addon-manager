@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// if labeled "addons.addonmgr.keikoproj.io/completed"
 func (c *Controller) isAddonCompleted(addon *addonv1.Addon) bool {
 	_, ok := addon.Labels[addonapiv1.AddonCompleteLabel]
 	return ok && addon.Labels[addonapiv1.AddonCompleteLabel] == addonapiv1.AddonCompleteTrueKey
@@ -39,7 +40,6 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	}
 	updating := latest.DeepCopy()
 	prevStatus := latest.Status
-	//fmt.Printf(" prevStatus.Lifecycle.Installed %s", prevStatus.Lifecycle.Installed)
 	if c.isAddonCompleted(updating) {
 		c.logger.Infof("[updateAddonStatusLifecycle] addon %s/%s completed, but not deleting. skip.", namespace, name)
 		return nil
@@ -114,7 +114,7 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 				}
 			}
 			return nil
-		} // goes to branch line 114, update status only
+		}
 	}
 
 	var afterupdating *addonv1.Addon
@@ -371,12 +371,16 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) (*
 				return nil, err
 			}
 		}
-		_, err = c.updateAddonStatus(ctx, updated)
+		afterupdate, err := c.updateAddonStatus(ctx, updated)
 		if err != nil {
 			errs = append(errs, err)
 		}
+		if afterupdate != nil {
+			c.addAddonToCache(afterupdate)
+		}
 	}
 	if len(errs) == 0 {
+
 		c.logger.Infof("[updateAddon] %s/%s succeed.", updated.Namespace, updated.Name)
 		return updated, nil
 	}
