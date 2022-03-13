@@ -107,6 +107,11 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 		if err != nil || !ready {
 			c.logger.Errorf("[handleAddonUpdate] addon %s/%s dependency is not ready", addon.Namespace, addon.Name)
 			errs = append(errs, err)
+			newEvent := Event{
+				key:       fmt.Sprintf("%s/%s", addon.Namespace, addon.Name),
+				eventType: "update",
+			}
+			c.queue.AddAfter(newEvent, 2*time.Second)
 		} else {
 			c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name, " resolves dependencies. ready to install")
 			wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
@@ -249,6 +254,11 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		return err
 	}
 
+	// status does not change, addon no update, keep previous addon object
+	if latest == nil {
+		latest = addon
+	}
+
 	// Check if addon installation expired.
 	if !latest.Status.Lifecycle.Installed.Completed() && common.IsExpired(latest.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
 		reason := fmt.Sprintf("[createAddon] Addon %s/%s ttl expired, starttime exceeded %s", addon.Namespace, addon.Name, addonapiv1.TTL.String())
@@ -286,7 +296,7 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		return err
 	}
 
-	return c.createAddonHelper(ctx, addon, wfl)
+	return c.createAddonHelper(ctx, latest, wfl)
 }
 
 func (c *Controller) createAddonHelper(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
