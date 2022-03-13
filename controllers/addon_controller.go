@@ -956,6 +956,7 @@ func (c *Controller) initController(ctx context.Context) error {
 			c.logger.Warnf("[initController] addon %s/%s stuck on dependency.", item.Namespace, item.Name)
 		}
 
+		item.Finalizers = append(item.Finalizers, addonapiv1.FinalizerName)
 		_, err := c.updateAddon(ctx, &item)
 		if err != nil {
 			c.logger.Errorf("[initController] failed patch addon %s/%s labels.", item.Namespace, item.Name)
@@ -964,6 +965,5 @@ func (c *Controller) initController(ctx context.Context) error {
 		c.addAddonToCache(&item)
 	}
 	c.logger.Infof("initController pre-process end.")
-	os.Exit(0)
 	return nil
 }
