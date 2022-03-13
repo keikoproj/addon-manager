@@ -124,6 +124,45 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 		}
 	}
 
+	// check if prereq completed while install wf not being kicked off yet
+	if addon.Status.Lifecycle.Prereqs.Succeeded() && len(addon.Status.Lifecycle.Installed) == 0 {
+		c.logger.Infof("[handleAddonUpdate] %s/%s prereq %s while install %s, run install wf", addon.Namespace, addon.Name, addon.Status.Lifecycle.Prereqs, addon.Status.Lifecycle.Installed)
+
+		if err := c.validateSecrets(ctx, addon); err != nil {
+			reason := fmt.Sprintf("handleAddonUpdate Addon %s/%s could not validate secrets. %v", addon.Namespace, addon.Name, err)
+			c.recorder.Event(addon, "Warning", "Failed", reason)
+			c.logger.Error(err, "handleAddonUpdate Addon could not validate secrets.")
+			addon.Status.Lifecycle.Installed = addonv1.Failed
+			addon.Status.Reason = reason
+			if _, err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("[handleAddonUpdate] failed updating ", addon.Namespace, "/", addon.Name, " validate secrets status err ", err)
+				return err
+			}
+			return err
+		}
+
+		var wfl = workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
+		phase, err := c.runWorkflow(addonv1.Install, addon, wfl)
+		if err != nil {
+			reason := fmt.Sprintf("handleAddonUpdate Addon %s/%s wf could not be installed due to error. %v", addon.Namespace, addon.Name, err)
+			c.recorder.Event(addon, "Warning", "Failed", reason)
+			c.logger.Error(err, "handleAddonUpdate Addon install workflow failed.")
+
+			addon.Status.Reason = reason
+			addon.Status.Lifecycle.Installed = phase
+			if _, err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("[handleAddonUpdate] failed updating ", addon.Namespace, "/", addon.Name, " install workflow status err ", err)
+				return err
+			}
+		}
+		addon.Status.Lifecycle.Installed = phase
+		if _, err := c.updateAddonStatus(ctx, addon); err != nil {
+			c.logger.Error("[handleAddonUpdate] failed updating ", addon.Namespace, "/", addon.Name, "  execute install status err ", err)
+			return err
+		}
+		return nil
+	}
+
 	var changedStatus bool
 	changedStatus, addon.Status.Checksum = c.validateChecksum(addon)
 	if changedStatus {
@@ -371,34 +410,36 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 	}
 
 	addon.Status.Lifecycle.Prereqs = prereqsPhase
-	if err := c.validateSecrets(ctx, addon); err != nil {
-		reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", addon.Namespace, addon.Name, err)
-		c.recorder.Event(addon, "Warning", "Failed", reason)
-		c.logger.Error(err, "Addon could not validate secrets.")
-		addon.Status.Lifecycle.Installed = addonv1.Failed
-		addon.Status.Reason = reason
-		if _, err := c.updateAddonStatus(ctx, addon); err != nil {
-			c.logger.Error("[executePrereqAndInstall] failed updating ", addon.Namespace, "/", addon.Name, " validate secrets status err ", err)
+	if prereqsPhase == addonv1.Succeeded {
+		if err := c.validateSecrets(ctx, addon); err != nil {
+			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", addon.Namespace, addon.Name, err)
+			c.recorder.Event(addon, "Warning", "Failed", reason)
+			c.logger.Error(err, "Addon could not validate secrets.")
+			addon.Status.Lifecycle.Installed = addonv1.Failed
+			addon.Status.Reason = reason
+			if _, err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("[executePrereqAndInstall] failed updating ", addon.Namespace, "/", addon.Name, " validate secrets status err ", err)
+				return err
+			}
 			return err
 		}
-		return err
-	}
 
-	phase, err := c.runWorkflow(addonv1.Install, addon, wfl)
-	if err != nil {
-		reason := fmt.Sprintf("Addon %s/%s wf could not be installed due to error. %v", addon.Namespace, addon.Name, err)
-		c.recorder.Event(addon, "Warning", "Failed", reason)
-		c.logger.Error(err, " Addon install workflow failed.")
+		phase, err := c.runWorkflow(addonv1.Install, addon, wfl)
+		if err != nil {
+			reason := fmt.Sprintf("Addon %s/%s wf could not be installed due to error. %v", addon.Namespace, addon.Name, err)
+			c.recorder.Event(addon, "Warning", "Failed", reason)
+			c.logger.Error(err, " Addon install workflow failed.")
 
-		addon.Status.Reason = reason
+			addon.Status.Reason = reason
+			addon.Status.Lifecycle.Installed = phase
+			if _, err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("[executePrereqAndInstall] failed updating ", addon.Namespace, "/", addon.Name, " install workflow status err ", err)
+				return err
+			}
+		}
 		addon.Status.Lifecycle.Installed = phase
-		if _, err := c.updateAddonStatus(ctx, addon); err != nil {
-			c.logger.Error("[executePrereqAndInstall] failed updating ", addon.Namespace, "/", addon.Name, " install workflow status err ", err)
-			return err
-		}
 	}
 
-	addon.Status.Lifecycle.Installed = phase
 	if _, err := c.updateAddonStatus(ctx, addon); err != nil {
 		c.logger.Error("[executePrereqAndInstall] failed updating ", addon.Namespace, "/", addon.Name, "  execute prereq and install status err ", err)
 		return err
