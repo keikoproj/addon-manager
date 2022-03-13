@@ -936,23 +936,26 @@ func (c *Controller) initController(ctx context.Context) error {
 			} else {
 				c.logger.Warnf("[initController] failed get addon %s/%s prereqs wf", item.Namespace, item.Name)
 			}
-		} else {
-			// might stuck on dependency
-			if item.Status.Lifecycle.Installed == addonv1.DepPending || item.Status.Lifecycle.Installed == addonv1.ValidationFailed {
-				c.logger.Warnf("[initController] addon %s/%s stuck on dependency.", item.Namespace, item.Name)
-			} else {
-				c.logger.Infof("[initController] addon %s/%s does not lifecycle.", item.Namespace, item.Name)
-				item.Status.Lifecycle.Installed = addonv1.Succeeded
-				item.Status.Reason = ""
-
-				labels := item.GetLabels()
-				if labels == nil {
-					labels = map[string]string{}
-				}
-				labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
-				item.SetLabels(labels)
-			}
 		}
+
+		if item.Spec.Lifecycle.Prereqs.Template == "" && item.Spec.Lifecycle.Install.Template == "" {
+			c.logger.Infof("[initController] addon %s/%s does not lifecycle.", item.Namespace, item.Name)
+			item.Status.Lifecycle.Installed = addonv1.Succeeded
+			item.Status.Reason = ""
+
+			labels := item.GetLabels()
+			if labels == nil {
+				labels = map[string]string{}
+			}
+			labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
+			item.SetLabels(labels)
+		}
+
+		// might stuck on dependency
+		if item.Status.Lifecycle.Installed == addonv1.DepPending || item.Status.Lifecycle.Installed == addonv1.ValidationFailed {
+			c.logger.Warnf("[initController] addon %s/%s stuck on dependency.", item.Namespace, item.Name)
+		}
+
 		_, err := c.updateAddon(ctx, &item)
 		if err != nil {
 			c.logger.Errorf("[initController] failed patch addon %s/%s labels.", item.Namespace, item.Name)
@@ -961,5 +964,6 @@ func (c *Controller) initController(ctx context.Context) error {
 		c.addAddonToCache(&item)
 	}
 	c.logger.Infof("initController pre-process end.")
+	os.Exit(0)
 	return nil
 }
