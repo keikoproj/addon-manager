@@ -177,6 +177,7 @@ func TestAddonInstall(t *testing.T) {
 	//Update instance params for checksum validation
 	fetchedAddon.Spec.Params.Context.ClusterRegion = "us-east-2"
 	err = addonController.handleAddonUpdate(ctx, fetchedAddon)
+	fmt.Printf("\n err %#v\n", err)
 	Expect(err).To(BeNil())
 
 	updated, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, testAddon, metav1.GetOptions{})
