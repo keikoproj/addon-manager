@@ -82,6 +82,25 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 	c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name)
 	var errs []error
 
+	var changedStatus bool
+	changedStatus, addon.Status.Checksum = c.validateChecksum(addon)
+	if changedStatus {
+		c.logger.Info("[handleAddonUpdate] addon ", addon.Namespace, "/", addon.Name, " spec checksum changes.")
+		resetedAddon, err := c.resetAddonStatus(ctx, addon)
+		// requeue should also be an option
+		if err != nil || resetedAddon == nil {
+			c.logger.Error("[handleAddonUpdate] failed reset addon status ", addon.Namespace, "/", addon.Name, " after spec change.", err)
+			errs = append(errs, err)
+		} else {
+			c.logger.Info("[handleAddonUpdate] re install addon after spec changes.")
+			err := c.handleAddonCreation(ctx, resetedAddon)
+			if err != nil {
+				c.logger.Error("[handleAddonUpdate] failed re-install addon ", addon.Namespace, "/", addon.Name, " after spec change.", err)
+				errs = append(errs, err)
+			}
+		}
+	}
+
 	beingDeleting, err := c.isAddonBeingDeleting(ctx, addon)
 	if beingDeleting {
 		return err
@@ -161,25 +180,6 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 			return err
 		}
 		return nil
-	}
-
-	var changedStatus bool
-	changedStatus, addon.Status.Checksum = c.validateChecksum(addon)
-	if changedStatus {
-		c.logger.Info("[handleAddonUpdate] addon ", addon.Namespace, "/", addon.Name, " spec checksum changes.")
-		resetedAddon, err := c.resetAddonStatus(ctx, addon)
-		// requeue should also be an option
-		if err != nil || resetedAddon == nil {
-			c.logger.Error("[handleAddonUpdate] failed reset addon status ", addon.Namespace, "/", addon.Name, " after spec change.", err)
-			errs = append(errs, err)
-		} else {
-			c.logger.Info("[handleAddonUpdate] re install addon after spec changes.")
-			err := c.handleAddonCreation(ctx, resetedAddon)
-			if err != nil {
-				c.logger.Error("[handleAddonUpdate] failed re-install addon ", addon.Namespace, "/", addon.Name, " after spec change.", err)
-				errs = append(errs, err)
-			}
-		}
 	}
 
 	noErr := true
@@ -410,6 +410,7 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 	}
 
 	addon.Status.Lifecycle.Prereqs = prereqsPhase
+	c.logger.Infof("executePrereqAndInstall %s/%s prereqs status %s", addon.Namespace, addon.Name, prereqsPhase)
 	if prereqsPhase == addonv1.Succeeded {
 		if err := c.validateSecrets(ctx, addon); err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", addon.Namespace, addon.Name, err)
