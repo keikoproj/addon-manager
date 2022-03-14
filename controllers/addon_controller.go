@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -84,6 +85,7 @@ type Controller struct {
 	scheme    *runtime.Scheme
 
 	versionCache addoninternal.VersionCacheClient
+	wftlock      sync.Mutex
 }
 
 // compose addon informer
@@ -345,6 +347,7 @@ func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Inter
 		namespace: namespace,
 	}
 	c.queue = workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	c.wftlock = sync.Mutex{}
 	return c
 }
 

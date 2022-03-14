@@ -22,7 +22,7 @@ func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Add
 	// check if addon being deletion
 	deleting, err := c.isAddonBeingDeleting(ctx, addon)
 	if deleting {
-		c.logger.Info("[handleAddonCreation]  ", addon.Namespace, "/", addon.Name, " being deletion. skip")
+		c.logger.Info("[handleAddonCreation]  ", addon.Namespace, "/", addon.Name, " being deletion. skip err %#v", err)
 		return err
 	}
 
@@ -47,6 +47,7 @@ func (c *Controller) isAddonBeingDeleting(ctx context.Context, addon *addonv1.Ad
 	c.logger.Infof("isAddonBeingDeleting %s/%s.", addon.Namespace, addon.Name)
 
 	if !addon.ObjectMeta.DeletionTimestamp.IsZero() {
+
 		if addon.Status.Lifecycle.Installed == addonv1.Deleting || addon.Status.Lifecycle.Installed == addonv1.DeleteFailed {
 			c.logger.Infof("isAddonBeingDeleting addon %s/%s deletion status %s.", addon.Namespace, addon.Name, addon.Status.Lifecycle.Installed)
 			return true, nil
@@ -62,16 +63,21 @@ func (c *Controller) isAddonBeingDeleting(ctx context.Context, addon *addonv1.Ad
 
 			addon.Status.Lifecycle.Installed = addonv1.DeleteFailed
 			addon.Status.Reason = reason
-		} else {
-			addon.Status.Lifecycle.Installed = addonv1.Deleting
+			if _, err := c.updateAddonStatus(ctx, addon); err != nil {
+				c.logger.Error("[isAddonBeingDeleting] failed updating ", addon.Namespace, "/", addon.Name, " deletion status ", err)
+				return true, err
+			}
+			return true, err
 		}
 
+		addon.Status.Lifecycle.Installed = addonv1.Deleting
 		if _, err := c.updateAddonStatus(ctx, addon); err != nil {
 			c.logger.Error("[isAddonBeingDeleting] failed updating ", addon.Namespace, "/", addon.Name, " deletion status ", err)
-		} else {
-			c.logger.Infof("isAddonBeingDeleting %s/%s processed successfully.", addon.Namespace, addon.Name)
+			return true, err
 		}
-		return true, err
+
+		c.logger.Infof("isAddonBeingDeleting %s/%s processed successfully.", addon.Namespace, addon.Name)
+		return true, nil
 	}
 
 	c.logger.Infof("isAddonBeingDeleting %s/%s not being deletion.", addon.Namespace, addon.Name)
@@ -103,6 +109,7 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 
 	beingDeleting, err := c.isAddonBeingDeleting(ctx, addon)
 	if beingDeleting {
+		c.logger.Infof("[handleAddonUpdate] addon %s/%s being deleting %#v", addon.Namespace, addon.Name, err)
 		return err
 	}
 
@@ -482,6 +489,8 @@ func (c *Controller) addAddonToCache(addon *addonv1.Addon) {
 }
 
 func (c *Controller) runWorkflow(lifecycleStep addonv1.LifecycleStep, addon *addonv1.Addon, wfl workflows.AddonLifecycle) (addonv1.ApplicationAssemblyPhase, error) {
+	c.wftlock.Lock()
+	defer c.wftlock.Unlock()
 
 	wt, err := addon.GetWorkflowType(lifecycleStep)
 	if err != nil {
