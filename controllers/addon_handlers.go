@@ -344,10 +344,11 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 	err = c.createAddonHelper(ctx, latest, wfl)
 	if err != nil {
 		c.logger.Errorf("[createAddon] failed %s/%s err %#v", addon.Namespace, addon.Name, err)
+		return err
 	} else {
 		c.logger.Infof("[createAddon] addon %s/%s successfully", addon.Namespace, addon.Name)
+		return nil
 	}
-	return err
 }
 
 func (c *Controller) createAddonHelper(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
@@ -387,6 +388,8 @@ func (c *Controller) createAddonHelper(ctx context.Context, addon *addonv1.Addon
 }
 
 func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
+
+	c.logger.Infof("executePrereqAndInstall %s/%s ", addon.Namespace, addon.Name)
 	prereqsPhase, err := c.runWorkflow(addonv1.Prereqs, addon, wfl)
 	if err != nil {
 		reason := fmt.Sprintf("Addon %s/%s prereqs wf execution failed. %v", addon.Namespace, addon.Name, err)
@@ -491,7 +494,7 @@ func (c *Controller) addAddonToCache(addon *addonv1.Addon) {
 func (c *Controller) runWorkflow(lifecycleStep addonv1.LifecycleStep, addon *addonv1.Addon, wfl workflows.AddonLifecycle) (addonv1.ApplicationAssemblyPhase, error) {
 	c.wftlock.Lock()
 	defer c.wftlock.Unlock()
-
+	c.logger.Infof("runWorkflow %s/%s workflow %s.", addon.Namespace, addon.Name, strings.Title(string(lifecycleStep)))
 	wt, err := addon.GetWorkflowType(lifecycleStep)
 	if err != nil {
 		c.logger.Error(err, "lifecycleStep is not a field in LifecycleWorkflowSpec", "lifecycleStep", lifecycleStep)
@@ -507,11 +510,13 @@ func (c *Controller) runWorkflow(lifecycleStep addonv1.LifecycleStep, addon *add
 	if wfIdentifierName == "" {
 		return addonv1.Failed, fmt.Errorf("could not generate workflow template name")
 	}
+	c.logger.Infof("runWorkflow %s/%s workflow id %s.", addon.Namespace, addon.Name, wfIdentifierName)
 	phase, err := wfl.Install(context.TODO(), wt, wfIdentifierName)
 	if err != nil {
 		return phase, err
 	}
 	c.recorder.Event(addon, "Normal", "Completed", fmt.Sprintf("Completed %s workflow %s/%s.", strings.Title(string(lifecycleStep)), addon.Namespace, wfIdentifierName))
+	c.logger.Infof("runWorkflow %s/%s workflow %s phase %s.", addon.Namespace, addon.Name, wfIdentifierName, phase)
 	return phase, nil
 }
 
