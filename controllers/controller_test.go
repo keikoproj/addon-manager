@@ -26,16 +26,13 @@ import (
 	dynamicFake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/pointer"
 
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/utils"
-	wfutility "github.com/keikoproj/addon-manager/pkg/workflows"
 )
 
 var (
@@ -199,81 +196,6 @@ func TestAddonInstall(t *testing.T) {
 	Expect(wf).To(BeNil())
 }
 
-func generateWorkflow(wfcli *wfclientsetfake.Clientset, namespace string) error {
-	prereqswf := &wfv1.Workflow{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "event-router-2-prereqs-5eecd98e-wf",
-			Namespace: namespace,
-			Annotations: map[string]string{
-				"annotation": "value",
-			},
-			Labels: map[string]string{
-				wfutility.WfInstanceIdLabelKey:    wfutility.WfInstanceId,
-				"workflows.argoproj.io/completed": "true",
-				"workflows.argoproj.io/phase":     "Succeeded",
-			},
-		},
-		TypeMeta: metav1.TypeMeta{},
-		Spec: wfv1.WorkflowSpec{
-			HostNetwork:        pointer.BoolPtr(true),
-			Entrypoint:         "good_entrypoint",
-			ServiceAccountName: "my_service_account",
-			TTLStrategy: &wfv1.TTLStrategy{
-				SecondsAfterCompletion: pointer.Int32Ptr(10),
-				SecondsAfterSuccess:    pointer.Int32Ptr(10),
-				SecondsAfterFailure:    pointer.Int32Ptr(10),
-			},
-		},
-		Status: wfv1.WorkflowStatus{
-			Phase: wfv1.WorkflowSucceeded,
-		},
-	}
-	wf, err := wfcli.ArgoprojV1alpha1().Workflows(namespace).Create(context.TODO(), prereqswf, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	if wf == nil {
-		return fmt.Errorf("failed creating prereqs wf")
-	}
-
-	installwf := &wfv1.Workflow{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "event-router-2-install-5eecd98e-wf",
-			Namespace: namespace,
-			Annotations: map[string]string{
-				"annotation": "value",
-			},
-			Labels: map[string]string{
-				wfutility.WfInstanceIdLabelKey:    wfutility.WfInstanceId,
-				"workflows.argoproj.io/completed": "true",
-				"workflows.argoproj.io/phase":     "Succeeded",
-			},
-		},
-		TypeMeta: metav1.TypeMeta{},
-		Spec: wfv1.WorkflowSpec{
-			HostNetwork:        pointer.BoolPtr(true),
-			Entrypoint:         "good_entrypoint",
-			ServiceAccountName: "my_service_account",
-			TTLStrategy: &wfv1.TTLStrategy{
-				SecondsAfterCompletion: pointer.Int32Ptr(10),
-				SecondsAfterSuccess:    pointer.Int32Ptr(10),
-				SecondsAfterFailure:    pointer.Int32Ptr(10),
-			},
-		},
-		Status: wfv1.WorkflowStatus{
-			Phase: wfv1.WorkflowSucceeded,
-		},
-	}
-	installwf, err = wfcli.ArgoprojV1alpha1().Workflows(namespace).Create(context.TODO(), installwf, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	if installwf == nil {
-		return fmt.Errorf("failed creating install wf")
-	}
-	return nil
-}
-
 func parseAddonYaml(data []byte) (*addonapiv1.Addon, error) {
 	var err error
 	o := &unstructured.Unstructured{}
@@ -288,4 +210,8 @@ func parseAddonYaml(data []byte) (*addonapiv1.Addon, error) {
 	}
 
 	return a, nil
+}
+
+func TestAddonWF(t *testing.T) {
+
 }
