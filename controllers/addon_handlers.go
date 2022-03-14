@@ -145,7 +145,7 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 
 	// check if prereq completed while install wf not being kicked off yet
 	if addon.Status.Lifecycle.Prereqs.Succeeded() && len(addon.Status.Lifecycle.Installed) == 0 {
-		c.logger.Infof("[handleAddonUpdate] %s/%s prereq %s while install %s, run install wf", addon.Namespace, addon.Name, addon.Status.Lifecycle.Prereqs, addon.Status.Lifecycle.Installed)
+		c.logger.Infof("[handleAddonUpdate] %s/%s prereq succeeded %s and install %s, run install wf", addon.Namespace, addon.Name, addon.Status.Lifecycle.Prereqs, addon.Status.Lifecycle.Installed)
 
 		if err := c.validateSecrets(ctx, addon); err != nil {
 			reason := fmt.Sprintf("handleAddonUpdate Addon %s/%s could not validate secrets. %v", addon.Namespace, addon.Name, err)
@@ -410,8 +410,9 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 	}
 
 	addon.Status.Lifecycle.Prereqs = prereqsPhase
-	c.logger.Infof("executePrereqAndInstall %s/%s prereqs status %s", addon.Namespace, addon.Name, prereqsPhase)
-	if prereqsPhase == addonv1.Succeeded {
+	c.logger.Infof("executePrereqAndInstall %s/%s prereqs status %s", addon.Namespace, addon.Name, addon.Status.Lifecycle.Prereqs)
+	if addon.Status.Lifecycle.Prereqs == addonv1.Succeeded {
+		c.logger.Infof("executePrereqAndInstall %s/%s checking secret", addon.Namespace, addon.Name)
 		if err := c.validateSecrets(ctx, addon); err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", addon.Namespace, addon.Name, err)
 			c.recorder.Event(addon, "Warning", "Failed", reason)
@@ -424,7 +425,7 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 			}
 			return err
 		}
-
+		c.logger.Infof("executePrereqAndInstall %s/%s do install wf", addon.Namespace, addon.Name)
 		phase, err := c.runWorkflow(addonv1.Install, addon, wfl)
 		if err != nil {
 			reason := fmt.Sprintf("Addon %s/%s wf could not be installed due to error. %v", addon.Namespace, addon.Name, err)
