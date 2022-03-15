@@ -54,6 +54,11 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 	if lifecycle == "prereqs" {
 		newStatus.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 		newStatus.Lifecycle.Installed = prevStatus.Lifecycle.Installed
+		if newStatus.Lifecycle.Prereqs == addonv1.Failed {
+			newStatus.Lifecycle.Installed = addonv1.Failed
+			newStatus.Reason = "prereqs wf fails."
+			c.logger.Infof("[updateAddonStatusLifecycle] %s/%s prereq failed. mark addon failure also", namespace, name)
+		}
 	} else if lifecycle == "install" || lifecycle == "delete" {
 		newStatus.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 		newStatus.Lifecycle.Prereqs = prevStatus.Lifecycle.Prereqs
