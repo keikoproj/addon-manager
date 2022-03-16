@@ -9,7 +9,6 @@ import (
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
@@ -208,31 +207,30 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 
 func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Addon) error {
 	c.logger.Info("[handleAddonDeletion] ", addon.Namespace, "/", addon.Name)
+
 	if !addon.ObjectMeta.DeletionTimestamp.IsZero() {
 		var wfl = workflows.NewWorkflowLifecycle(c.wfcli, c.informer, c.dynCli, addon, c.scheme, c.recorder)
 
-		c.logger.Info("[handleAddonDeletion] addon ", addon.GetNamespace(), "/", addon.GetName(), " does not have install template. remove finalizer directly.")
-		c.removeFinalizer(addon)
 		c.unLabelComplete(addon)
-
-		retry := 1
-		for retry < 10 {
-			_, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Update(ctx, addon, metav1.UpdateOptions{})
-			switch {
-			case errors.IsNotFound(err):
-				msg := fmt.Sprintf("[handleAddonDeletion] Addon %s/%s is not found. %v", addon.Namespace, addon.Name, err)
-				c.logger.Error(msg)
-				return fmt.Errorf(msg)
-			case strings.Contains(err.Error(), "the object has been modified"):
-				c.logger.Info("[handleAddonDeletion] retry updating object for deleted addon.")
-				retry++
-			default:
-				c.logger.Error("[handleAddonDeletion] failed updating ", addon.Namespace, addon.Name, " lifecycle status err ", err)
+		if addon.Spec.Lifecycle.Delete.Template == "" {
+			c.logger.Info("[handleAddonDeletion] ", addon.Namespace, "/", addon.Name, " does not have delete wf. remove finalizer directly.")
+			c.removeFinalizer(addon)
+			if _, err := c.updateAddon(ctx, addon); err != nil {
+				c.logger.Errorf("handleAddonDeletion failed remove %s/%s finalizer and complete label %#v", addon.Namespace, addon.Name, err)
 				return err
 			}
+			c.logger.Infof("[handleAddonDeletion] remove %s/%s from cache", addon.Namespace, addon.Name)
+			c.removeFromCache(addon.Name)
+			return nil
 		}
 
-		err := c.Finalize(ctx, addon, wfl)
+		updatedAddon, err := c.updateAddon(ctx, addon)
+		if err != nil || updatedAddon == nil {
+			c.logger.Errorf("handleAddonDeletion failed remove %s/%s complete label %#v", addon.Namespace, addon.Name, err)
+			return err
+		}
+
+		err = c.Finalize(ctx, updatedAddon, wfl)
 		if err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", addon.Namespace, addon.Name, err)
 			c.recorder.Event(addon, "Warning", "Failed", reason)
@@ -246,10 +244,10 @@ func (c *Controller) handleAddonDeletion(ctx context.Context, addon *addonv1.Add
 		}
 
 		// For a better user experience we want to update the status and requeue
-		if addon.Status.Lifecycle.Installed != addonv1.Deleting {
-			addon.Status.Lifecycle.Installed = addonv1.Deleting
-			if _, err := c.updateAddonStatus(ctx, addon); err != nil {
-				c.logger.Error("failed updating ", addon.Namespace, "/", addon.Name, " deleting status ", err)
+		if updatedAddon.Status.Lifecycle.Installed != addonv1.Deleting {
+			updatedAddon.Status.Lifecycle.Installed = addonv1.Deleting
+			if _, err := c.updateAddonStatus(ctx, updatedAddon); err != nil {
+				c.logger.Error("failed updating ", updatedAddon.Namespace, "/", updatedAddon.Name, " deleting status ", err)
 				return err
 			}
 		}
