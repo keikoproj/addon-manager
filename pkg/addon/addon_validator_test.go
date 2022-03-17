@@ -597,7 +597,7 @@ func Test_addonValidator_validateDependencies(t *testing.T) {
 				cache:     cache,
 				dynClient: dynClient,
 			}
-			if err := av.validateDependencies(); (err != nil) != tt.wantErr {
+			if err := av.ValidateDependencies(); (err != nil) != tt.wantErr {
 				t.Errorf("addonValidator.validateDependencies() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

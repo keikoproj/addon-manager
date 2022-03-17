@@ -50,8 +50,10 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
-
 	"k8s.io/client-go/dynamic/dynamicinformer"
+
+	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
+	"k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -60,6 +62,8 @@ const (
 	TTL = time.Duration(1) * time.Hour // 1 hour
 
 	workflowDeployedNS = "addon-manager-system"
+
+	workflowResyncPeriod = 20 * time.Minute
 )
 
 // Watched resources
@@ -86,10 +90,19 @@ type AddonReconciler struct {
 	generatedClient *kubernetes.Clientset
 	recorder        record.EventRecorder
 	statusWGMap     map[string]*sync.WaitGroup
+
+	wfcli      wfclientset.Interface
+	wfinformer cache.SharedIndexInformer
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
 func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
+
+	wfcli := common.NewWFClient(mgr.GetConfig())
+	if wfcli == nil {
+		panic("workflow client could not be nil")
+	}
+
 	return &AddonReconciler{
 		Client:          mgr.GetClient(),
 		Log:             ctrl.Log.WithName(controllerName),
@@ -99,6 +112,7 @@ func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
 		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:        mgr.GetEventRecorderFor("addons"),
 		statusWGMap:     map[string]*sync.WaitGroup{},
+		wfcli:           wfcli,
 	}
 }
 
@@ -140,7 +154,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		}
 	}()
 
-	var wfl = workflows.NewWorkflowLifecycle(r.Client, r.dynClient, instance, r.recorder, r.Scheme)
+	var wfl = workflows.NewWorkflowLifecycle(r.wfcli, r.wfinformer, r.dynClient, instance, r.Scheme, r.recorder)
 
 	// Resource is being deleted, run finalizers and exit.
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -182,6 +196,8 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
 	r := NewAddonReconciler(mgr)
+	r.wfinformer = NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, TweakListOptions)
+	go r.wfinformer.Run(stopChan)
 
 	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
