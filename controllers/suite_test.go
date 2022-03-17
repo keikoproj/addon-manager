@@ -17,144 +17,122 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"path/filepath"
 	"testing"
+	"time"
 
+	addoninternal "github.com/keikoproj/addon-manager/pkg/addon"
+	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/pkg/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	// +kubebuilder:scaffold:imports
-
-	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
-	addonapiv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
-	addoninternal "github.com/keikoproj/addon-manager/pkg/addon"
-	fakeAddonCli "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/fake"
-	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/pkg/utils"
-	"k8s.io/apimachinery/pkg/runtime"
-	dynamicFake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
-
-	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-const (
-	addonNamespace = "default"
-	addonName      = "cluster-autoscaler"
-)
-
-var (
-	ctx             context.Context
-	addonController *Controller
-)
-
-func TestControllers(t *testing.T) {
+func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecsWithDefaultAndCustomReporters(t,
-		"v1alpha1 Suite",
+		"Controller Suite",
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+var (
+	testEnv         *envtest.Environment
+	ctx             context.Context
+	addonController *Controller
+	stopCh          chan struct{}
+)
+
+func getTestController() *Controller {
 	ctx = context.TODO()
+	By("bootstrapping test environment")
+	testEnv = &envtest.Environment{
+		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+		ErrorIfCRDPathMissing: true,
+	}
 
-	addonYaml, err := ioutil.ReadFile("./tests/clusterautoscaler.yaml")
-	Expect(err).To(BeNil())
-	instance, err := parseAddonYaml(addonYaml)
+	cfg, err := testEnv.Start()
 	Expect(err).ToNot(HaveOccurred())
-	instance.SetName(addonName)
-	instance.SetNamespace(addonNamespace)
-	Expect(instance).To(BeAssignableToTypeOf(&addonapiv1.Addon{}))
+	Expect(cfg).ToNot(BeNil())
 
-	addonController = newController(instance)
+	wfcli := common.NewWFClient(cfg)
+	if wfcli == nil {
+		panic("failed init wf client.")
+	}
+	kubecli, err := common.NewKubernetesClient(cfg)
+	if err != nil || kubecli == nil {
+		panic(err)
+	}
+	addonCli := common.NewAddonClient(cfg)
+	if addonCli == nil {
+		panic("failed init addon cli")
+	}
+	dynCli, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		panic(err)
+	}
+	if dynCli == nil {
+		panic("failed init dynCli")
+	}
+
+	addonController = newResourceController(kubecli, dynCli, addonCli, wfcli, "addon", "default")
 	Expect(addonController).NotTo(BeNil())
 
-	close(done)
-}, 60)
+	stopCh = make(chan struct{})
+	logger := logrus.WithField("controllers", "addon")
 
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-})
-
-func newController(options ...interface{}) *Controller {
-	ctx := context.TODO()
-	var objects []runtime.Object
-	wfcli := wfclientsetfake.NewSimpleClientset(objects...)
-	for _, opt := range options {
-		switch v := opt.(type) {
-		case *addonapiv1.Addon:
-			objects = append(objects, v)
-		case runtime.Object:
-			objects = append(objects, v)
-		}
-	}
-
-	kubecli := fake.NewSimpleClientset()
-	addonCli := fakeAddonCli.NewSimpleClientset(objects...)
-	dynCli := dynamicFake.NewSimpleDynamicClient(common.GetAddonMgrScheme(), objects...)
+	addonController.scheme = common.GetAddonMgrScheme()
+	addonController.versionCache = addoninternal.NewAddonVersionCacheClient()
+	addonController.recorder = createEventRecorder(addonController.namespace, addonController.clientset, logger)
+	addonController.informer = newAddonInformer(ctx, addonController.dynCli, addonController.namespace)
+	addonController.wfinformer = utils.NewWorkflowInformer(addonController.dynCli, addonController.namespace, 0, cache.Indexers{}, utils.TweakListOptions)
 	k8sinformer := kubeinformers.NewSharedInformerFactory(kubecli, 0)
 
-	controller := newResourceController(
-		kubecli, dynCli, addonCli, wfcli,
-		"addon", "default")
+	addonController.nsinformer = k8sinformer.Core().V1().Namespaces().Informer()
+	addonController.deploymentinformer = k8sinformer.Apps().V1().Deployments().Informer()
+	addonController.srvinformer = k8sinformer.Core().V1().Services().Informer()
+	addonController.configMapinformer = k8sinformer.Core().V1().ConfigMaps().Informer()
+	addonController.clusterRoleinformer = k8sinformer.Rbac().V1().ClusterRoles().Informer()
+	addonController.clusterRoleBindingInformer = k8sinformer.Rbac().V1().ClusterRoleBindings().Informer()
+	addonController.jobinformer = k8sinformer.Batch().V1().Jobs().Informer()
+	addonController.cronjobinformer = k8sinformer.Core().V1().ServiceAccounts().Informer()
+	addonController.cronjobinformer = k8sinformer.Batch().V1().CronJobs().Informer()
+	addonController.daemonSetinformer = k8sinformer.Apps().V1().DaemonSets().Informer()
+	addonController.replicaSetinformer = k8sinformer.Apps().V1().ReplicaSets().Informer()
+	addonController.statefulSetinformer = k8sinformer.Apps().V1().StatefulSets().Informer()
 
-	controller.queue = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "addon-controller")
-	controller.scheme = common.GetAddonMgrScheme()
-
-	logger := logrus.WithField("controllers", "addon")
-	controller.versionCache = addoninternal.NewAddonVersionCacheClient()
-	controller.recorder = createEventRecorder(controller.namespace, controller.clientset, logger)
-	controller.informer = newAddonInformer(ctx, controller.dynCli, controller.namespace)
-	controller.wfinformer = utils.NewWorkflowInformer(controller.dynCli, controller.namespace, 0, cache.Indexers{}, utils.TweakListOptions)
-	configureCRD(controller.dynCli)
-
-	controller.nsinformer = k8sinformer.Core().V1().Namespaces().Informer()
-	controller.deploymentinformer = k8sinformer.Apps().V1().Deployments().Informer()
-	controller.srvinformer = k8sinformer.Core().V1().Services().Informer()
-	controller.configMapinformer = k8sinformer.Core().V1().ConfigMaps().Informer()
-	controller.clusterRoleinformer = k8sinformer.Rbac().V1().ClusterRoles().Informer()
-	controller.clusterRoleBindingInformer = k8sinformer.Rbac().V1().ClusterRoleBindings().Informer()
-	controller.jobinformer = k8sinformer.Batch().V1().Jobs().Informer()
-	controller.cronjobinformer = k8sinformer.Core().V1().ServiceAccounts().Informer()
-	controller.cronjobinformer = k8sinformer.Batch().V1().CronJobs().Informer()
-	controller.daemonSetinformer = k8sinformer.Apps().V1().DaemonSets().Informer()
-	controller.replicaSetinformer = k8sinformer.Apps().V1().ReplicaSets().Informer()
-	controller.statefulSetinformer = k8sinformer.Apps().V1().StatefulSets().Informer()
-
-	controller.setupaddonhandlers()
-	controller.setupwfhandlers(ctx)
-	controller.setupwfhandlers(ctx)
+	addonController.setupaddonhandlers()
+	addonController.setupwfhandlers(ctx)
+	// addonController.setupresourcehandlers(ctx)
 
 	stopCh := make(<-chan struct{})
+	go addonController.informer.Run(stopCh)
+	go addonController.wfinformer.Run(stopCh)
+	go addonController.nsinformer.Run(stopCh)
+	go addonController.srvinformer.Run(stopCh)
+	go addonController.configMapinformer.Run(stopCh)
+	go addonController.clusterRoleinformer.Run(stopCh)
+	go addonController.clusterRoleBindingInformer.Run(stopCh)
+	go addonController.jobinformer.Run(stopCh)
+	go addonController.cronjobinformer.Run(stopCh)
+	go addonController.daemonSetinformer.Run(stopCh)
+	go addonController.replicaSetinformer.Run(stopCh)
+	go addonController.statefulSetinformer.Run(stopCh)
 
-	go controller.informer.Run(stopCh)
-	go controller.wfinformer.Run(stopCh)
-	go controller.nsinformer.Run(stopCh)
-	go controller.srvinformer.Run(stopCh)
-	go controller.configMapinformer.Run(stopCh)
-	go controller.clusterRoleinformer.Run(stopCh)
-	go controller.clusterRoleBindingInformer.Run(stopCh)
-	go controller.jobinformer.Run(stopCh)
-	go controller.cronjobinformer.Run(stopCh)
-	go controller.daemonSetinformer.Run(stopCh)
-	go controller.replicaSetinformer.Run(stopCh)
-	go controller.statefulSetinformer.Run(stopCh)
-
-	if !cache.WaitForCacheSync(stopCh, controller.informer.HasSynced, controller.wfinformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, addonController.informer.HasSynced, addonController.wfinformer.HasSynced) {
 		fmt.Printf("failed wait for sync.")
 	}
-
-	return controller
+	go wait.Until(addonController.runWorker, time.Second, stopCh)
+	return addonController
 }

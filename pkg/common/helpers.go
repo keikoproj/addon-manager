@@ -127,6 +127,15 @@ func NewK8sClient(kubeconfigPath string) (kubernetes.Interface, error) {
 	return client, nil
 }
 
+// NewKubeClient defines kubernetes client
+func NewKubernetesClient(cfg *rest.Config) (kubernetes.Interface, error) {
+	client, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create a client: %v", err)
+	}
+	return client, nil
+}
+
 func WorkFlowFromUnstructured(un *unstructured.Unstructured) (*wfv1.Workflow, error) {
 	var wf wfv1.Workflow
 	err := FromUnstructuredObj(un, &wf)

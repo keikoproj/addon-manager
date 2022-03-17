@@ -7,17 +7,23 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v2"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	//. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 )
 
-var (
-	addonKey = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
+const (
+	addonName     = "cluster-autoscaler"
+	testNamespace = "default"
 )
 
 var fetched *v1alpha1.Addon
@@ -26,14 +32,26 @@ const timeout = time.Second * 5
 
 var _ = Describe("AddonController", func() {
 
+	var (
+		instance *v1alpha1.Addon
+	)
+
+	var _ = BeforeSuite(func() {
+		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+
+		addonController = getTestController()
+	})
+
+	var _ = AfterSuite(func() {
+		<-stopCh
+
+		By("tearing down the test environment")
+		//close(stopCh)
+		//err := testEnv.Stop()
+		//Expect(err).ToNot(HaveOccurred())
+	})
+
 	Describe("Addon CR can be reconciled", func() {
-		var instance *v1alpha1.Addon
-		var wfv1 = &unstructured.Unstructured{}
-		wfv1.SetGroupVersionKind(schema.GroupVersionKind{
-			Kind:    "Workflow",
-			Group:   "argoproj.io",
-			Version: "v1alpha1",
-		})
 
 		It("instance should be parsable", func() {
 			addonYaml, err := ioutil.ReadFile("./tests/clusterautoscaler.yaml")
@@ -46,12 +64,13 @@ var _ = Describe("AddonController", func() {
 		})
 
 		It("instance should be reconciled", func() {
-			processed := addonController.processNextItem(ctx)
-			Expect(processed).To(BeTrue())
+			created, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Create(ctx, instance, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(created).NotTo(BeNil())
 
 			fetchedAddon, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, instance.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(fetchedAddon).NotTo(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Verify addon has been reconciled by checking for checksum status")
 			Expect(fetchedAddon.Status.Checksum).ShouldNot(BeEmpty())
@@ -107,7 +126,8 @@ var _ = Describe("AddonController", func() {
 		It("instance should be deleted w/ deleting state", func() {
 			By("Verify deleting instance should set Deleting state")
 			fetched.ObjectMeta.DeletionTimestamp = &metav1.Time{Time: metav1.Now().Time}
-			addonController.handleAddonDeletion(ctx, fetched)
+			err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Delete(ctx, fetched.Name, metav1.DeleteOptions{})
+			Expect(err).To(BeNil())
 			Eventually(func() error {
 				updated, err := addonController.addoncli.AddonmgrV1alpha1().Addons(testNamespace).Get(ctx, fetched.Name, metav1.GetOptions{})
 				if err != nil {
@@ -134,7 +154,7 @@ var _ = Describe("AddonController", func() {
 
 		It("instance with dependencies should succeed", func() {
 			instance = &v1alpha1.Addon{
-				ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: addonNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: testNamespace},
 				Spec: v1alpha1.AddonSpec{
 					PackageSpec: v1alpha1.PackageSpec{
 						PkgType:    v1alpha1.CompositePkg,
@@ -147,7 +167,7 @@ var _ = Describe("AddonController", func() {
 				},
 			}
 			var instance2 = &v1alpha1.Addon{
-				ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: addonNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: testNamespace},
 				Spec: v1alpha1.AddonSpec{
 					PackageSpec: v1alpha1.PackageSpec{
 						PkgType:    v1alpha1.CompositePkg,
@@ -220,3 +240,19 @@ var _ = Describe("AddonController", func() {
 
 	})
 })
+
+func parseAddonYaml(data []byte) (*v1alpha1.Addon, error) {
+	var err error
+	o := &unstructured.Unstructured{}
+	err = yaml.Unmarshal(data, &o.Object)
+	if err != nil {
+		return nil, err
+	}
+	a := &v1alpha1.Addon{}
+	err = scheme.Scheme.Convert(o, a, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	return a, nil
+}
