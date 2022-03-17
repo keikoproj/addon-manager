@@ -2,7 +2,7 @@ apiVersion: addonmgr.keikoproj.io/v1alpha1
 kind: Addon
 metadata:
   name: cluster-autoscaler
-  namespace: addon-manager-system
+  namespace: default
 spec:
   pkgChannel: cluster-autoscaler
   pkgName: cluster-autoscaler
