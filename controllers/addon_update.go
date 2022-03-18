@@ -12,6 +12,7 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -424,7 +425,11 @@ func (c *Controller) getExistingAddon(ctx context.Context, key string) (*addonv1
 			}
 		}
 		c.logger.Infof("[getExistingAddon] getting addon %s from informer.", key)
-		updating = item.(*addonv1.Addon)
+		updating, err := common.FromUnstructured(item.(*unstructured.Unstructured))
+		if err != nil || updating == nil {
+			c.logger.Errorf("[getExistingAddon] failed converting to addon %s from informer unstructure err %#v", key, err)
+			return nil, fmt.Errorf("[getExistingAddon] failed converting to addon %s from informer unstructure err %#v", key, err)
+		}
 	}
 	return updating, nil
 }
