@@ -16,16 +16,13 @@ package common
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
@@ -83,25 +80,6 @@ func NewAddonClient(cfg *rest.Config) addonv1versioned.Interface {
 	return cli
 }
 
-// NewK8sClient defines kubernetes client
-func NewK8sClient(kubeconfigPath string) (kubernetes.Interface, error) {
-	if kubeconfigPath == "" {
-		return nil, fmt.Errorf("kubeconfig should be configured a valid value")
-	}
-	var kubeconfig *rest.Config
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to load kubeconfig from %s: %v", kubeconfigPath, err)
-	}
-	kubeconfig = config
-
-	client, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create a client: %v", err)
-	}
-	return client, nil
-}
-
 func WorkFlowFromUnstructured(un *unstructured.Unstructured) (*wfv1.Workflow, error) {
 	var wf wfv1.Workflow
 	err := FromUnstructuredObj(un, &wf)
@@ -114,6 +92,7 @@ func FromUnstructured(un *unstructured.Unstructured) (*addonv1.Addon, error) {
 	return &addon, err
 }
 
+// FromUnstructuredObj convert unstructured to objects
 func FromUnstructuredObj(un *unstructured.Unstructured, v interface{}) error {
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(un.Object, v)
 	if err != nil {
