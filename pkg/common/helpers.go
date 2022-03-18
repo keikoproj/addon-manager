@@ -17,9 +17,6 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"net"
-	"os"
 	"time"
 
 	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
@@ -84,28 +81,6 @@ func NewAddonClient(cfg *rest.Config) addonv1versioned.Interface {
 		panic(err)
 	}
 	return cli
-}
-
-// return cluster config
-func InClusterConfig() (*rest.Config, error) {
-	k8shost := "KUBERNETES_SERVICE_HOST"
-	k8sport := "KUBERNETES_SERVICE_PORT"
-	if len(os.Getenv(k8shost)) == 0 {
-		addrs, err := net.LookupHost("kubernetes.default.svc")
-		if err != nil {
-			log.Fatalf(err.Error())
-		}
-		os.Setenv(k8shost, addrs[0])
-	}
-	if len(os.Getenv(k8sport)) == 0 {
-		os.Setenv(k8sport, "443")
-	}
-
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-	return cfg, nil
 }
 
 // NewK8sClient defines kubernetes client

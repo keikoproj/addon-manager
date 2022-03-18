@@ -34,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -84,13 +83,12 @@ var (
 // AddonReconciler reconciles a Addon object
 type AddonReconciler struct {
 	client.Client
-	Log             logr.Logger
-	Scheme          *runtime.Scheme
-	versionCache    addon.VersionCacheClient
-	dynClient       dynamic.Interface
-	generatedClient *kubernetes.Clientset
-	recorder        record.EventRecorder
-	statusWGMap     map[string]*sync.WaitGroup
+	Log          logr.Logger
+	Scheme       *runtime.Scheme
+	versionCache addon.VersionCacheClient
+	dynClient    dynamic.Interface
+	recorder     record.EventRecorder
+	statusWGMap  map[string]*sync.WaitGroup
 
 	wfcli      wfclientset.Interface
 	wfinformer cache.SharedIndexInformer
@@ -105,15 +103,14 @@ func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
 	}
 
 	return &AddonReconciler{
-		Client:          mgr.GetClient(),
-		Log:             ctrl.Log.WithName(controllerName),
-		Scheme:          mgr.GetScheme(),
-		versionCache:    addon.NewAddonVersionCacheClient(),
-		dynClient:       dynamic.NewForConfigOrDie(mgr.GetConfig()),
-		generatedClient: kubernetes.NewForConfigOrDie(mgr.GetConfig()),
-		recorder:        mgr.GetEventRecorderFor("addons"),
-		statusWGMap:     map[string]*sync.WaitGroup{},
-		wfcli:           wfcli,
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName(controllerName),
+		Scheme:       mgr.GetScheme(),
+		versionCache: addon.NewAddonVersionCacheClient(),
+		dynClient:    dynamic.NewForConfigOrDie(mgr.GetConfig()),
+		recorder:     mgr.GetEventRecorderFor("addons"),
+		statusWGMap:  map[string]*sync.WaitGroup{},
+		wfcli:        wfcli,
 	}
 }
 
