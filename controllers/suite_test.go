@@ -16,28 +16,39 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
-	"time"
 
-	addoninternal "github.com/keikoproj/addon-manager/pkg/addon"
+	"github.com/go-logr/logr"
+	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/pkg/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/dynamic"
-	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	// +kubebuilder:scaffold:imports
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+
+var (
+	k8sClient client.Client
+	testEnv   *envtest.Environment
+	stopMgr   chan struct{}
+	wg        *sync.WaitGroup
+	log       logr.Logger
+	ctx       context.Context
+	cancel    context.CancelFunc
+)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -47,15 +58,12 @@ func TestAPIs(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var (
-	testEnv         *envtest.Environment
-	ctx             context.Context
-	addonController *Controller
-	stopCh          chan struct{}
-)
+var _ = BeforeSuite(func(done Done) {
+	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
+	logf.SetLogger(log)
 
-func getTestController() *Controller {
-	ctx = context.TODO()
+	ctx, cancel = context.WithCancel(context.TODO())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
@@ -66,73 +74,47 @@ func getTestController() *Controller {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(cfg).ToNot(BeNil())
 
-	wfcli := common.NewWFClient(cfg)
-	if wfcli == nil {
-		panic("failed init wf client.")
-	}
-	kubecli, err := common.NewKubernetesClient(cfg)
-	if err != nil || kubecli == nil {
-		panic(err)
-	}
-	addonCli := common.NewAddonClient(cfg)
-	if addonCli == nil {
-		panic("failed init addon cli")
-	}
-	dynCli, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		panic(err)
-	}
-	if dynCli == nil {
-		panic("failed init dynCli")
-	}
+	err = addonmgrv1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 
-	addonController = newResourceController(kubecli, dynCli, addonCli, wfcli, "addon", "default")
-	Expect(addonController).NotTo(BeNil())
+	By("starting reconciler and manager")
+	k8sClient, err = client.New(cfg, client.Options{Scheme: common.GetAddonMgrScheme()})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(k8sClient).ToNot(BeNil())
 
-	stopCh = make(chan struct{})
-	logger := logrus.WithField("controllers", "addon")
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme:         common.GetAddonMgrScheme(),
+		LeaderElection: false,
+	})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(mgr).ToNot(BeNil())
 
-	addonController.scheme = common.GetAddonMgrScheme()
-	addonController.versionCache = addoninternal.NewAddonVersionCacheClient()
-	addonController.recorder = createEventRecorder(addonController.namespace, addonController.clientset, logger)
-	addonController.informer = newAddonInformer(ctx, addonController.dynCli, addonController.namespace)
-	addonController.wfinformer = utils.NewWorkflowInformer(addonController.dynCli, addonController.namespace, 0, cache.Indexers{}, utils.TweakListOptions)
-	k8sinformer := kubeinformers.NewSharedInformerFactory(kubecli, 0)
+	stopMgr, wg = StartTestManager(mgr)
+	go func() {
+		New(mgr, stopMgr)
+	}()
+	close(done)
+}, 60)
 
-	addonController.nsinformer = k8sinformer.Core().V1().Namespaces().Informer()
-	addonController.deploymentinformer = k8sinformer.Apps().V1().Deployments().Informer()
-	addonController.srvinformer = k8sinformer.Core().V1().Services().Informer()
-	addonController.configMapinformer = k8sinformer.Core().V1().ConfigMaps().Informer()
-	addonController.clusterRoleinformer = k8sinformer.Rbac().V1().ClusterRoles().Informer()
-	addonController.clusterRoleBindingInformer = k8sinformer.Rbac().V1().ClusterRoleBindings().Informer()
-	addonController.jobinformer = k8sinformer.Batch().V1().Jobs().Informer()
-	addonController.cronjobinformer = k8sinformer.Core().V1().ServiceAccounts().Informer()
-	addonController.cronjobinformer = k8sinformer.Batch().V1().CronJobs().Informer()
-	addonController.daemonSetinformer = k8sinformer.Apps().V1().DaemonSets().Informer()
-	addonController.replicaSetinformer = k8sinformer.Apps().V1().ReplicaSets().Informer()
-	addonController.statefulSetinformer = k8sinformer.Apps().V1().StatefulSets().Informer()
+var _ = AfterSuite(func() {
+	cancel()
+	By("stopping manager")
+	close(stopMgr)
+	wg.Wait()
 
-	addonController.setupaddonhandlers()
-	addonController.setupwfhandlers(ctx)
-	// addonController.setupresourcehandlers(ctx)
+	By("tearing down the test environment")
+	err := testEnv.Stop()
+	Expect(err).ToNot(HaveOccurred())
+})
 
-	stopCh := make(<-chan struct{})
-	go addonController.informer.Run(stopCh)
-	go addonController.wfinformer.Run(stopCh)
-	go addonController.nsinformer.Run(stopCh)
-	go addonController.srvinformer.Run(stopCh)
-	go addonController.configMapinformer.Run(stopCh)
-	go addonController.clusterRoleinformer.Run(stopCh)
-	go addonController.clusterRoleBindingInformer.Run(stopCh)
-	go addonController.jobinformer.Run(stopCh)
-	go addonController.cronjobinformer.Run(stopCh)
-	go addonController.daemonSetinformer.Run(stopCh)
-	go addonController.replicaSetinformer.Run(stopCh)
-	go addonController.statefulSetinformer.Run(stopCh)
-
-	if !cache.WaitForCacheSync(stopCh, addonController.informer.HasSynced, addonController.wfinformer.HasSynced) {
-		fmt.Printf("failed wait for sync.")
-	}
-	go wait.Until(addonController.runWorker, time.Second, stopCh)
-	return addonController
+func StartTestManager(mgr manager.Manager) (chan struct{}, *sync.WaitGroup) {
+	stop := make(chan struct{})
+	wg := &sync.WaitGroup{}
+	go func() {
+		defer GinkgoRecover()
+		wg.Add(1)
+		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
+		wg.Done()
+	}()
+	return stop, wg
 }
