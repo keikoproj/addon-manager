@@ -16,7 +16,6 @@ package workflows
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -752,15 +751,27 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 }
 
 func TestExtractAddOnNameAndLifecycleStep(t *testing.T) {
-	testsString := []string{
-		"event-router-4-prereqs-2c13ee7f-wf",
-		"event-router-4-install-2c13ee7f-wf",
+	g := NewGomegaWithT(t)
+	table := []struct {
+		input string
+		name  string
+		step  string
+	}{{
+		input: "event-router-4-prereqs-2c13ee7f-wf",
+		name:  "event-router-4",
+		step:  "prereqs",
+	},
+		{
+			input: "event-router-4-install-2c13ee7f-wf",
+			name:  "event-router-4",
+			step:  "install",
+		}}
+
+	for _, entry := range table {
+		name, step, err := ExtractAddOnNameAndLifecycleStep(entry.input)
+		g.Expect(err).To(Not(HaveOccurred()))
+		g.Expect(name).To(Equal(entry.name))
+		g.Expect(step).To(Equal(entry.step))
 	}
-	for _, testsString := range testsString {
-		name, step, err := ExtractAddOnNameAndLifecycleStep(testsString)
-		if err != nil {
-			fmt.Printf("failed extracting addon name and lifecycle step.")
-		}
-		fmt.Printf(" addon name %s step %s", name, step)
-	}
+
 }
