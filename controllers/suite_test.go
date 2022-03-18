@@ -16,24 +16,17 @@ package controllers
 
 import (
 	"context"
-	"path/filepath"
+	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/go-logr/logr"
-	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
-	"github.com/keikoproj/addon-manager/pkg/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
-	ctrl "sigs.k8s.io/controller-runtime"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -48,6 +41,8 @@ var (
 	log       logr.Logger
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	addonController *Controller
 )
 
 func TestAPIs(t *testing.T) {
@@ -58,63 +53,70 @@ func TestAPIs(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var _ = BeforeSuite(func(done Done) {
-	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
-	logf.SetLogger(log)
+// var _ = BeforeSuite(func(done Done) {
+// 	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
+// 	logf.SetLogger(log)
 
-	ctx, cancel = context.WithCancel(context.TODO())
+// 	ctx, cancel = context.WithCancel(context.TODO())
 
-	By("bootstrapping test environment")
-	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: true,
-	}
+// 	By("bootstrapping test environment")
+// 	testEnv = &envtest.Environment{
+// 		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+// 		ErrorIfCRDPathMissing: true,
+// 	}
 
-	cfg, err := testEnv.Start()
-	Expect(err).ToNot(HaveOccurred())
-	Expect(cfg).ToNot(BeNil())
+// 	cfg, err := testEnv.Start()
+// 	Expect(err).ToNot(HaveOccurred())
+// 	Expect(cfg).ToNot(BeNil())
 
-	err = addonmgrv1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
+// 	err = addonmgrv1alpha1.AddToScheme(scheme.Scheme)
+// 	Expect(err).NotTo(HaveOccurred())
 
-	By("starting reconciler and manager")
-	k8sClient, err = client.New(cfg, client.Options{Scheme: common.GetAddonMgrScheme()})
-	Expect(err).ToNot(HaveOccurred())
-	Expect(k8sClient).ToNot(BeNil())
+// 	By("starting reconciler and manager")
+// 	k8sClient, err = client.New(cfg, client.Options{Scheme: common.GetAddonMgrScheme()})
+// 	Expect(err).ToNot(HaveOccurred())
+// 	Expect(k8sClient).ToNot(BeNil())
 
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:         common.GetAddonMgrScheme(),
-		LeaderElection: false,
-	})
-	Expect(err).ToNot(HaveOccurred())
-	Expect(mgr).ToNot(BeNil())
+// 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+// 		Scheme:         common.GetAddonMgrScheme(),
+// 		LeaderElection: false,
+// 	})
+// 	Expect(err).ToNot(HaveOccurred())
+// 	Expect(mgr).ToNot(BeNil())
 
-	stopMgr, wg = StartTestManager(mgr)
-	go func() {
-		New(mgr, stopMgr)
-	}()
-	close(done)
-}, 60)
+// 	go func(c *Controller) {
+// 		New(mgr, stopMgr)
+// 	}(addonController)
+
+// 	stopMgr, wg = StartTestManager(mgr)
+
+// 	close(done)
+// }, 60)
 
 var _ = AfterSuite(func() {
 	cancel()
 	By("stopping manager")
 	close(stopMgr)
-	wg.Wait()
+	//wg.Wait()
 
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
 
-func StartTestManager(mgr manager.Manager) (chan struct{}, *sync.WaitGroup) {
-	stop := make(chan struct{})
-	wg := &sync.WaitGroup{}
+func StartController(mgr manager.Manager, stop chan struct{}, wg *sync.WaitGroup) {
 	go func() {
-		defer GinkgoRecover()
-		wg.Add(1)
-		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
-		wg.Done()
+		New(mgr, stopMgr)
+		fmt.Printf("start controller successfully.")
 	}()
-	return stop, wg
+}
+
+func StartTestManager(mgr manager.Manager, wg *sync.WaitGroup) {
+	go func() {
+		if err := mgr.Start(ctx); err != nil {
+			fmt.Printf("failed start test manager")
+			panic(err)
+		}
+		fmt.Printf("start test manager successfully.")
+	}()
 }

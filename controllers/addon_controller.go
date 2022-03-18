@@ -339,29 +339,35 @@ func Start(ctx context.Context, namespace string, kubeClient kubernetes.Interfac
 }
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) {
-	var kubeClient kubernetes.Interface
-
 	cfg := mgr.GetConfig()
-
-	kubeClient = kubernetes.NewForConfigOrDie(cfg)
-
+	kubeClient := kubernetes.NewForConfigOrDie(cfg)
 	dynCli, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		panic(err)
 	}
-
 	wfcli := common.NewWFClient(cfg)
 	if wfcli == nil {
 		panic("workflow client could not be nil")
 	}
+	addoncli := common.NewAddonClient(cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	Start(ctx, "addon-manager-system", kubeClient, dynCli, addoncli, wfcli)
+}
 
+func ControllerRun(c *Controller, stopChan <-chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	addoncli := common.NewAddonClient(cfg)
-	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, "addon", "addon-manager-system")
-	c.Run(ctx, stopChan)
-	<-stopChan
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	c.Run(ctx, stopCh)
+
+	sigterm := make(chan os.Signal, 1)
+	signal.Notify(sigterm, syscall.SIGTERM)
+	signal.Notify(sigterm, syscall.SIGINT)
+	<-sigterm
 }
 
 func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface, resourceType, namespace string) *Controller {

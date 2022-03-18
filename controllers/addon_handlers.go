@@ -38,6 +38,10 @@ func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Add
 		c.logger.Error("failed creating addon err :", err)
 		return err
 	}
+
+	if _, err := c.updateAddonStatus(ctx, addon); err != nil {
+		c.logger.Errorf("[handleAddonCreation] failed updating %s/%s status %#v", addon.Namespace, addon.Name, err)
+	}
 	c.addAddonToCache(addon)
 	return nil
 }
