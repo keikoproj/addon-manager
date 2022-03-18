@@ -324,7 +324,6 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 // Start prepares watchers and run their controllers, then waits for process termination signals
 func Start(ctx context.Context, namespace string, kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface) {
-
 	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, "addon", namespace)
 
 	stopCh := make(chan struct{})
@@ -338,7 +337,7 @@ func Start(ctx context.Context, namespace string, kubeClient kubernetes.Interfac
 	<-sigterm
 }
 
-func New(mgr manager.Manager, stopChan <-chan struct{}) {
+func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) {
 	cfg := mgr.GetConfig()
 	kubeClient := kubernetes.NewForConfigOrDie(cfg)
 	dynCli, err := dynamic.NewForConfig(cfg)
@@ -350,24 +349,8 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) {
 		panic("workflow client could not be nil")
 	}
 	addoncli := common.NewAddonClient(cfg)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	Start(ctx, "addon-manager-system", kubeClient, dynCli, addoncli, wfcli)
-}
-
-func ControllerRun(c *Controller, stopChan <-chan struct{}) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-
-	c.Run(ctx, stopCh)
-
-	sigterm := make(chan os.Signal, 1)
-	signal.Notify(sigterm, syscall.SIGTERM)
-	signal.Notify(sigterm, syscall.SIGINT)
-	<-sigterm
+	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, "addon", "addon-manager-system")
+	c.Run(ctx, stopChan)
 }
 
 func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface, resourceType, namespace string) *Controller {
@@ -783,8 +766,6 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
 	c.logger.Info("Starting keiko addon-manager controller")
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	serverStartTime = time.Now().Local()
 
@@ -924,7 +905,7 @@ func (c *Controller) initController(ctx context.Context) error {
 	c.logger.Infof("initController pre-process addon every restart.")
 	addonList, err := c.addoncli.AddonmgrV1alpha1().Addons(c.namespace).List(ctx, meta_v1.ListOptions{})
 	if err != nil {
-		c.logger.Fatalf("failed list %s addons ", c.namespace)
+		c.logger.Fatalf("failed list %s addons %#v", c.namespace, err)
 	}
 	for _, item := range addonList.Items {
 

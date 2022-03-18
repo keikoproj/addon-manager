@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -56,7 +57,9 @@ func main() {
 	}
 
 	stopChan := make(chan struct{})
-	controllers.New(mgr, stopChan)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	controllers.New(ctx, mgr, stopChan)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

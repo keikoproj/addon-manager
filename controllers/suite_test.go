@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -41,8 +40,6 @@ var (
 	log       logr.Logger
 	ctx       context.Context
 	cancel    context.CancelFunc
-
-	addonController *Controller
 )
 
 func TestAPIs(t *testing.T) {
@@ -53,70 +50,24 @@ func TestAPIs(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-// var _ = BeforeSuite(func(done Done) {
-// 	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
-// 	logf.SetLogger(log)
-
-// 	ctx, cancel = context.WithCancel(context.TODO())
-
-// 	By("bootstrapping test environment")
-// 	testEnv = &envtest.Environment{
-// 		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
-// 		ErrorIfCRDPathMissing: true,
-// 	}
-
-// 	cfg, err := testEnv.Start()
-// 	Expect(err).ToNot(HaveOccurred())
-// 	Expect(cfg).ToNot(BeNil())
-
-// 	err = addonmgrv1alpha1.AddToScheme(scheme.Scheme)
-// 	Expect(err).NotTo(HaveOccurred())
-
-// 	By("starting reconciler and manager")
-// 	k8sClient, err = client.New(cfg, client.Options{Scheme: common.GetAddonMgrScheme()})
-// 	Expect(err).ToNot(HaveOccurred())
-// 	Expect(k8sClient).ToNot(BeNil())
-
-// 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-// 		Scheme:         common.GetAddonMgrScheme(),
-// 		LeaderElection: false,
-// 	})
-// 	Expect(err).ToNot(HaveOccurred())
-// 	Expect(mgr).ToNot(BeNil())
-
-// 	go func(c *Controller) {
-// 		New(mgr, stopMgr)
-// 	}(addonController)
-
-// 	stopMgr, wg = StartTestManager(mgr)
-
-// 	close(done)
-// }, 60)
-
 var _ = AfterSuite(func() {
-	cancel()
 	By("stopping manager")
 	close(stopMgr)
-	//wg.Wait()
+	cancel()
 
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
 
-func StartController(mgr manager.Manager, stop chan struct{}, wg *sync.WaitGroup) {
+func StartTestManager(mgr manager.Manager) (chan struct{}, *sync.WaitGroup) {
+	stop := make(chan struct{})
+	wg := &sync.WaitGroup{}
 	go func() {
-		New(mgr, stopMgr)
-		fmt.Printf("start controller successfully.")
+		defer GinkgoRecover()
+		wg.Add(1)
+		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
+		wg.Done()
 	}()
-}
-
-func StartTestManager(mgr manager.Manager, wg *sync.WaitGroup) {
-	go func() {
-		if err := mgr.Start(ctx); err != nil {
-			fmt.Printf("failed start test manager")
-			panic(err)
-		}
-		fmt.Printf("start test manager successfully.")
-	}()
+	return stop, wg
 }

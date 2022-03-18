@@ -5,15 +5,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
-	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -24,12 +27,14 @@ import (
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 	"github.com/keikoproj/addon-manager/pkg/common"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 var (
-	addonNamespace = "default"
-	addonName      = "cluster-autoscaler"
-	addonKey       = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
+	addonNamespace  = "default"
+	addonName       = "cluster-autoscaler"
+	addonKey        = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
+	addonController = &Controller{}
 )
 
 const timeout = time.Second * 5
@@ -62,19 +67,38 @@ var _ = Describe("AddonController", func() {
 
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme:             common.GetAddonMgrScheme(),
-			MetricsBindAddress: "0",
 			LeaderElection:     false,
+			MetricsBindAddress: "0",
 		})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(mgr).ToNot(BeNil())
 
-		stopMgr = make(chan struct{})
-		wg := &sync.WaitGroup{}
-		//wg.Add(1)
-		StartTestManager(mgr, wg)
-		//wg.Wait()
-		StartController(mgr, stopMgr, wg)
+		stopMgr, wg = StartTestManager(mgr)
+		kubeClient := kubernetes.NewForConfigOrDie(cfg)
+		dynCli, err := dynamic.NewForConfig(cfg)
+		if err != nil {
+			panic(err)
+		}
+		wfcli := common.NewWFClient(cfg)
+		if wfcli == nil {
+			panic("workflow client could not be nil")
+		}
+		addoncli := common.NewAddonClient(cfg)
+		ctx, cancel = context.WithCancel(context.Background())
 
+		ns := "addon-manager-system"
+		_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: ns},
+		}, metav1.CreateOptions{})
+		if err != nil {
+			panic(err)
+		}
+		addonController = newResourceController(kubeClient, dynCli, addoncli, wfcli, "addon", ns)
+
+		go func() {
+			addonController.Run(ctx, stopMgr)
+		}()
+		Expect(addonController).ToNot(BeNil())
 	})
 
 	Describe("Addon CR can be reconciled", func() {
@@ -98,72 +122,30 @@ var _ = Describe("AddonController", func() {
 		})
 
 		It("instance should be reconciled", func() {
-			instance.SetNamespace(addonNamespace)
-			err := k8sClient.Create(context.TODO(), instance)
-			// created, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Create(ctx, instance, metav1.CreateOptions{})
-			// if apierrors.IsInvalid(err) {
-			// 	Fail(fmt.Sprintf("failed to create object, got an invalid object error. %v", err))
-			// }
+			_, err := addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Create(ctx, instance, metav1.CreateOptions{})
+			if apierrors.IsInvalid(err) {
+				Fail(fmt.Sprintf("failed to create object, got an invalid object error. %v", err))
+			}
 			Expect(err).NotTo(HaveOccurred())
-			// By("Verify addon has been reconciled by checking for checksum status")
-			// Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
+			var fetched *addonmgrv1alpha1.Addon
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+				fetched, err = addonController.addoncli.AddonmgrV1alpha1().Addons(addonNamespace).Get(ctx, instance.Name, metav1.GetOptions{})
+				if err != nil {
 					return err
 				}
 
-				if len(instance.ObjectMeta.Finalizers) > 0 {
+				if len(fetched.ObjectMeta.Finalizers) > 0 {
 					return nil
 				}
 				return fmt.Errorf("addon is not valid")
 			}, timeout).Should(Succeed())
 
-			// By("Verify addon has been reconciled by checking for checksum status")
-			// Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
+			By("Verify addon has been reconciled by checking for checksum status")
+			Expect(fetched.Status.Checksum).ShouldNot(BeEmpty())
 
-			// By("Verify addon has finalizers added which means it's valid")
-			// Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
-
-			// oldCheckSum := instance.Status.Checksum
-
-			// //Update instance params for checksum validation
-			// instance.Spec.Params.Context.ClusterRegion = "us-east-2"
-			// err = k8sClient.Update(context.TODO(), instance)
-
-			// // This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
-			// time.Sleep(5 * time.Second)
-
-			// if apierrors.IsInvalid(err) {
-			// 	log.Error(err, "failed to update object, got an invalid object error")
-			// 	return
-			// }
-			// Expect(err).NotTo(HaveOccurred())
-			// Eventually(func() error {
-			// 	if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
-			// 		return err
-			// 	}
-
-			// 	if len(instance.ObjectMeta.Finalizers) > 0 {
-			// 		return nil
-			// 	}
-			// 	return fmt.Errorf("addon is not valid")
-			// }, timeout).Should(Succeed())
-
-			// By("Verify changing addon spec generates new checksum")
-			// Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
-
-			// By("Verify addon has workflows generated with new checksum name")
-			// wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
-			// var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
-			// Eventually(func() error {
-			// 	return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
-			// }, timeout).Should(Succeed())
-			// Expect(wfv1.GetName()).Should(Equal(wfName))
-
-			// By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
-			// Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
-			// Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
+			By("Verify addon has finalizers added which means it's valid")
+			Expect(fetched.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
 		})
 	})
 })
