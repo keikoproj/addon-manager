@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
@@ -335,6 +336,32 @@ func Start(ctx context.Context, namespace string, kubeClient kubernetes.Interfac
 	signal.Notify(sigterm, syscall.SIGTERM)
 	signal.Notify(sigterm, syscall.SIGINT)
 	<-sigterm
+}
+
+func New(mgr manager.Manager, stopChan <-chan struct{}) {
+	var kubeClient kubernetes.Interface
+
+	cfg := mgr.GetConfig()
+
+	kubeClient = kubernetes.NewForConfigOrDie(cfg)
+
+	dynCli, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	wfcli := common.NewWFClient(cfg)
+	if wfcli == nil {
+		panic("workflow client could not be nil")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addoncli := common.NewAddonClient(cfg)
+	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, "addon", "addon-manager-system")
+	c.Run(ctx, stopChan)
+	<-stopChan
 }
 
 func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface, resourceType, namespace string) *Controller {

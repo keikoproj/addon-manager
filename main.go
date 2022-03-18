@@ -15,16 +15,12 @@
 package main
 
 import (
-	"context"
 	"flag"
+	"os"
 
 	"github.com/keikoproj/addon-manager/controllers"
 	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/pkg/utils"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
@@ -34,6 +30,7 @@ var (
 	debug                bool
 	metricsAddr          string
 	enableLeaderElection bool
+	setupLog             = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -47,28 +44,24 @@ func init() {
 func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
-	var kubeClient kubernetes.Interface
-	var cfg *rest.Config
-	cfg, err := rest.InClusterConfig()
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:             common.GetAddonMgrScheme(),
+		MetricsBindAddress: metricsAddr,
+		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   "addonmgr.keikoproj.io",
+	})
 	if err != nil {
-		kubeClient = utils.GetClientOutOfCluster()
-	} else {
-		kubeClient = utils.GetClient()
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
 	}
 
-	dynCli, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		panic(err)
+	stopChan := make(chan struct{})
+	controllers.New(mgr, stopChan)
+
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
 	}
-
-	wfcli := common.NewWFClient(cfg)
-	if wfcli == nil {
-		panic("workflow client could not be nil")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	addoncli := common.NewAddonClient(cfg)
-	controllers.Start(ctx, "addon-manager-system", kubeClient, dynCli, addoncli, wfcli)
+	close(stopChan)
 }

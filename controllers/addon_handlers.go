@@ -38,6 +38,7 @@ func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Add
 		c.logger.Error("failed creating addon err :", err)
 		return err
 	}
+	c.addAddonToCache(addon)
 	return nil
 }
 
@@ -290,19 +291,19 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		addon.Status.Lifecycle.Installed = addonv1.Init
 	}
 
-	latest, err := c.updateAddonStatus(ctx, addon)
-	if err != nil {
-		c.logger.Error("[createAddon] failed updating ", addon.Namespace, "/", addon.Name, " status ", err)
-		return err
-	}
+	// latest, err := c.updateAddonStatus(ctx, addon)
+	// if err != nil {
+	// 	c.logger.Error("[createAddon] failed updating ", addon.Namespace, "/", addon.Name, " status ", err)
+	// 	return err
+	// }
 
-	// status does not change, addon no update, keep previous addon object
-	if latest == nil {
-		latest = addon
-	}
+	// // status does not change, addon no update, keep previous addon object
+	// if latest == nil {
+	// 	latest = addon
+	// }
 
 	// Check if addon installation expired.
-	if !latest.Status.Lifecycle.Installed.Completed() && common.IsExpired(latest.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
+	if !addon.Status.Lifecycle.Installed.Completed() && common.IsExpired(addon.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
 		reason := fmt.Sprintf("[createAddon] Addon %s/%s ttl expired, starttime exceeded %s", addon.Namespace, addon.Name, addonapiv1.TTL.String())
 		c.recorder.Event(addon, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
@@ -317,7 +318,7 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 	}
 
 	// already update status
-	isAddonValid, err := c.handleValidation(ctx, latest)
+	isAddonValid, err := c.handleValidation(ctx, addon)
 	if err != nil || !isAddonValid {
 		c.logger.Info("[createAddon] ", addon.Namespace, "/", addon.Name, " is ", addon.Status.Lifecycle.Installed)
 		return fmt.Errorf("invalid addon, %#v", err)
@@ -325,7 +326,7 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 	c.recorder.Event(addon, "Normal", "Completed", fmt.Sprintf("addon %s/%s is valid.", addon.Namespace, addon.Name))
 
 	// Set finalizer only if it is valid
-	if err := c.SetFinalizer(ctx, latest, addonapiv1.FinalizerName); err != nil {
+	if err := c.SetFinalizer(ctx, addon, addonapiv1.FinalizerName); err != nil {
 		reason := fmt.Sprintf("[createAddon] Addon %s/%s could not add finalizer. %v", addon.Namespace, addon.Name, err)
 		c.recorder.Event(addon, "Warning", "Failed", reason)
 		c.logger.Errorf(reason)
@@ -339,7 +340,7 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		return err
 	}
 
-	err = c.createAddonHelper(ctx, latest, wfl)
+	err = c.createAddonHelper(ctx, addon, wfl)
 	if err != nil {
 		c.logger.Errorf("[createAddon] failed %s/%s err %#v", addon.Namespace, addon.Name, err)
 		return err
