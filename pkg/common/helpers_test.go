@@ -16,6 +16,9 @@ package common
 import (
 	"reflect"
 	"testing"
+
+	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestContainsString(t *testing.T) {
@@ -57,5 +60,53 @@ func TestRemoveStringNotPresent(t *testing.T) {
 	got := RemoveString(a, "toast")
 	if !reflect.DeepEqual(got, expected) {
 		t.Errorf("common.RemoveString = %v, want %v", got, expected)
+	}
+}
+
+func TestFromUnstructuredObj(t *testing.T) {
+	un := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "addonmgr.keikoproj.io/v1alpha1",
+			"kind":       "Addons",
+			"Spec": map[string]interface{}{
+				"pkgName":    "event-router",
+				"pkgVersion": "v0.2",
+				"pkgType":    "composite",
+				"params": map[string]interface{}{
+					"namespace": "addon-event-router-ns",
+					"context": map[string]interface{}{
+						"clusterName":   "cluster-name",
+						"clusterRegion": "us-west-2",
+					},
+				},
+			},
+		},
+	}
+	x := &addonv1.Addon{}
+	err := FromUnstructuredObj(un, x)
+	if err != nil {
+		t.Errorf("failed converting unstructure obj to addon instance, %#v", err)
+	}
+
+	converted, err := FromUnstructured(un)
+	if err != nil || converted == nil {
+		t.Errorf("failed converting unstructure to addon instance, %#v", err)
+	}
+
+	un = &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "argoproj.io/v1alpha1",
+			"kind":       "Workflow",
+			"Spec": map[string]interface{}{
+				"entrypoint": "whalesay",
+				"templates": map[string]interface{}{
+					"name": "whalesay",
+				},
+			},
+		}}
+
+	wf, err := WorkFlowFromUnstructured(un)
+	if err != nil || wf == nil {
+		t.Errorf("failed converting unstructure to workflow instance, %#v", err)
 	}
 }
