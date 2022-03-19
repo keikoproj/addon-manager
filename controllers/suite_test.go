@@ -84,7 +84,7 @@ func StartTestManager(mgr manager.Manager) (chan struct{}, *sync.WaitGroup) {
 	return stop, wg
 }
 
-var _ = BeforeEach(func() {
+var _ = BeforeSuite(func() {
 	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
 	logf.SetLogger(log)
 
@@ -108,7 +108,6 @@ var _ = BeforeEach(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).ToNot(BeNil())
 
-	fmt.Printf("111111111111 \n")
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:             common.GetAddonMgrScheme(),
 		LeaderElection:     false,
@@ -117,7 +116,6 @@ var _ = BeforeEach(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(mgr).ToNot(BeNil())
 
-	fmt.Printf("22222222222 \n")
 	stopMgr, wg = StartTestManager(mgr)
 	kubeClient := kubernetes.NewForConfigOrDie(cfg)
 	dynCli, err := dynamic.NewForConfig(cfg)
@@ -131,7 +129,6 @@ var _ = BeforeEach(func() {
 	addoncli := common.NewAddonClient(cfg)
 	ctx, cancel = context.WithCancel(context.Background())
 
-	fmt.Printf("333333333 \n")
 	ns := "addon-manager-system"
 	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: ns},
@@ -147,9 +144,6 @@ var _ = BeforeEach(func() {
 		defer GinkgoRecover()
 		defer wg.Done()
 		addonController.Run(ctx, stopMgr)
-		fmt.Printf("44444444 \n")
 	}()
-	fmt.Printf("5555555 \n")
-	// wg.Wait()
 	Expect(addonController).ToNot(BeNil())
 })
