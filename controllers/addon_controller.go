@@ -7,7 +7,11 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlcli "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
@@ -17,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -77,6 +82,9 @@ type Controller struct {
 	addoncli addonv1versioned.Interface
 	wfcli    wfclientset.Interface
 
+	client ctrlcli.Client
+	mgr    manager.Manager
+
 	recorder record.EventRecorder
 
 	namespace string
@@ -86,20 +94,29 @@ type Controller struct {
 	wftlock      sync.Mutex
 }
 
-// compose addon informer
-func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string) cache.SharedIndexInformer {
-	resource := schema.GroupVersionResource{
-		Group:    addonapiv1.Group,
-		Version:  "v1alpha1",
-		Resource: addonapiv1.AddonPlural,
+func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, mgr manager.Manager) cache.SharedIndexInformer {
+	addongvk := schema.GroupVersionKind{
+		Group:   addonapiv1.Group,
+		Version: "v1alpha1",
+		Kind:    addonapiv1.AddonKind,
 	}
+	mapper, err := apiutil.NewDiscoveryRESTMapper(mgr.GetConfig())
+	if err != nil {
+		panic(err)
+	}
+	mapping, err := mapper.RESTMapping(addongvk.GroupKind(), addongvk.Version)
+	if err != nil {
+		panic(err)
+	}
+	ctx = context.TODO()
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return dynCli.Resource(resource).Namespace(namespace).List(ctx, options)
+				return dynCli.Resource(mapping.Resource).Namespace(namespace).List(ctx, options)
+
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return dynCli.Resource(resource).Namespace(namespace).Watch(ctx, options)
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return dynCli.Resource(mapping.Resource).Namespace(namespace).Watch(ctx, options)
 			},
 		},
 		&unstructured.Unstructured{},
@@ -320,29 +337,37 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 }
 
 func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) {
-	cfg := mgr.GetConfig()
-	kubeClient := kubernetes.NewForConfigOrDie(cfg)
-	dynCli, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		panic(err)
+	kubeClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+	if kubeClient == nil {
+		panic("kubeClient could not be nil")
 	}
-	wfcli := common.NewWFClient(cfg)
+	dynCli := dynamic.NewForConfigOrDie(mgr.GetConfig())
+	if dynCli == nil {
+		panic("dynCli could not be nil")
+	}
+	wfcli := common.NewWFClient(mgr.GetConfig())
 	if wfcli == nil {
-		panic("workflow client could not be nil")
+		panic("wfcli could not be nil")
 	}
-	addoncli := common.NewAddonClient(cfg)
-	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, "addon", "addon-manager-system")
+	addoncli := common.NewAddonClient(mgr.GetConfig())
+	if addoncli == nil {
+		panic("addoncli could not be nil")
+	}
+
+	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, mgr.GetClient(), "addon", "addon-manager-system", mgr)
 	c.Run(ctx, stopChan)
 }
 
-func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface, resourceType, namespace string) *Controller {
+func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface, client client.Client, resourceType, namespace string, mgr manager.Manager) *Controller {
 	c := &Controller{
 		logger:    logrus.WithField("controllers", resourceType),
 		clientset: kubeClient,
 		dynCli:    dynCli,
 		addoncli:  addoncli,
 		wfcli:     wfcli,
+		client:    client,
 		namespace: namespace,
+		mgr:       mgr,
 	}
 	c.queue = workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c.wftlock = sync.Mutex{}
@@ -360,7 +385,6 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.eventType = "create"
 
 			if err == nil {
-				fmt.Printf("\n Good, I am unblocked. add event detected.\n")
 				logrus.WithField("controllers", "addon").Infof("Processing add to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
@@ -370,7 +394,6 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.eventType = "update"
 
 			if err == nil {
-				fmt.Printf("\n Good, I am unblocked. update event detected.\n")
 				logrus.WithField("controllers", "addon").Infof("Processing update to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
@@ -380,7 +403,6 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.eventType = "delete"
 
 			if err == nil {
-				fmt.Printf("\n Good, I am unblocked. delete event detected.\n")
 				logrus.WithField("controllers", "addon").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
@@ -762,7 +784,7 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	c.scheme = common.GetAddonMgrScheme()
 	c.versionCache = addoninternal.NewAddonVersionCacheClient()
 
-	c.informer = newAddonInformer(ctx, c.dynCli, c.namespace)
+	c.informer = newAddonInformer(ctx, c.dynCli, c.namespace, c.mgr)
 	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
 
 	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
@@ -892,12 +914,13 @@ func (c *Controller) processItem(ctx context.Context, newEvent Event) error {
 
 func (c *Controller) initController(ctx context.Context) error {
 	c.logger.Infof("initController pre-process addon every restart.")
+
 	addonList, err := c.addoncli.AddonmgrV1alpha1().Addons(c.namespace).List(ctx, meta_v1.ListOptions{})
 	if err != nil {
 		c.logger.Fatalf("failed list %s addons %#v", c.namespace, err)
 	}
-	for _, item := range addonList.Items {
 
+	for _, item := range addonList.Items {
 		// retrieve status from install wf
 		if item.Spec.Lifecycle.Install.Template != "" {
 			wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", item.Name, "install", item.CalculateChecksum())
