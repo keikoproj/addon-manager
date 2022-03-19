@@ -59,6 +59,7 @@ func main() {
 	stopChan := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	controllers.New(ctx, mgr, stopChan)
 
 	setupLog.Info("starting manager")

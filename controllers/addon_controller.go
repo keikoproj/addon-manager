@@ -3,10 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -320,21 +317,6 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 	resourceInformers["replicaSet"] = replicaSetinformer
 	resourceInformers["statefulSet"] = statefulSetinformer
 	return resourceInformers
-}
-
-// Start prepares watchers and run their controllers, then waits for process termination signals
-func Start(ctx context.Context, namespace string, kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface) {
-	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, "addon", namespace)
-
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-
-	c.Run(ctx, stopCh)
-
-	sigterm := make(chan os.Signal, 1)
-	signal.Notify(sigterm, syscall.SIGTERM)
-	signal.Notify(sigterm, syscall.SIGINT)
-	<-sigterm
 }
 
 func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) {
@@ -763,6 +745,10 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 // Run starts the addon-controllers controller
 func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	defer c.queue.ShutDown()
 
 	c.logger.Info("Starting keiko addon-manager controller")
@@ -810,7 +796,7 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	go c.cronjobinformer.Run(stopCh)
 	go c.replicaSetinformer.Run(stopCh)
 	go c.daemonSetinformer.Run(stopCh)
-	go c.srvinformer.Run(ctx.Done())
+	go c.srvinformer.Run(stopCh)
 	go c.replicaSetinformer.Run(stopCh)
 	go c.srvinformer.Run(stopCh)
 
