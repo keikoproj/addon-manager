@@ -360,6 +360,7 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.eventType = "create"
 
 			if err == nil {
+				fmt.Printf("\n Good, I am unblocked. add event detected.\n")
 				logrus.WithField("controllers", "addon").Infof("Processing add to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
@@ -369,6 +370,7 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.eventType = "update"
 
 			if err == nil {
+				fmt.Printf("\n Good, I am unblocked. update event detected.\n")
 				logrus.WithField("controllers", "addon").Infof("Processing update to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
@@ -378,6 +380,7 @@ func (c *Controller) setupaddonhandlers() {
 			newEvent.eventType = "delete"
 
 			if err == nil {
+				fmt.Printf("\n Good, I am unblocked. delete event detected.\n")
 				logrus.WithField("controllers", "addon").Infof("Processing delete to %v: %s", resourceType, newEvent.key)
 				c.queue.Add(newEvent)
 			}
@@ -800,7 +803,7 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	go c.replicaSetinformer.Run(stopCh)
 	go c.srvinformer.Run(stopCh)
 
-	if !cache.WaitForCacheSync(stopCh, c.HasSynced, c.wfinformer.HasSynced, c.nsinformer.HasSynced, c.deploymentinformer.HasSynced,
+	if !cache.WaitForCacheSync(ctx.Done(), c.HasSynced, c.wfinformer.HasSynced, c.nsinformer.HasSynced, c.deploymentinformer.HasSynced,
 		c.srvAcntinformer.HasSynced, c.configMapinformer.HasSynced, c.clusterRoleinformer.HasSynced, c.clusterRoleBindingInformer.HasSynced,
 		c.replicaSetinformer.HasSynced, c.daemonSetinformer.HasSynced) {
 		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))

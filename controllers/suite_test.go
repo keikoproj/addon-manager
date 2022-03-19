@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -61,16 +60,16 @@ func TestAPIs(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var _ = AfterSuite(func() {
-	By("stopping manager")
-	close(stopMgr)
-	cancel()
+// var _ = AfterSuite(func() {
+// 	By("stopping manager")
+// 	close(stopMgr)
+// 	cancel()
 
-	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+// 	By("tearing down the test environment")
+// 	err := testEnv.Stop()
+// 	Expect(err).ToNot(HaveOccurred())
 
-})
+// })
 
 func StartTestManager(mgr manager.Manager) (chan struct{}, *sync.WaitGroup) {
 	stop := make(chan struct{})
