@@ -6,9 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/sirupsen/logrus"
+	ctrlruntimecache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	ctrlcli "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -20,7 +22,7 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,7 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache" // tools-cache
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 
@@ -59,10 +62,13 @@ type Event struct {
 
 // Controller object
 type Controller struct {
-	logger             *logrus.Entry
-	clientset          kubernetes.Interface
-	queue              workqueue.RateLimitingInterface
-	informer           cache.SharedIndexInformer
+	//logger    *logrus.Entry
+	logger    logr.Logger
+	clientset kubernetes.Interface
+	queue     workqueue.RateLimitingInterface
+	//addinformer informers.GenericInformer
+
+	addoninformer      cache.SharedIndexInformer
 	wfinformer         cache.SharedIndexInformer
 	nsinformer         cache.SharedIndexInformer
 	deploymentinformer cache.SharedIndexInformer
@@ -82,7 +88,7 @@ type Controller struct {
 	addoncli addonv1versioned.Interface
 	wfcli    wfclientset.Interface
 
-	client ctrlcli.Client
+	client client.Client
 	mgr    manager.Manager
 
 	recorder record.EventRecorder
@@ -95,6 +101,7 @@ type Controller struct {
 }
 
 func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, mgr manager.Manager) cache.SharedIndexInformer {
+
 	addongvk := schema.GroupVersionKind{
 		Group:   addonapiv1.Group,
 		Version: "v1alpha1",
@@ -108,10 +115,10 @@ func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace s
 	if err != nil {
 		panic(err)
 	}
-	ctx = context.TODO()
+
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				return dynCli.Resource(mapping.Resource).Namespace(namespace).List(ctx, options)
 
 			},
@@ -132,12 +139,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 	// addon resources namespace informers
 	nsinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.CoreV1().Namespaces().List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.CoreV1().Namespaces().Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.CoreV1().Namespaces().Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -148,12 +155,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	deploymentinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.AppsV1().Deployments("").List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.AppsV1().Deployments("").List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.AppsV1().Deployments("").Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.AppsV1().Deployments("").Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -164,12 +171,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	srvinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.CoreV1().Services("").List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.CoreV1().Services("").List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.CoreV1().Services("").Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.CoreV1().Services("").Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -180,12 +187,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	configMapinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.CoreV1().ConfigMaps("").List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.CoreV1().ConfigMaps("").List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.CoreV1().ConfigMaps("").Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.CoreV1().ConfigMaps("").Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -196,12 +203,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	clusterRoleinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.RbacV1().ClusterRoles().List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.RbacV1().ClusterRoles().Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.RbacV1().ClusterRoles().Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -212,12 +219,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	clusterRoleBindingInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.RbacV1().ClusterRoleBindings().List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.RbacV1().ClusterRoleBindings().Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.RbacV1().ClusterRoleBindings().Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -228,12 +235,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	srvAcntinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.CoreV1().ServiceAccounts(namespace).List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.CoreV1().ServiceAccounts(namespace).List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.CoreV1().ServiceAccounts(namespace).Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.CoreV1().ServiceAccounts(namespace).Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -244,12 +251,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	jobinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.BatchV1().Jobs(namespace).List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.BatchV1().Jobs(namespace).Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.BatchV1().Jobs(namespace).Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -260,12 +267,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	cronjobinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.BatchV1beta1().CronJobs(namespace).List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.BatchV1beta1().CronJobs(namespace).List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.BatchV1beta1().CronJobs(namespace).Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.BatchV1beta1().CronJobs(namespace).Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -276,12 +283,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	daemonSetinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.AppsV1().DaemonSets(namespace).List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.AppsV1().DaemonSets(namespace).Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.AppsV1().DaemonSets(namespace).Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -292,12 +299,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	replicaSetinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.AppsV1().ReplicaSets(namespace).List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.AppsV1().ReplicaSets(namespace).Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.AppsV1().ReplicaSets(namespace).Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -308,12 +315,12 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 
 	statefulSetinformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return kubeClient.AppsV1().StatefulSets(namespace).List(ctx, meta_v1.ListOptions{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return kubeClient.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return kubeClient.AppsV1().StatefulSets(namespace).Watch(ctx, meta_v1.ListOptions{
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return kubeClient.AppsV1().StatefulSets(namespace).Watch(ctx, metav1.ListOptions{
 					LabelSelector: ResourcetweakListOptions()})
 			},
 		},
@@ -355,12 +362,12 @@ func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) {
 	}
 
 	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, mgr.GetClient(), "addon", "addon-manager-system", mgr)
-	c.Run(ctx, stopChan)
+	mgr.Add(c)
 }
 
 func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface, client client.Client, resourceType, namespace string, mgr manager.Manager) *Controller {
 	c := &Controller{
-		logger:    logrus.WithField("controllers", resourceType),
+		logger:    mgr.GetLogger(),
 		clientset: kubeClient,
 		dynCli:    dynCli,
 		addoncli:  addoncli,
@@ -379,7 +386,7 @@ func (c *Controller) setupaddonhandlers() {
 	var err error
 	resourceType := "addon"
 
-	c.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	c.addoninformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
 			newEvent.eventType = "create"
@@ -768,23 +775,24 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 }
 
 // Run starts the addon-controllers controller
-func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
+func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}, mgr manager.Manager) {
 	defer utilruntime.HandleCrash()
+	defer c.queue.ShutDown()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	defer c.queue.ShutDown()
+	//ctx = context.TODO()
 
 	c.logger.Info("Starting keiko addon-manager controller")
 
 	serverStartTime = time.Now().Local()
 
-	c.recorder = createEventRecorder(c.namespace, c.clientset, c.logger)
+	//c.recorder = createEventRecorder(c.namespace, c.clientset, c.logger)
+	c.recorder = mgr.GetEventRecorderFor("addon-manager-controller")
 	c.scheme = common.GetAddonMgrScheme()
 	c.versionCache = addoninternal.NewAddonVersionCacheClient()
 
-	c.informer = newAddonInformer(ctx, c.dynCli, c.namespace, c.mgr)
+	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace, mgr)
 	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
 
 	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
@@ -802,14 +810,14 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	c.statefulSetinformer = resourceInformers["statefulSet"]
 
 	if err := c.initController(ctx); err != nil {
-		c.logger.Errorf("[Run] pre-process addon(s) err %#v", err)
+		c.logger.Error(err, "[Run] pre-process addon(s)")
 	}
 
 	c.setupaddonhandlers()
 	c.setupwfhandlers(ctx)
 	c.setupresourcehandlers(ctx)
 
-	go c.informer.Run(stopCh)
+	go c.addoninformer.Run(stopCh)
 	go c.wfinformer.Run(stopCh)
 	go c.nsinformer.Run(stopCh)
 	go c.deploymentinformer.Run(stopCh)
@@ -825,14 +833,12 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	go c.replicaSetinformer.Run(stopCh)
 	go c.srvinformer.Run(stopCh)
 
-	if !cache.WaitForCacheSync(ctx.Done(), c.HasSynced, c.wfinformer.HasSynced, c.nsinformer.HasSynced, c.deploymentinformer.HasSynced,
-		c.srvAcntinformer.HasSynced, c.configMapinformer.HasSynced, c.clusterRoleinformer.HasSynced, c.clusterRoleBindingInformer.HasSynced,
-		c.replicaSetinformer.HasSynced, c.daemonSetinformer.HasSynced) {
+	if !c.mgr.GetCache().WaitForCacheSync(ctx) {
 		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
-		return
+		panic("failed sync cache.")
 	}
-
 	c.logger.Info("Keiko addon-manager controller synced and ready")
+
 	for i := 0; i < 5; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -841,7 +847,7 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 
 // HasSynced is required for the cache.Controller interface.
 func (c *Controller) HasSynced() bool {
-	return c.informer.HasSynced()
+	return c.addoninformer.HasSynced()
 }
 
 func (c *Controller) runWorker() {
@@ -856,7 +862,7 @@ func (c *Controller) runWorker() {
 func (c *Controller) processNextItem(ctx context.Context) bool {
 	newEvent, quit := c.queue.Get()
 	if quit {
-		c.logger.Debugf("received shutdown message.")
+		c.logger.Info("received shutdown message.")
 		return false
 	}
 	defer c.queue.Done(newEvent)
@@ -865,10 +871,10 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 	if err == nil {
 		c.queue.Forget(newEvent)
 	} else if c.queue.NumRequeues(newEvent) < maxRetries {
-		c.logger.Errorf("Error processing %s (will retry): %v", newEvent.(Event).key, err)
+		c.logger.Error(err, "Error processing %s (will retry): %v", newEvent.(Event).key, err)
 		c.queue.AddRateLimited(newEvent)
 	} else {
-		c.logger.Errorf("Error processing %s (giving up): %v", newEvent.(Event).key, err)
+		c.logger.Error(err, "Error processing %s (giving up): %v", newEvent.(Event).key, err)
 		c.queue.Forget(newEvent)
 		utilruntime.HandleError(err)
 	}
@@ -876,11 +882,17 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 	return true
 }
 
+func (c *Controller) Start(ctx context.Context) error {
+	stopCh := make(chan struct{})
+	go c.Run(ctx, stopCh, c.mgr)
+	return nil
+}
+
 func (c *Controller) processItem(ctx context.Context, newEvent Event) error {
-	obj, exists, err := c.informer.GetIndexer().GetByKey(newEvent.key)
+	obj, exists, err := c.addoninformer.GetIndexer().GetByKey(newEvent.key)
 	if err != nil {
 		msg := fmt.Sprintf("failed fetching key %s from cache, err %v ", newEvent.key, err)
-		c.logger.Error(msg)
+		c.logger.Error(err, msg)
 		return fmt.Errorf(msg)
 	} else if !exists {
 		if newEvent.eventType == "delete" {
@@ -889,14 +901,14 @@ func (c *Controller) processItem(ctx context.Context, newEvent Event) error {
 		msg := fmt.Sprintf("event %s obj %s does not exist", newEvent.eventType, newEvent.key)
 		_, addonName := c.namespacenameFromKey(newEvent.key)
 		c.removeFromCache(addonName)
-		c.logger.Error(msg)
+		c.logger.Error(err, msg)
 		return fmt.Errorf(msg)
 	}
 
 	addon, err := common.FromUnstructured(obj.(*unstructured.Unstructured))
 	if err != nil {
 		msg := fmt.Sprintf("obj %s is not addon, err %v", newEvent.key, err)
-		c.logger.Error(msg)
+		c.logger.Error(err, msg)
 		return fmt.Errorf(msg)
 	}
 
@@ -913,18 +925,20 @@ func (c *Controller) processItem(ctx context.Context, newEvent Event) error {
 }
 
 func (c *Controller) initController(ctx context.Context) error {
-	c.logger.Infof("initController pre-process addon every restart.")
+	c.logger.Info("initController pre-process addon every restart.")
 
-	addonList, err := c.addoncli.AddonmgrV1alpha1().Addons(c.namespace).List(ctx, meta_v1.ListOptions{})
+	addonList := &addonv1.AddonList{}
+	err := c.client.List(ctx, addonList, &client.ListOptions{})
 	if err != nil {
-		c.logger.Fatalf("failed list %s addons %#v", c.namespace, err)
+		c.logger.Error(err, " failed list addons")
+		panic(err)
 	}
 
 	for _, item := range addonList.Items {
 		// retrieve status from install wf
 		if item.Spec.Lifecycle.Install.Template != "" {
 			wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", item.Name, "install", item.CalculateChecksum())
-			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, meta_v1.GetOptions{})
+			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, metav1.GetOptions{})
 			if err == nil && wf != nil {
 				// align status
 				item.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(wf.Status.Phase)
@@ -940,10 +954,10 @@ func (c *Controller) initController(ctx context.Context) error {
 					labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
 					item.SetLabels(labels)
 				}
-				c.logger.Infof("[initController] addon %s/%s install status %s", item.Namespace, item.Name, item.Status.Lifecycle.Installed)
+				c.logger.WithValues("[initController]", fmt.Sprintf(" addon %s/%s install status %s", item.Namespace, item.Name, item.Status.Lifecycle.Installed))
 			} else {
 				// error case the install wf does not exist
-				c.logger.Warnf("[initController] failed get addon %s/%s install wf", item.Namespace, item.Name)
+				c.logger.WithValues("[initController]", fmt.Sprintf("failed get addon %s/%s install wf", item.Namespace, item.Name))
 				if item.Status.Lifecycle.Installed.Completed() {
 					labels := item.GetLabels()
 					if labels == nil {
@@ -957,18 +971,18 @@ func (c *Controller) initController(ctx context.Context) error {
 
 		if item.Spec.Lifecycle.Prereqs.Template != "" {
 			wfIdentifierName := fmt.Sprintf("%s-%s-%s-wf", item.Name, "prereqs", item.CalculateChecksum())
-			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, meta_v1.GetOptions{})
+			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, metav1.GetOptions{})
 			if err == nil && wf != nil {
 				// reset lifecycle status
 				item.Status.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(wf.Status.Phase)
-				c.logger.Infof("[initController] addon %s/%s prereqs status %s", item.Namespace, item.Name, item.Status.Lifecycle.Prereqs)
+				c.logger.WithValues("[initController]", fmt.Sprintf("addon %s/%s prereqs status %s", item.Namespace, item.Name, item.Status.Lifecycle.Prereqs))
 			} else {
-				c.logger.Warnf("[initController] failed get addon %s/%s prereqs wf", item.Namespace, item.Name)
+				c.logger.WithValues("[initController]", fmt.Sprintf(" failed get addon %s/%s prereqs wf", item.Namespace, item.Name))
 			}
 		}
 
 		if item.Spec.Lifecycle.Prereqs.Template == "" && item.Spec.Lifecycle.Install.Template == "" {
-			c.logger.Infof("[initController] addon %s/%s does not lifecycle.", item.Namespace, item.Name)
+			c.logger.WithValues("[initController]", fmt.Sprintf(" addon %s/%s does not have lifecycle.", item.Namespace, item.Name))
 			item.Status.Lifecycle.Installed = addonv1.Succeeded
 			item.Status.Reason = ""
 
@@ -982,17 +996,44 @@ func (c *Controller) initController(ctx context.Context) error {
 
 		// might stuck on dependency
 		if item.Status.Lifecycle.Installed == addonv1.DepPending || item.Status.Lifecycle.Installed == addonv1.ValidationFailed {
-			c.logger.Warnf("[initController] addon %s/%s stuck on dependency.", item.Namespace, item.Name)
+			c.logger.WithValues("[initController] ", "addon %s/%s stuck on dependency.", item.Namespace, item.Name)
 		}
 
-		item.Finalizers = append(item.Finalizers, addonapiv1.FinalizerName)
-		_, err := c.updateAddon(ctx, &item)
+		item.Finalizers = c.mergeFinalizer(item.Finalizers, []string{addonapiv1.FinalizerName})
+		err := c.updateAddon(ctx, &item)
 		if err != nil {
-			c.logger.Errorf("[initController] failed patch addon %s/%s labels.", item.Namespace, item.Name)
+			c.logger.Error(err, "[initController] failed patch addon %s/%s labels.", item.Namespace, item.Name)
 		}
-		c.logger.Infof("[initController] pre-press addon %s/%s successfully. adding into cache.", item.Namespace, item.Name)
+		c.logger.WithValues("[initController]", fmt.Sprintf(" pre-press addon %s/%s successfully. adding into cache.", item.Namespace, item.Name))
 		c.addAddonToCache(&item)
 	}
-	c.logger.Infof("initController pre-process end.")
+	c.logger.Info("initController pre-process end.")
 	return nil
+}
+
+func NewCachingClient(cache ctrlruntimecache.Cache, config *rest.Config, options client.Options, uncachedObjects ...client.Object) (client.Client, error) {
+	c, err := client.New(config, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.NewDelegatingClient(client.NewDelegatingClientInput{
+		CacheReader:     cache,
+		Client:          c,
+		UncachedObjects: uncachedObjects,
+
+		CacheUnstructured: true,
+	})
+}
+
+func NewCacheFunc(config *rest.Config, opts ctrlruntimecache.Options) (ctrlruntimecache.Cache, error) {
+	mapper, err := apiutil.NewDiscoveryRESTMapper(config)
+	if err != nil {
+		panic(err)
+	}
+	return ctrlruntimecache.New(config, ctrlruntimecache.Options{
+		Scheme:    common.GetAddonMgrScheme(),
+		Mapper:    mapper,
+		Namespace: "addon-manager-system",
+	})
 }

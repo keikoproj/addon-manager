@@ -21,7 +21,9 @@ import (
 
 	"github.com/keikoproj/addon-manager/controllers"
 	"github.com/keikoproj/addon-manager/pkg/common"
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
@@ -46,11 +48,13 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		NewClient:          controllers.NewCachingClient,
 		Scheme:             common.GetAddonMgrScheme(),
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		LeaderElectionID:   "addonmgr.keikoproj.io",
 	})
+
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -59,7 +63,6 @@ func main() {
 	stopChan := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	controllers.New(ctx, mgr, stopChan)
 
 	setupLog.Info("starting manager")
