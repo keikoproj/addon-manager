@@ -104,7 +104,7 @@ var _ = BeforeSuite(func() {
 		MetricsBindAddress:      ":8080",
 		LeaderElection:          true,
 		LeaderElectionID:        "addonmgr.keikoproj.io",
-		LeaderElectionNamespace: "addon-manager-system",
+		LeaderElectionNamespace: addonNamespace,
 	})
 
 	if err != nil {
