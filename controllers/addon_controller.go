@@ -66,10 +66,11 @@ type Event struct {
 // Controller object
 type Controller struct {
 	//logger    *logrus.Entry
-	logger    logr.Logger
-	clientset kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	//addinformer informers.GenericInformer
+	logger       logr.Logger
+	clientset    kubernetes.Interface
+	queue        workqueue.RateLimitingInterface
+	config       *rest.Config
+	runtimecache ctrlruntimecache.Cache
 
 	addoninformer      cache.SharedIndexInformer
 	wfinformer         cache.SharedIndexInformer
@@ -103,13 +104,13 @@ type Controller struct {
 	wftlock      sync.Mutex
 }
 
-func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, mgr manager.Manager) cache.SharedIndexInformer {
+func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, config *rest.Config) cache.SharedIndexInformer {
 	addongvk := schema.GroupVersionKind{
 		Group:   addonapiv1.Group,
 		Version: "v1alpha1",
 		Kind:    addonapiv1.AddonKind,
 	}
-	mapper, err := apiutil.NewDiscoveryRESTMapper(mgr.GetConfig())
+	mapper, err := apiutil.NewDiscoveryRESTMapper(config)
 	if err != nil {
 		panic(err)
 	}
@@ -363,20 +364,33 @@ func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) {
 		panic("addoncli could not be nil")
 	}
 
-	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, mgr.GetClient(), "addon", "addon-manager-system", mgr)
+	ctrlruntimeclient := mgr.GetClient()
+	logger := mgr.GetLogger().WithName("addon-manager-controller")
+	eventRecorder := mgr.GetEventRecorderFor("addon-manager-controller")
+	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, ctrlruntimeclient, "addon", "addon-manager-system",
+		logger, eventRecorder, mgr.GetConfig(), mgr.GetCache())
 	mgr.Add(c)
 }
 
-func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface, addoncli addonv1versioned.Interface, wfcli wfclientset.Interface, client client.Client, resourceType, namespace string, mgr manager.Manager) *Controller {
+func newResourceController(kubeClient kubernetes.Interface, dynCli dynamic.Interface,
+	addoncli addonv1versioned.Interface, wfcli wfclientset.Interface,
+	ctrlruntimeclient client.Client,
+	resourceType, namespace string,
+	logger logr.Logger,
+	eventRecorder record.EventRecorder,
+	config *rest.Config,
+	runtimecache ctrlruntimecache.Cache) *Controller {
 	c := &Controller{
-		logger:    mgr.GetLogger(),
-		clientset: kubeClient,
-		dynCli:    dynCli,
-		addoncli:  addoncli,
-		wfcli:     wfcli,
-		client:    client,
-		namespace: namespace,
-		mgr:       mgr,
+		logger:       logger,
+		clientset:    kubeClient,
+		dynCli:       dynCli,
+		addoncli:     addoncli,
+		wfcli:        wfcli,
+		client:       ctrlruntimeclient,
+		namespace:    namespace,
+		recorder:     eventRecorder,
+		config:       config,
+		runtimecache: runtimecache,
 	}
 	c.queue = workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c.wftlock = sync.Mutex{}
@@ -780,78 +794,6 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 	})
 }
 
-// Run starts the addon-controllers controller
-func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
-	defer utilruntime.HandleCrash()
-	defer c.queue.ShutDown()
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	//ctx = context.TODO()
-
-	c.logger.Info("Starting keiko addon-manager controller")
-
-	serverStartTime = time.Now().Local()
-
-	//c.recorder = createEventRecorder(c.namespace, c.clientset, c.logger)
-	c.recorder = c.mgr.GetEventRecorderFor("addon-manager-controller")
-	c.scheme = common.GetAddonMgrScheme()
-	c.versionCache = addoninternal.NewAddonVersionCacheClient()
-
-	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace, c.mgr)
-	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
-
-	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
-	c.nsinformer = resourceInformers["namespace"]
-	c.deploymentinformer = resourceInformers["deployment"]
-	c.srvinformer = resourceInformers["service"]
-	c.configMapinformer = resourceInformers["configmap"]
-	c.clusterRoleinformer = resourceInformers["clusterrole"]
-	c.clusterRoleBindingInformer = resourceInformers["clusterRoleBinding"]
-	c.jobinformer = resourceInformers["job"]
-	c.srvAcntinformer = resourceInformers["serviceAccount"]
-	c.cronjobinformer = resourceInformers["cronjob"]
-	c.daemonSetinformer = resourceInformers["daemonSet"]
-	c.replicaSetinformer = resourceInformers["replicaSet"]
-	c.statefulSetinformer = resourceInformers["statefulSet"]
-
-	if err := c.initController(ctx); err != nil {
-		c.logger.Error(err, "[Run] pre-process addon(s)")
-	}
-
-	c.setupaddonhandlers()
-	c.setupwfhandlers(ctx)
-	c.setupresourcehandlers(ctx)
-
-	go c.addoninformer.Run(stopCh)
-	go c.wfinformer.Run(stopCh)
-
-	go c.nsinformer.Run(stopCh)
-	go c.deploymentinformer.Run(stopCh)
-	go c.srvAcntinformer.Run(stopCh)
-	go c.configMapinformer.Run(stopCh)
-	go c.clusterRoleinformer.Run(stopCh)
-	go c.clusterRoleBindingInformer.Run(stopCh)
-	go c.jobinformer.Run(stopCh)
-	go c.cronjobinformer.Run(stopCh)
-	go c.replicaSetinformer.Run(stopCh)
-	go c.daemonSetinformer.Run(stopCh)
-	go c.srvinformer.Run(stopCh)
-	go c.replicaSetinformer.Run(stopCh)
-	go c.srvinformer.Run(stopCh)
-
-	if !c.mgr.GetCache().WaitForCacheSync(ctx) {
-		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
-		panic("failed sync cache.")
-	}
-	c.logger.Info("Keiko addon-manager controller synced and ready")
-
-	for i := 0; i < 5; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
-	}
-	<-stopCh
-}
-
 // HasSynced is required for the cache.Controller interface.
 func (c *Controller) HasSynced() bool {
 	return c.addoninformer.HasSynced()
@@ -891,8 +833,72 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 }
 
 func (c *Controller) Start(ctx context.Context) error {
+	defer utilruntime.HandleCrash()
+	defer c.queue.ShutDown()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	c.logger.Info("Starting keiko addon-manager controller")
+	serverStartTime = time.Now().Local()
+
+	c.scheme = common.GetAddonMgrScheme()
+	c.versionCache = addoninternal.NewAddonVersionCacheClient()
+
+	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace, c.config)
+	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
+
+	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
+	c.nsinformer = resourceInformers["namespace"]
+	c.deploymentinformer = resourceInformers["deployment"]
+	c.srvinformer = resourceInformers["service"]
+	c.configMapinformer = resourceInformers["configmap"]
+	c.clusterRoleinformer = resourceInformers["clusterrole"]
+	c.clusterRoleBindingInformer = resourceInformers["clusterRoleBinding"]
+	c.jobinformer = resourceInformers["job"]
+	c.srvAcntinformer = resourceInformers["serviceAccount"]
+	c.cronjobinformer = resourceInformers["cronjob"]
+	c.daemonSetinformer = resourceInformers["daemonSet"]
+	c.replicaSetinformer = resourceInformers["replicaSet"]
+	c.statefulSetinformer = resourceInformers["statefulSet"]
+
+	if err := c.initController(ctx); err != nil {
+		c.logger.Error(err, "[Run] pre-process addon(s)")
+	}
+
+	c.setupaddonhandlers()
+	c.setupwfhandlers(ctx)
+	c.setupresourcehandlers(ctx)
+
+	go c.addoninformer.Run(ctx.Done())
+	go c.wfinformer.Run(ctx.Done())
+
+	go c.nsinformer.Run(ctx.Done())
+	go c.deploymentinformer.Run(ctx.Done())
+	go c.srvAcntinformer.Run(ctx.Done())
+	go c.configMapinformer.Run(ctx.Done())
+	go c.clusterRoleinformer.Run(ctx.Done())
+	go c.clusterRoleBindingInformer.Run(ctx.Done())
+	go c.jobinformer.Run(ctx.Done())
+	go c.cronjobinformer.Run(ctx.Done())
+	go c.replicaSetinformer.Run(ctx.Done())
+	go c.daemonSetinformer.Run(ctx.Done())
+	go c.srvinformer.Run(ctx.Done())
+	go c.replicaSetinformer.Run(ctx.Done())
+	go c.srvinformer.Run(ctx.Done())
+
+	if !c.runtimecache.WaitForCacheSync(ctx) {
+		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
+		panic("failed sync cache.")
+	}
+	c.logger.Info("Keiko addon-manager controller synced and ready")
+
 	stopCh := make(chan struct{})
-	go c.Run(ctx, stopCh)
+	for i := 0; i < 5; i++ {
+		go wait.Until(c.runWorker, time.Second, stopCh)
+	}
+
+	<-ctx.Done()
 	return nil
 }
 

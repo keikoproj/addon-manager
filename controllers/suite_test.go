@@ -117,7 +117,7 @@ var _ = BeforeSuite(func(done Done) {
 		LeaderElection:          true,
 		LeaderElectionID:        "addonmgr.keikoproj.io",
 		LeaderElectionNamespace: addonNamespace,
-		Logger:                  ctrl.Log.WithName("addon-manager"),
+		Logger:                  ctrl.Log.WithName("addon-manager-controller"),
 	})
 
 	if err != nil {
