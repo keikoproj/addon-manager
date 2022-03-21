@@ -819,6 +819,7 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}, mgr manage
 
 	go c.addoninformer.Run(stopCh)
 	go c.wfinformer.Run(stopCh)
+
 	go c.nsinformer.Run(stopCh)
 	go c.deploymentinformer.Run(stopCh)
 	go c.srvAcntinformer.Run(stopCh)

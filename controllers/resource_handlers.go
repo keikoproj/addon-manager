@@ -17,7 +17,7 @@ func (c *Controller) handleNamespaceAdd(ctx context.Context, obj interface{}) er
 	ns, ok := obj.(*v1.Namespace)
 	if !ok {
 		msg := "expecting v1 namespace"
-		c.logger.Error(msg)
+		//c.logger.Error(err, msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := ns.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -26,7 +26,7 @@ func (c *Controller) handleNamespaceAdd(ctx context.Context, obj interface{}) er
 		addonName, ok = ns.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleNamespaceAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(err, msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -39,7 +39,7 @@ func (c *Controller) handleNamespaceAdd(ctx context.Context, obj interface{}) er
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " namespace resource status.  err : ", err)
+		c.logger.Error(err, "failed updating ", key, " namespace resource status.  err : ", err)
 	}
 	return nil
 }
@@ -55,7 +55,7 @@ func (c *Controller) handleNamespaceDeletion(ctx context.Context, obj interface{
 func (c *Controller) handleDeploymentAdd(ctx context.Context, obj interface{}) error {
 	deploy, ok := obj.(*appsv1.Deployment)
 	if !ok {
-		c.logger.Error("expecting appsv1 deployment")
+		//c.logger.Error("expecting appsv1 deployment")
 		return fmt.Errorf("expecting appsv1 deployment")
 	}
 	addonName, ok := deploy.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -64,7 +64,7 @@ func (c *Controller) handleDeploymentAdd(ctx context.Context, obj interface{}) e
 		addonName, ok = deploy.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleDeploymentAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(err, msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -77,7 +77,7 @@ func (c *Controller) handleDeploymentAdd(ctx context.Context, obj interface{}) e
 	key := fmt.Sprintf("%s/%s", c.namespace, addonName)
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " deployment resource status. err:", err)
+		c.logger.Error(err, "failed updating ", key, " deployment resource status. err:", err)
 	}
 	return nil
 }
@@ -95,7 +95,7 @@ func (c *Controller) handleServiceAccountAdd(ctx context.Context, obj interface{
 	srvacnt, ok := obj.(*v1.ServiceAccount)
 	if !ok {
 		msg := "expecting v1 ServiceAccount"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := srvacnt.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -104,7 +104,7 @@ func (c *Controller) handleServiceAccountAdd(ctx context.Context, obj interface{
 		addonName, ok = srvacnt.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleServiceAccountAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(err, msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -117,7 +117,7 @@ func (c *Controller) handleServiceAccountAdd(ctx context.Context, obj interface{
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " service account resource status.  err : ", err)
+		c.logger.Error(err, "failed updating ", key, " service account resource status.  err : ", err)
 	}
 	return nil
 }
@@ -135,7 +135,7 @@ func (c *Controller) handleConfigMapAdd(ctx context.Context, obj interface{}) er
 	configmap, ok := obj.(*v1.ConfigMap)
 	if !ok {
 		msg := "expecting v1 ConfigMap"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := configmap.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -144,7 +144,7 @@ func (c *Controller) handleConfigMapAdd(ctx context.Context, obj interface{}) er
 		addonName, ok = configmap.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleConfigMapAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -157,7 +157,7 @@ func (c *Controller) handleConfigMapAdd(ctx context.Context, obj interface{}) er
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " configmap resource status.  err : ", err)
+		c.logger.Error(err, "failed updating ", key, " configmap resource status.  err : ", err)
 	}
 	return nil
 }
@@ -175,7 +175,7 @@ func (c *Controller) handleClusterRoleAdd(ctx context.Context, obj interface{}) 
 	clsRole, ok := obj.(*rbac_v1.ClusterRole)
 	if !ok {
 		msg := "expecting v1 ClusterRole"
-		c.logger.Error(msg)
+		//c.logger.Error(err,msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := clsRole.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -184,7 +184,7 @@ func (c *Controller) handleClusterRoleAdd(ctx context.Context, obj interface{}) 
 		addonName, ok = clsRole.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleClusterRoleAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -197,7 +197,7 @@ func (c *Controller) handleClusterRoleAdd(ctx context.Context, obj interface{}) 
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed updating ", key, " cluster role resource status.  err : ", err)
+		c.logger.Error(err, "failed updating ", key, " cluster role resource status.  err : ", err)
 	}
 	return nil
 }
@@ -214,7 +214,7 @@ func (c *Controller) handleClusterRoleBindingAdd(ctx context.Context, obj interf
 	clsRoleBnd, ok := obj.(*rbac_v1.ClusterRoleBinding)
 	if !ok {
 		msg := "expecting v1 ClusterRole"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := clsRoleBnd.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -223,7 +223,7 @@ func (c *Controller) handleClusterRoleBindingAdd(ctx context.Context, obj interf
 		addonName, ok = clsRoleBnd.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleClusterRoleBindingAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -236,7 +236,7 @@ func (c *Controller) handleClusterRoleBindingAdd(ctx context.Context, obj interf
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error("failed ClusterRoleBinding ", key, " resource status.  err : ", err)
+		c.logger.Error(err, "failed ClusterRoleBinding ", key, " resource status.  err : ", err)
 	}
 	return nil
 }
@@ -253,7 +253,7 @@ func (c *Controller) handleJobAdd(ctx context.Context, obj interface{}) error {
 	job, ok := obj.(*batch_v1.Job)
 	if !ok {
 		msg := "expecting v1 Job"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := job.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -262,7 +262,7 @@ func (c *Controller) handleJobAdd(ctx context.Context, obj interface{}) error {
 		addonName, ok = job.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleJobAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -275,7 +275,7 @@ func (c *Controller) handleJobAdd(ctx context.Context, obj interface{}) error {
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error("failed job ", key, " resource status.  err : ", err)
+		c.logger.Error(err, "failed job ", key, " resource status.  err : ", err)
 	}
 	return nil
 }
@@ -284,7 +284,7 @@ func (c *Controller) handleCronJobAdd(ctx context.Context, obj interface{}) erro
 	cjob, ok := obj.(*batch_v1.CronJob)
 	if !ok {
 		msg := "expecting v1 CronJob"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := cjob.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -293,7 +293,7 @@ func (c *Controller) handleCronJobAdd(ctx context.Context, obj interface{}) erro
 		addonName, ok = cjob.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleCronJobAdd] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -306,7 +306,7 @@ func (c *Controller) handleCronJobAdd(ctx context.Context, obj interface{}) erro
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error("failed CronJob ", key, " resource status.  err : ", err)
+		c.logger.Error(err, "failed CronJob ", key, " resource status.  err : ", err)
 	}
 	return nil
 }
@@ -315,7 +315,7 @@ func (c *Controller) handleReplicaSet(ctx context.Context, obj interface{}) erro
 	replicaSet, ok := obj.(*appsv1.ReplicaSet)
 	if !ok {
 		msg := "expecting v1 DaemonSet"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := replicaSet.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -324,7 +324,7 @@ func (c *Controller) handleReplicaSet(ctx context.Context, obj interface{}) erro
 		addonName, ok = replicaSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleReplicaSet] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -337,7 +337,7 @@ func (c *Controller) handleReplicaSet(ctx context.Context, obj interface{}) erro
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error("failed DaemonSet ", key, " resource status.  err : ", err)
+		c.logger.Error(err, "failed DaemonSet ", key, " resource status.  err : ", err)
 	}
 	return nil
 }
@@ -346,7 +346,7 @@ func (c *Controller) handleDaemonSet(ctx context.Context, obj interface{}) error
 	daemonSet, ok := obj.(*appsv1.DaemonSet)
 	if !ok {
 		msg := "expecting v1 DaemonSet"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := daemonSet.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -355,7 +355,7 @@ func (c *Controller) handleDaemonSet(ctx context.Context, obj interface{}) error
 		addonName, ok = daemonSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleDaemonSet] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -369,7 +369,7 @@ func (c *Controller) handleDaemonSet(ctx context.Context, obj interface{}) error
 
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error("failed DaemonSet ", key, " resource status.  err : ", err)
+		c.logger.Error(err, "failed DaemonSet ", key, " resource status.  err : ", err)
 	}
 	return nil
 }
@@ -378,7 +378,7 @@ func (c *Controller) handleStatefulSet(ctx context.Context, obj interface{}) err
 	statefulSet, ok := obj.(*appsv1.StatefulSet)
 	if !ok {
 		msg := "expecting v1 StatefulSet"
-		c.logger.Error(msg)
+		//c.logger.Error(msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := statefulSet.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -387,7 +387,7 @@ func (c *Controller) handleStatefulSet(ctx context.Context, obj interface{}) err
 		addonName, ok = statefulSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleStatefulSet] failed getting addon name, should not happen"
-			c.logger.Error(msg)
+			//c.logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -401,7 +401,7 @@ func (c *Controller) handleStatefulSet(ctx context.Context, obj interface{}) err
 
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error("failed StatefulSet ", key, " resource status.  err : ", err)
+		c.logger.Error(err, "failed StatefulSet ", key, " resource status.  err : ", err)
 	}
 	return nil
 }

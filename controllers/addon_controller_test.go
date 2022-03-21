@@ -178,7 +178,7 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance2.Status.Lifecycle.Installed == v1alpha1.DepPending {
+				if instance2.Status.Lifecycle.Installed == v1alpha1.DepNotInstalled {
 					return nil
 				}
 
