@@ -396,7 +396,11 @@ func (c *Controller) setupaddonhandlers() {
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
+			oldaddon, newaddon := old.(*unstructured.Unstructured), new.(*unstructured.Unstructured)
+			if oldaddon.GetResourceVersion() == newaddon.GetResourceVersion() {
+				return
+			}
+			newEvent.key, err = cache.MetaNamespaceKeyFunc(new)
 			newEvent.eventType = "update"
 
 			if err == nil {
@@ -432,7 +436,7 @@ func (c *Controller) setupwfhandlers(ctx context.Context) {
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -458,7 +462,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -490,7 +494,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -523,7 +527,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -557,7 +561,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -591,7 +595,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -626,7 +630,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -661,7 +665,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -686,7 +690,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -711,7 +715,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -736,7 +740,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -761,7 +765,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(old)
+			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
 				newEvent.key = key
 				newEvent.eventType = "update"
@@ -1023,17 +1027,5 @@ func NewCachingClient(cache ctrlruntimecache.Cache, config *rest.Config, options
 		UncachedObjects: uncachedObjects,
 
 		CacheUnstructured: true,
-	})
-}
-
-func NewCacheFunc(config *rest.Config, opts ctrlruntimecache.Options) (ctrlruntimecache.Cache, error) {
-	mapper, err := apiutil.NewDiscoveryRESTMapper(config)
-	if err != nil {
-		panic(err)
-	}
-	return ctrlruntimecache.New(config, ctrlruntimecache.Options{
-		Scheme:    common.GetAddonMgrScheme(),
-		Mapper:    mapper,
-		Namespace: "addon-manager-system",
 	})
 }

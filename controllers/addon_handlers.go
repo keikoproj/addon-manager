@@ -109,18 +109,16 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 	if changedStatus {
 		c.logger.Info(fmt.Sprintf("[handleAddonUpdate] addon %s/%s spec checksum changes.", addon.Namespace, addon.Name))
 		err := c.resetAddonStatus(ctx, addon)
-		// requeue should also be an option
 		if err != nil {
-			c.logger.Error(err, fmt.Sprintf("[handleAddonUpdate] failed reset addon %s/%s status after spec change.", addon.Namespace, addon.Name))
-			errs = append(errs, err)
-		} else {
-			c.logger.Info("[handleAddonUpdate] re install addon after spec changes.")
-			err := c.handleAddonCreation(ctx, addon)
-			if err != nil {
-				c.logger.Error(err, "[handleAddonUpdate] failed re-install addon ", addon.Namespace, "/", addon.Name, " after spec change.", err)
-				errs = append(errs, err)
-			}
+			return err
 		}
+		c.logger.Info(fmt.Sprintf("[handleAddonUpdate] re install addon %s/%s after spec changes.", addon.Namespace, addon.Name))
+		err = c.handleAddonCreation(ctx, addon)
+		if err != nil {
+			c.logger.Error(err, "[handleAddonUpdate] failed re-install addon ", addon.Namespace, "/", addon.Name, " after spec change.")
+			return err
+		}
+		return nil
 	}
 
 	beingDeleting, err := c.isAddonBeingDeleting(ctx, addon)

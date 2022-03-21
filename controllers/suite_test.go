@@ -24,6 +24,7 @@ import (
 
 	//"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 
+	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -47,6 +48,9 @@ var (
 	ctx       context.Context
 	cancel    context.CancelFunc
 	stopMgr   chan struct{}
+	instance  *v1alpha1.Addon
+	instance2 *v1alpha1.Addon
+	instance1 *v1alpha1.Addon
 )
 
 func TestAPIs(t *testing.T) {
@@ -58,6 +62,20 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = AfterSuite(func() {
+	By("cleanup instance(s)")
+	if instance != nil {
+		err := k8sClient.Delete(context.TODO(), instance)
+		Expect(err).To(BeNil())
+	}
+	if instance1 != nil {
+		err := k8sClient.Delete(context.TODO(), instance1)
+		Expect(err).To(BeNil())
+	}
+	if instance2 != nil {
+		err := k8sClient.Delete(context.TODO(), instance2)
+		Expect(err).To(BeNil())
+	}
+
 	By("stopping manager")
 	close(stopMgr)
 	cancel()

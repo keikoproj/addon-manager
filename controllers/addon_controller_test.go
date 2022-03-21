@@ -80,7 +80,7 @@ var _ = Describe("AddonController", func() {
 			err = k8sClient.Update(context.TODO(), instance)
 
 			// This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
-			time.Sleep(5 * time.Second)
+			//time.Sleep(5 * time.Second)
 
 			if apierrors.IsInvalid(err) {
 				log.Error(err, "failed to update object, got an invalid object error")
@@ -138,7 +138,7 @@ var _ = Describe("AddonController", func() {
 		})
 
 		It("instance with dependencies should succeed", func() {
-			instance = &v1alpha1.Addon{
+			instance1 := &v1alpha1.Addon{
 				ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: addonNamespace},
 				Spec: v1alpha1.AddonSpec{
 					PackageSpec: v1alpha1.PackageSpec{
@@ -151,7 +151,7 @@ var _ = Describe("AddonController", func() {
 					},
 				},
 			}
-			var instanceKey = types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+			var instance1Key = types.NamespacedName{Namespace: instance1.Namespace, Name: instance1.Name}
 			var instance2 = &v1alpha1.Addon{
 				ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: addonNamespace},
 				Spec: v1alpha1.AddonSpec{
@@ -186,14 +186,14 @@ var _ = Describe("AddonController", func() {
 			}, timeout).Should(Succeed())
 
 			By("Verify addon-1 is submitted and completes successfully")
-			Expect(k8sClient.Create(context.TODO(), instance)).NotTo(HaveOccurred())
-			defer k8sClient.Delete(context.TODO(), instance)
+			Expect(k8sClient.Create(context.TODO(), instance1)).NotTo(HaveOccurred())
+			defer k8sClient.Delete(context.TODO(), instance1)
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), instanceKey, instance); err != nil {
+				if err := k8sClient.Get(context.TODO(), instance1Key, instance1); err != nil {
 					return err
 				}
 
-				if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+				if instance1.Status.Lifecycle.Installed == v1alpha1.Succeeded {
 					return nil
 				}
 

@@ -136,7 +136,7 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 }
 
 func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
-
+	c.logger.Info("resetAddonStatus", addon.Namespace, "/", addon.Name)
 	addon.Status.StartTime = common.GetCurretTimestamp()
 	addon.Status.Lifecycle.Prereqs = ""
 	addon.Status.Lifecycle.Installed = ""
@@ -153,12 +153,11 @@ func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon)
 
 	err := c.updateAddon(ctx, addon)
 	if err != nil {
-		c.logger.Error(err, "failed resetting ", addon.Namespace, addon.Name, " status err ", err)
+		c.logger.Error(err, "failed resetting ", addon.Namespace, addon.Name, " status ")
 		return err
 	}
 
-	msg := fmt.Sprintf("successfully reset addon %s status", addon.Name)
-	c.logger.Info(msg)
+	c.logger.Info(fmt.Sprintf("successfully reset addon %s status", addon.Name))
 	return nil
 }
 
