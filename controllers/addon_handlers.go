@@ -17,7 +17,6 @@ import (
 
 func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Addon) error {
 	c.logger.WithValues("[handleAddonCreation]", fmt.Sprintf(" %s/%s ", addon.Namespace, addon.Name))
-
 	// check if addon being deletion
 	deleting, _ := c.isAddonBeingDeleting(ctx, addon)
 	if deleting {
@@ -131,13 +130,13 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 		c.logger.Info("[handleAddonUpdate]  %s/%s pending on package dependencies.", addon.Namespace, addon.Name)
 		ready, err := c.isDependenciesReady(ctx, addon)
 		if err != nil || !ready {
-			c.logger.Error(err, "[handleAddonUpdate] addon %s/%s dependency is not ready", addon.Namespace, addon.Name)
+			c.logger.Error(err, fmt.Sprintf("[handleAddonUpdate] addon %s/%s dependency is not ready", addon.Namespace, addon.Name))
 			errs = append(errs, err)
 			newEvent := Event{
 				key:       fmt.Sprintf("%s/%s", addon.Namespace, addon.Name),
 				eventType: "update",
 			}
-			c.queue.AddAfter(newEvent, 2*time.Second)
+			c.queue.AddAfter(newEvent, 5*time.Second)
 		} else {
 			c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name, " resolves dependencies. ready to install")
 			wfl := workflows.NewWorkflowLifecycle(c.wfcli, c.addoninformer, c.dynCli, addon, c.scheme, c.recorder)
@@ -303,12 +302,6 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 	if addon.Status.Lifecycle.Installed == addonv1.Init {
 		c.logger.Info("[createAddon] ", addon.Namespace, "/", addon.Name, " to set init status")
 		addon.Status.Lifecycle.Installed = addonv1.Init
-	}
-
-	err := c.updateAddonStatus(ctx, addon)
-	if err != nil {
-		c.logger.Error(err, "[createAddon] failed updating ", addon.Namespace, "/", addon.Name, " status ", err)
-		return err
 	}
 
 	// Check if addon installation expired.
@@ -587,7 +580,7 @@ func (c *Controller) unLabelComplete(addon *addonv1.Addon) {
 func (c *Controller) isDependenciesReady(ctx context.Context, addon *addonv1.Addon) (bool, error) {
 	a := pkgaddon.NewAddonValidator(addon, c.versionCache, c.dynCli)
 	if err := a.ValidateDependencies(); err != nil {
-		c.logger.Info("Addon %s/%s is waiting on dependencies to be installed. %v", addon.Namespace, addon.Name, err)
+		c.logger.Info(fmt.Sprintf("Addon %s/%s is waiting on dependencies to be installed. %v", addon.Namespace, addon.Name, err))
 		return false, err
 	}
 	addon.Status.Lifecycle.Installed = addonv1.Init
@@ -605,7 +598,7 @@ func (c *Controller) handleValidation(ctx context.Context, addon *addonv1.Addon)
 	if ok, err := pkgaddon.NewAddonValidator(addon, c.versionCache, c.dynCli).Validate(); !ok {
 		// if an addons dependency is in a Pending state then make the parent addon Pending
 		if err != nil && strings.HasPrefix(err.Error(), pkgaddon.ErrDepPending) {
-			reason := fmt.Sprintf("[handleValidation] Addon %s/%s is waiting on dependencies to be out of Pending state.", addon.Namespace, addon.Name)
+			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be out of Pending state.", addon.Namespace, addon.Name)
 			// Record an event if addon is not valid
 			c.recorder.Event(addon, "Normal", "Pending", reason)
 			c.logger.Error(err, reason)
@@ -617,7 +610,7 @@ func (c *Controller) handleValidation(ctx context.Context, addon *addonv1.Addon)
 			}
 			return false, err
 		} else if err != nil && strings.HasPrefix(err.Error(), pkgaddon.ErrDepNotInstalled) {
-			reason := fmt.Sprintf("[handleValidation] Addon %s/%s is waiting on dependencies to be installed. %v", addon.Namespace, addon.Name, err)
+			reason := fmt.Sprintf("Addon %s/%s is waiting on dependencies to be installed. %v", addon.Namespace, addon.Name, err)
 			// Record an event if addon is not valid
 			c.recorder.Event(addon, "Normal", "Failed", reason)
 			c.logger.Error(err, reason)

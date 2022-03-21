@@ -165,8 +165,8 @@ func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon
 	c.logger.WithValues("[updateAddonStatus]", fmt.Sprintf(" %s/%s ", addon.Namespace, addon.Name))
 	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
 	if err != nil {
-		msg := fmt.Sprintf("updateAddonStatus failed finding addon %s err %v.", addon.Name, err)
-		c.logger.Error(err, msg)
+		//msg := fmt.Sprintf("updateAddonStatus failed finding addon %s err %v.", addon.Name, err)
+		//c.logger.Error(err, msg)
 		return err
 	}
 	updating := latest.DeepCopy()
@@ -349,7 +349,7 @@ func (c *Controller) mergeResources(res1, res2 []addonv1.ObjectStatus) []addonv1
 }
 
 func (c *Controller) updateAddonStatusResources(ctx context.Context, key string, resource addonv1.ObjectStatus) error {
-	c.logger.Info("updateAddonStatusResources %s resource %s", key, resource)
+	c.logger.Info(fmt.Sprintf("updateAddonStatusResources %s resource %s", key, resource))
 
 	updating, err := c.getExistingAddon(ctx, key)
 	if err != nil || updating == nil {

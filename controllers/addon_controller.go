@@ -778,7 +778,7 @@ func (c *Controller) setupresourcehandlers(ctx context.Context) {
 }
 
 // Run starts the addon-controllers controller
-func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}, mgr manager.Manager) {
+func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
@@ -791,11 +791,11 @@ func (c *Controller) Run(ctx context.Context, stopCh <-chan struct{}, mgr manage
 	serverStartTime = time.Now().Local()
 
 	//c.recorder = createEventRecorder(c.namespace, c.clientset, c.logger)
-	c.recorder = mgr.GetEventRecorderFor("addon-manager-controller")
+	c.recorder = c.mgr.GetEventRecorderFor("addon-manager-controller")
 	c.scheme = common.GetAddonMgrScheme()
 	c.versionCache = addoninternal.NewAddonVersionCacheClient()
 
-	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace, mgr)
+	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace, c.mgr)
 	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
 
 	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
@@ -880,6 +880,7 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 	} else {
 		c.logger.Error(err, "Error processing %s (giving up): %v", newEvent.(Event).key, err)
 		c.queue.Forget(newEvent)
+		c.queue.Done(newEvent)
 		utilruntime.HandleError(err)
 	}
 
@@ -888,7 +889,7 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 
 func (c *Controller) Start(ctx context.Context) error {
 	stopCh := make(chan struct{})
-	go c.Run(ctx, stopCh, c.mgr)
+	go c.Run(ctx, stopCh)
 	return nil
 }
 

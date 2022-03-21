@@ -17,7 +17,6 @@ package controllers
 import (
 	"context"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -87,12 +86,9 @@ var _ = AfterSuite(func() {
 })
 
 func StartTestManager(mgr manager.Manager) {
-	wg := &sync.WaitGroup{}
 	go func() {
 		defer GinkgoRecover()
-		wg.Add(1)
 		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
-		wg.Done()
 	}()
 }
 
@@ -121,17 +117,21 @@ var _ = BeforeSuite(func(done Done) {
 		LeaderElection:          true,
 		LeaderElectionID:        "addonmgr.keikoproj.io",
 		LeaderElectionNamespace: addonNamespace,
+		Logger:                  ctrl.Log.WithName("addon-manager"),
 	})
 
 	if err != nil {
 		panic(err)
 	}
-	k8sClient = mgr.GetClient()
 
 	stopMgr = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	New(ctx, mgr, stopMgr)
 	StartTestManager(mgr)
+
+	k8sClient = mgr.GetClient()
+	Expect(k8sClient).ToNot(BeNil())
+
 	close(done)
 }, 60)

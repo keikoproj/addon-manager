@@ -17,7 +17,6 @@ func (c *Controller) handleNamespaceAdd(ctx context.Context, obj interface{}) er
 	ns, ok := obj.(*v1.Namespace)
 	if !ok {
 		msg := "expecting v1 namespace"
-		//c.logger.Error(err, msg)
 		return fmt.Errorf(msg)
 	}
 	addonName, ok := ns.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -39,7 +38,8 @@ func (c *Controller) handleNamespaceAdd(ctx context.Context, obj interface{}) er
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error(err, "failed updating ", key, " namespace resource status.  err : ", err)
+		//c.logger.Error(err, " failed updating namespace resource", " addon ", key)
+		return err
 	}
 	return nil
 }
@@ -55,7 +55,6 @@ func (c *Controller) handleNamespaceDeletion(ctx context.Context, obj interface{
 func (c *Controller) handleDeploymentAdd(ctx context.Context, obj interface{}) error {
 	deploy, ok := obj.(*appsv1.Deployment)
 	if !ok {
-		//c.logger.Error("expecting appsv1 deployment")
 		return fmt.Errorf("expecting appsv1 deployment")
 	}
 	addonName, ok := deploy.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
@@ -77,7 +76,8 @@ func (c *Controller) handleDeploymentAdd(ctx context.Context, obj interface{}) e
 	key := fmt.Sprintf("%s/%s", c.namespace, addonName)
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error(err, "failed updating ", key, " deployment resource status. err:", err)
+		//c.logger.Error(err, "failed updating deployment resource", " addon ", key)
+		return err
 	}
 	return nil
 }
@@ -117,7 +117,8 @@ func (c *Controller) handleServiceAccountAdd(ctx context.Context, obj interface{
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error(err, "failed updating ", key, " service account resource status.  err : ", err)
+		//c.logger.Error(err, "failed updating service account resource ", " addon ", key)
+		return err
 	}
 	return nil
 }
@@ -157,7 +158,8 @@ func (c *Controller) handleConfigMapAdd(ctx context.Context, obj interface{}) er
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error(err, "failed updating ", key, " configmap resource status.  err : ", err)
+		//c.logger.Error(err, "failed updating configmap resource", " addon ", key)
+		return err
 	}
 	return nil
 }
@@ -197,7 +199,8 @@ func (c *Controller) handleClusterRoleAdd(ctx context.Context, obj interface{}) 
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error(err, "failed updating ", key, " cluster role resource status.  err : ", err)
+		//c.logger.Error(err, "failed updating cluster role resource", "addon", key)
+		return err
 	}
 	return nil
 }
@@ -236,7 +239,8 @@ func (c *Controller) handleClusterRoleBindingAdd(ctx context.Context, obj interf
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		c.logger.Error(err, "failed ClusterRoleBinding ", key, " resource status.  err : ", err)
+		//c.logger.Error(err, "failed updating ClusterRoleBinding ", "addon", key)
+		return err
 	}
 	return nil
 }
@@ -275,7 +279,8 @@ func (c *Controller) handleJobAdd(ctx context.Context, obj interface{}) error {
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error(err, "failed job ", key, " resource status.  err : ", err)
+		//c.logger.Error(err, "failed job ", "addon", key)
+		return err
 	}
 	return nil
 }
@@ -306,7 +311,8 @@ func (c *Controller) handleCronJobAdd(ctx context.Context, obj interface{}) erro
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error(err, "failed CronJob ", key, " resource status.  err : ", err)
+		//c.logger.Error(err, "failed CronJob ", " addon ", key)
+		return err
 	}
 	return nil
 }
@@ -337,7 +343,8 @@ func (c *Controller) handleReplicaSet(ctx context.Context, obj interface{}) erro
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error(err, "failed DaemonSet ", key, " resource status.  err : ", err)
+		//c.logger.Error(err, "failed DaemonSet ", " addon ", key)
+		return err
 	}
 	return nil
 }
@@ -369,7 +376,8 @@ func (c *Controller) handleDaemonSet(ctx context.Context, obj interface{}) error
 
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error(err, "failed DaemonSet ", key, " resource status.  err : ", err)
+		//c.logger.Error(err, "failed DaemonSet ", key, " resource status.  err : ", err)
+		return err
 	}
 	return nil
 }
@@ -401,7 +409,8 @@ func (c *Controller) handleStatefulSet(ctx context.Context, obj interface{}) err
 
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		c.logger.Error(err, "failed StatefulSet ", key, " resource status.  err : ", err)
+		//c.logger.Error(err, "failed StatefulSet ", key, " resource status.  err : ", err)
+		return err
 	}
 	return nil
 }
