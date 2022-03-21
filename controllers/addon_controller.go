@@ -101,7 +101,6 @@ type Controller struct {
 }
 
 func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, mgr manager.Manager) cache.SharedIndexInformer {
-
 	addongvk := schema.GroupVersionKind{
 		Group:   addonapiv1.Group,
 		Version: "v1alpha1",

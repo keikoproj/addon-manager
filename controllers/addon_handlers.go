@@ -214,11 +214,11 @@ func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon
 		}
 	}
 	if noErr || len(errs) == 0 {
-		c.logger.Info("[handleAddonUpdate] %s/%s succeed.", addon.Namespace, addon.Name)
+		c.logger.Info(fmt.Sprintf("[handleAddonUpdate] %s/%s succeed.", addon.Namespace, addon.Name))
 		return nil
 	}
 
-	c.logger.Info("[handleAddonUpdate] %s/%s failed.", addon.Namespace, addon.Name)
+	c.logger.Info(fmt.Sprintf("[handleAddonUpdate] %s/%s failed.", addon.Namespace, addon.Name))
 	return fmt.Errorf("%v", errs)
 }
 

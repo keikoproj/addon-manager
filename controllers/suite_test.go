@@ -78,7 +78,7 @@ func StartTestManager(mgr manager.Manager) {
 	}()
 }
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(done Done) {
 	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
 	logf.SetLogger(log)
 
@@ -115,4 +115,5 @@ var _ = BeforeSuite(func() {
 	defer cancel()
 	New(ctx, mgr, stopMgr)
 	StartTestManager(mgr)
-})
+	close(done)
+}, 60)

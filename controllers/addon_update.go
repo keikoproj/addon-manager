@@ -203,7 +203,7 @@ func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon
 			}
 		default:
 			c.logger.Error(err, fmt.Sprintf("[updateAddonStatus] failed updating %s/%s status ", addon.Namespace, addon.Name))
-			panic(err)
+			return err
 		}
 	}
 	c.logger.WithValues("[updateAddonStatus]", fmt.Sprintf("add %s/%s into cache.", addon.Namespace, addon.Name))
@@ -281,14 +281,12 @@ func (c *Controller) mergeFinalizer(old, new []string) []string {
 
 func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) error {
 	var errs []error
-	latest := &addonv1.Addon{}
-	//latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
+	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
 
-	err := c.client.Get(ctx, types.NamespacedName{Namespace: updated.Namespace, Name: updated.Name}, latest)
 	if err != nil || latest == nil {
 		msg := fmt.Sprintf("[updateAddon] failed getting %s err %#v", updated.Name, err)
 		c.logger.Error(err, msg)
-		panic(err)
+		return err
 	} else {
 		if reflect.DeepEqual(updated, latest) {
 			c.logger.WithValues("[updateAddon]", fmt.Sprintf(" latest and updated %s/%s is the same, skip", updated.Namespace, updated.Name))
@@ -301,8 +299,8 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		updating.ObjectMeta.Labels = map[string]string{}
 		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
-		err := c.client.Update(ctx, updating, &client.UpdateOptions{})
-		if err != nil {
+		updated, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
+		if err != nil || updated == nil {
 			switch {
 			case errors.IsNotFound(err):
 				msg := fmt.Sprintf("[updateAddon] Addon %s/%s is not found. %v", updated.Namespace, updated.Name, err)
