@@ -13,8 +13,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-
 	"github.com/keikoproj/addon-manager/api/addon"
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
@@ -104,29 +102,20 @@ type Controller struct {
 	wftlock      sync.Mutex
 }
 
-func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, config *rest.Config) cache.SharedIndexInformer {
-	addongvk := schema.GroupVersionKind{
-		Group:   addonapiv1.Group,
-		Version: "v1alpha1",
-		Kind:    addonapiv1.AddonKind,
+//compose addon informer
+func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string) cache.SharedIndexInformer {
+	resource := schema.GroupVersionResource{
+		Group:    addonapiv1.Group,
+		Version:  "v1alpha1",
+		Resource: addonapiv1.AddonPlural,
 	}
-	mapper, err := apiutil.NewDiscoveryRESTMapper(config)
-	if err != nil {
-		panic(err)
-	}
-	mapping, err := mapper.RESTMapping(addongvk.GroupKind(), addongvk.Version)
-	if err != nil {
-		panic(err)
-	}
-
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return dynCli.Resource(mapping.Resource).Namespace(namespace).List(ctx, options)
-
+				return dynCli.Resource(resource).Namespace(namespace).List(ctx, options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return dynCli.Resource(mapping.Resource).Namespace(namespace).Watch(ctx, options)
+				return dynCli.Resource(resource).Namespace(namespace).Watch(ctx, options)
 			},
 		},
 		&unstructured.Unstructured{},
@@ -135,6 +124,38 @@ func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace s
 	)
 	return informer
 }
+
+// func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, config *rest.Config) cache.SharedIndexInformer {
+// 	addongvk := schema.GroupVersionKind{
+// 		Group:   addonapiv1.Group,
+// 		Version: "v1alpha1",
+// 		Kind:    addonapiv1.AddonKind,
+// 	}
+// 	mapper, err := apiutil.NewDiscoveryRESTMapper(config)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	mapping, err := mapper.RESTMapping(addongvk.GroupKind(), addongvk.Version)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	informer := cache.NewSharedIndexInformer(
+// 		&cache.ListWatch{
+// 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+// 				return dynCli.Resource(mapping.Resource).Namespace(namespace).List(ctx, options)
+
+// 			},
+// 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+// 				return dynCli.Resource(mapping.Resource).Namespace(namespace).Watch(ctx, options)
+// 			},
+// 		},
+// 		&unstructured.Unstructured{},
+// 		0, //Skip resync
+// 		cache.Indexers{},
+// 	)
+// 	return informer
+// }
 
 // addon dependent resources informers
 func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, namespace string) map[string]cache.SharedIndexInformer {
@@ -845,7 +866,7 @@ func (c *Controller) Start(ctx context.Context) error {
 	c.scheme = common.GetAddonMgrScheme()
 	c.versionCache = addoninternal.NewAddonVersionCacheClient()
 
-	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace, c.config)
+	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace)
 	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
 
 	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
