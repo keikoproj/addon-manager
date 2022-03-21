@@ -73,9 +73,7 @@ func StartTestManager(mgr manager.Manager) {
 	go func() {
 		defer GinkgoRecover()
 		wg.Add(1)
-		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-			panic(err)
-		}
+		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
 		wg.Done()
 	}()
 }
@@ -116,6 +114,5 @@ var _ = BeforeSuite(func() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	New(ctx, mgr, stopMgr)
-
 	StartTestManager(mgr)
 })

@@ -281,7 +281,10 @@ func (c *Controller) mergeFinalizer(old, new []string) []string {
 
 func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) error {
 	var errs []error
-	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
+	latest := &addonv1.Addon{}
+	//latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
+
+	err := c.client.Get(ctx, types.NamespacedName{Namespace: updated.Namespace, Name: updated.Name}, latest)
 	if err != nil || latest == nil {
 		msg := fmt.Sprintf("[updateAddon] failed getting %s err %#v", updated.Name, err)
 		c.logger.Error(err, msg)
@@ -298,7 +301,7 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		updating.ObjectMeta.Labels = map[string]string{}
 		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
-		err := c.client.Update(ctx, updated, &client.UpdateOptions{})
+		err := c.client.Update(ctx, updating, &client.UpdateOptions{})
 		if err != nil {
 			switch {
 			case errors.IsNotFound(err):
@@ -397,14 +400,14 @@ func (c *Controller) getExistingAddon(ctx context.Context, key string) (*addonv1
 	updating := &addonv1.Addon{}
 	err := c.client.Get(ctx, namespacedname, updating)
 	if err != nil {
-		c.logger.Error(err, "[getExistingAddon] failed getting addon %s from controller-runtime err %#v", key, err)
+		//c.logger.WithValues("[getExistingAddon]", fmt.Sprintf(" failed getting addon %s from controller-runtime err %#v", key, err))
 		updating, err := c.addoncli.AddonmgrV1alpha1().Addons(info[0]).Get(ctx, info[1], metav1.GetOptions{})
 		if err != nil || updating == nil {
-			c.logger.Error(err, "[getExistingAddon] failed getting addon %s/%s through api. err %#v", info[0], info[1], err)
+			//c.logger.WithValues("[getExistingAddon]", fmt.Sprintf("failed getting addon %s/%s through api. err %#v", info[0], info[1], err))
 
 			item, existing, err := c.addoninformer.GetIndexer().GetByKey(key)
 			if err != nil || !existing {
-				c.logger.Error(err, "[getExistingAddon] failed getting addon %s through informer. err %#v", key, err)
+				//c.logger.WithValues("[getExistingAddon]", fmt.Sprintf("failed getting addon %s through informer. err %#v", key, err))
 
 				_, name := c.namespacenameFromKey(key)
 				un, err := c.dynCli.Resource(schema.GroupVersionResource{
@@ -415,19 +418,19 @@ func (c *Controller) getExistingAddon(ctx context.Context, key string) (*addonv1
 				if err == nil && un != nil {
 					updating, err := common.FromUnstructured(un)
 					if err == nil || updating == nil {
-						c.logger.Error(err, "[getExistingAddon] failed converting to addon %s from unstructure err %#v", key, err)
+						//c.logger.WithValues("[getExistingAddon]", fmt.Sprintf("[getExistingAddon] failed converting to addon %s from unstructure err %#v", key, err))
 						return nil, fmt.Errorf("[getExistingAddon] failed converting to addon %s from unstructure err %#v", key, err)
 					}
-					c.logger.Info("[getExistingAddon] getting addon %s through unstructure.", key)
+					//c.logger.WithValues("[getExistingAddon]", fmt.Sprintf("getting addon %s through unstructure.", key))
 				} else {
-					c.logger.Error(err, "[getExistingAddon] failed getting %s from unstructure err %#v", key, err)
+					//c.logger.WithValues("[getExistingAddon]", fmt.Sprintf(" failed getting %s from unstructure err %#v", key, err))
 					return nil, fmt.Errorf("[getExistingAddon] failed getting %s/%s from unstructure %#v", info[0], info[1], err)
 				}
 			}
-			c.logger.Info("[getExistingAddon] getting addon %s from informer.", key)
+			c.logger.WithValues("[getExistingAddon]", fmt.Sprintf("getting addon %s from informer.", key))
 			updating, err := common.FromUnstructured(item.(*unstructured.Unstructured))
 			if err != nil || updating == nil {
-				c.logger.Error(err, "[getExistingAddon] failed converting to addon %s from informer unstructure err %#v", key, err)
+				//c.logger.Error(err, "[getExistingAddon] failed converting to addon %s from informer unstructure err %#v", key, err)
 				return nil, fmt.Errorf("[getExistingAddon] failed converting to addon %s from informer unstructure err %#v", key, err)
 			}
 		}

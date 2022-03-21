@@ -82,7 +82,7 @@ func (c *Controller) isAddonBeingDeleting(ctx context.Context, addon *addonv1.Ad
 			}
 		} else {
 			c.unLabelComplete(addon)
-			c.logger.Info("[isAddonBeingDeleting]", " %s/%s does not have delete wf. remove finalizer directly.", addon.Namespace, addon.Name)
+			c.logger.WithValues("[isAddonBeingDeleting]", fmt.Sprintf(" %s/%s does not have delete wf. remove finalizer directly.", addon.Namespace, addon.Name))
 			c.removeFinalizer(addon)
 			if err := c.updateAddon(ctx, addon); err != nil {
 				c.logger.Error(err, "handleAddonDeletion failed remove %s/%s finalizer and complete label %#v", addon.Namespace, addon.Name, err)
@@ -286,7 +286,7 @@ func (c *Controller) namespacenameFromKey(key string) (string, string) {
 }
 
 func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
-	c.logger.Info("[createAddon]", fmt.Sprintf(" addon %s/%s ", addon.Namespace, addon.Name))
+	c.logger.WithValues("[createAddon]", fmt.Sprintf(" addon %s/%s ", addon.Namespace, addon.Name))
 
 	changed, checksum := c.validateChecksum(addon)
 	if changed {
@@ -356,7 +356,7 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		c.logger.Error(err, "[createAddon] failed %s/%s err %#v", addon.Namespace, addon.Name, err)
 		return err
 	} else {
-		c.logger.Info("[createAddon] addon %s/%s successfully", addon.Namespace, addon.Name)
+		c.logger.WithValues("[createAddon]", fmt.Sprintf(" addon %s/%s successfully", addon.Namespace, addon.Name))
 		return nil
 	}
 }
