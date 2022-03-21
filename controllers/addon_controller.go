@@ -15,6 +15,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
+	"github.com/keikoproj/addon-manager/api/addon"
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
@@ -25,8 +26,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -1029,4 +1032,10 @@ func NewCachingClient(cache ctrlruntimecache.Cache, config *rest.Config, options
 
 		CacheUnstructured: true,
 	})
+}
+
+func ResourcetweakListOptions() string {
+	req, _ := labels.NewRequirement(addon.ResourceDefaultManageByLabel, selection.Equals, []string{addon.ResourceDefaultManageByValue})
+	return labels.NewSelector().Add(*req).String()
+
 }
