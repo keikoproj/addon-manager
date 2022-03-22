@@ -152,7 +152,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 		}
 	}()
 
-	var wfl = workflows.NewWorkflowLifecycle(r.wfcli, r.wfinformer, r.dynClient, instance, r.Scheme, r.recorder)
+	var wfl = workflows.NewWorkflowLifecycle(r.wfcli, r.wfinformer, r.dynClient, instance, r.Scheme, r.recorder, r.Log)
 
 	// Resource is being deleted, run finalizers and exit.
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {

@@ -36,6 +36,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/go-logr/logr"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 
@@ -62,10 +63,13 @@ type workflowLifecycle struct {
 
 	wfclientset wfclientset.Interface
 	wfinformer  cache.SharedIndexInformer
+
+	log logr.Logger
 }
 
 // NewWorkflowLifecycle returns a AddonLifecycle object
-func NewWorkflowLifecycle(wfclientset wfclientset.Interface, wfinformer cache.SharedIndexInformer, dynClient dynamic.Interface, addon *addonmgrv1alpha1.Addon, scheme *runtime.Scheme, recorder record.EventRecorder) AddonLifecycle {
+func NewWorkflowLifecycle(wfclientset wfclientset.Interface, wfinformer cache.SharedIndexInformer, dynClient dynamic.Interface, addon *addonmgrv1alpha1.Addon, scheme *runtime.Scheme, recorder record.EventRecorder,
+	log logr.Logger) AddonLifecycle {
 	return &workflowLifecycle{
 		dynClient:   dynClient,
 		addon:       addon,
@@ -73,6 +77,7 @@ func NewWorkflowLifecycle(wfclientset wfclientset.Interface, wfinformer cache.Sh
 		recorder:    recorder,
 		wfclientset: wfclientset,
 		wfinformer:  wfinformer,
+		log:         log,
 	}
 }
 
@@ -254,7 +259,7 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 		}
 		wf, err := common.WorkFlowFromUnstructured(wfv1)
 		if err != nil {
-			fmt.Printf("### failed convert unstructure to workflow")
+			w.log.Error(err, "failed convert unstructure to workflow")
 			return addonmgrv1alpha1.Failed, err
 		}
 		_, err = w.wfclientset.ArgoprojV1alpha1().Workflows(wp.GetNamespace()).Create(ctx, wf, metav1.CreateOptions{})
@@ -263,6 +268,7 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 		} else if err != nil {
 			msg := fmt.Sprintf("failed creating wf %s err %v", wp.GetName(), err)
 			fmt.Println(msg)
+			w.log.Error(err, msg)
 			return addonmgrv1alpha1.Failed, fmt.Errorf(msg)
 		}
 		// Record an event for created workflow

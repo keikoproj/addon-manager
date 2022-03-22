@@ -30,6 +30,7 @@ import (
 	dynfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
@@ -328,7 +329,8 @@ func TestNewWorkflowLifecycle(t *testing.T) {
 
 	a := &v1alpha1.Addon{}
 	wfcli, wfinformer := helper()
-	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
+
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("setup"))
 
 	var expected AddonLifecycle = &workflowLifecycle{}
 	g.Expect(wfl).To(BeAssignableToTypeOf(expected))
@@ -385,7 +387,7 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 	}
 
 	wfcli, wfinformer := helper()
-	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr)
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr, ctrl.Log.WithName("test"))
 
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
@@ -524,7 +526,7 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 	}
 
 	wfcli, wfinformer := helper()
-	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr)
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr, ctrl.Log.WithName("test"))
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
@@ -626,7 +628,7 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowType(t *testing.T) {
 	}
 
 	wfcli, wfinformer := helper()
-	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	// Empty workflow type should fail
 	wt := &v1alpha1.WorkflowType{}
@@ -663,7 +665,7 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowTemplate(t *testing.T) {
 	}
 
 	wfcli, wfinformer := helper()
-	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	// Workflow missing "spec" should fail
 	wt := &v1alpha1.WorkflowType{
@@ -701,7 +703,7 @@ func TestWorkflowLifecycle_Delete_NotExists(t *testing.T) {
 	}
 
 	wfcli, wfinformer := helper()
-	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(HaveOccurred())
 }
@@ -731,7 +733,7 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 	}
 
 	wfcli, wfinformer := helper()
-	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr)
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	wf := &unstructured.Unstructured{}
 	wf.SetGroupVersionKind(schema.GroupVersionKind{
