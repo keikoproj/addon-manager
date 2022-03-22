@@ -97,7 +97,7 @@ func (c *Controller) isAddonBeingDeleting(ctx context.Context, addon *addonv1.Ad
 }
 
 func (c *Controller) handleAddonUpdate(ctx context.Context, addon *addonv1.Addon) error {
-	c.logger.Info("[handleAddonUpdate] ", addon.Namespace, "/", addon.Name)
+	c.logger.Info("[handleAddonUpdate] ", "--", addon.Namespace, "--", addon.Name)
 	var errs []error
 
 	var changedStatus bool

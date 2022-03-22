@@ -186,7 +186,7 @@ func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon
 		Resources: c.mergeResources(addon.Status.Resources, latest.Status.Resources),
 	}
 
-	err = c.client.Status().Update(ctx, addon, &client.UpdateOptions{})
+	err = c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
 	if err != nil {
 		switch {
 		case errors.IsNotFound(err):
@@ -298,8 +298,8 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		updating.ObjectMeta.Labels = map[string]string{}
 		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
-		updated, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
-		if err != nil || updated == nil {
+		afterupdating, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
+		if err != nil || afterupdating == nil {
 			switch {
 			case errors.IsNotFound(err):
 				msg := fmt.Sprintf("[updateAddon] Addon %s/%s is not found. %v", updated.Namespace, updated.Name, err)

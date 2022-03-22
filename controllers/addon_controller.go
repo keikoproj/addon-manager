@@ -976,6 +976,7 @@ func (c *Controller) initController(ctx context.Context) error {
 			wf, err := c.wfcli.ArgoprojV1alpha1().Workflows(item.Namespace).Get(ctx, wfIdentifierName, metav1.GetOptions{})
 			if err == nil && wf != nil {
 				// align status
+
 				item.Status.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(wf.Status.Phase)
 				if item.Status.Lifecycle.Installed.Succeeded() {
 					item.Status.Reason = ""
@@ -989,7 +990,7 @@ func (c *Controller) initController(ctx context.Context) error {
 					labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
 					item.SetLabels(labels)
 				}
-				c.logger.WithValues("[initController]", fmt.Sprintf(" addon %s/%s install status %s", item.Namespace, item.Name, item.Status.Lifecycle.Installed))
+				c.logger.Info(fmt.Sprintf("[initController] addon %s/%s install status %s", item.Namespace, item.Name, item.Status.Lifecycle.Installed))
 			} else {
 				// error case the install wf does not exist
 				c.logger.WithValues("[initController]", fmt.Sprintf("failed get addon %s/%s install wf", item.Namespace, item.Name))
@@ -1010,14 +1011,14 @@ func (c *Controller) initController(ctx context.Context) error {
 			if err == nil && wf != nil {
 				// reset lifecycle status
 				item.Status.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(wf.Status.Phase)
-				c.logger.WithValues("[initController]", fmt.Sprintf("addon %s/%s prereqs status %s", item.Namespace, item.Name, item.Status.Lifecycle.Prereqs))
+				c.logger.Info(fmt.Sprintf("[initController] addon %s/%s prereqs status %s", item.Namespace, item.Name, item.Status.Lifecycle.Prereqs))
 			} else {
-				c.logger.WithValues("[initController]", fmt.Sprintf(" failed get addon %s/%s prereqs wf", item.Namespace, item.Name))
+				c.logger.Info(fmt.Sprintf("[initController] failed get addon %s/%s prereqs wf", item.Namespace, item.Name))
 			}
 		}
 
 		if item.Spec.Lifecycle.Prereqs.Template == "" && item.Spec.Lifecycle.Install.Template == "" {
-			c.logger.WithValues("[initController]", fmt.Sprintf(" addon %s/%s does not have lifecycle.", item.Namespace, item.Name))
+			c.logger.Info(fmt.Sprintf("[initController] addon %s/%s does not have lifecycle.", item.Namespace, item.Name))
 			item.Status.Lifecycle.Installed = addonv1.Succeeded
 			item.Status.Reason = ""
 
@@ -1031,15 +1032,15 @@ func (c *Controller) initController(ctx context.Context) error {
 
 		// might stuck on dependency
 		if item.Status.Lifecycle.Installed == addonv1.DepPending || item.Status.Lifecycle.Installed == addonv1.ValidationFailed {
-			c.logger.WithValues("[initController] ", "addon %s/%s stuck on dependency.", item.Namespace, item.Name)
+			c.logger.Info(fmt.Sprintf("[initController] addon %s/%s stuck on dependency.", item.Namespace, item.Name))
 		}
 
 		item.Finalizers = c.mergeFinalizer(item.Finalizers, []string{addonapiv1.FinalizerName})
 		err := c.updateAddon(ctx, &item)
 		if err != nil {
-			c.logger.Error(err, "[initController] failed patch addon %s/%s labels.", item.Namespace, item.Name)
+			c.logger.Error(err, fmt.Sprintf("[initController] failed patch addon %s/%s labels.", item.Namespace, item.Name))
 		}
-		c.logger.WithValues("[initController]", fmt.Sprintf(" pre-press addon %s/%s successfully. adding into cache.", item.Namespace, item.Name))
+		c.logger.Info(fmt.Sprintf("[initController] pre-press addon %s/%s successfully. adding into cache.", item.Namespace, item.Name))
 		c.addAddonToCache(&item)
 	}
 	c.logger.Info("initController pre-process end.")
