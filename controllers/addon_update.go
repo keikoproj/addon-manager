@@ -163,7 +163,8 @@ func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon)
 
 func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
 	c.logger.WithValues("[updateAddonStatus]", fmt.Sprintf(" %s/%s ", addon.Namespace, addon.Name))
-	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
+	latest := &addonv1.Addon{}
+	err := c.client.Get(ctx, types.NamespacedName{Namespace: addon.Namespace, Name: addon.Name}, latest)
 	if err != nil {
 		//msg := fmt.Sprintf("updateAddonStatus failed finding addon %s err %v.", addon.Name, err)
 		//c.logger.Error(err, msg)
@@ -279,12 +280,11 @@ func (c *Controller) mergeFinalizer(old, new []string) []string {
 }
 
 func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) error {
-	var errs []error
-	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
-
+	latest := &addonv1.Addon{}
+	err := c.client.Get(ctx, types.NamespacedName{Namespace: updated.Namespace, Name: updated.Name}, latest)
 	if err != nil || latest == nil {
-		msg := fmt.Sprintf("[updateAddon] failed getting %s err %#v", updated.Name, err)
-		c.logger.Error(err, msg)
+		// msg := fmt.Sprintf("[updateAddon] failed getting %s err %#v", updated.Name, err)
+		// c.logger.Error(err, msg)
 		return err
 	} else {
 		if reflect.DeepEqual(updated, latest) {
@@ -298,15 +298,15 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		updating.ObjectMeta.Labels = map[string]string{}
 		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
-		afterupdating, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
-		if err != nil || afterupdating == nil {
+		err := c.client.Update(ctx, updating, &client.UpdateOptions{})
+		if err != nil {
 			switch {
 			case errors.IsNotFound(err):
 				msg := fmt.Sprintf("[updateAddon] Addon %s/%s is not found. %v", updated.Namespace, updated.Name, err)
 				c.logger.Error(err, msg)
 				return err
 			case strings.Contains(err.Error(), "the object has been modified"):
-				errs = append(errs, err)
+				//errs = append(errs, err)
 				//c.logger.Error(err, fmt.Sprintf("[updateAddon] retry updating object metadata %s/%s coz objects has been modified", updated.Namespace, updated.Name))
 				c.logger.Info(fmt.Sprintf("[updateAddon] retry updating object metadata %s/%s coz objects has been modified", updated.Namespace, updated.Name))
 				if err := c.updateAddon(ctx, updated); err != nil {
@@ -321,17 +321,12 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		err = c.updateAddonStatus(ctx, updated)
 		if err != nil {
 			c.logger.Error(err, fmt.Sprintf("[updateAddon] failed updating %s/%s status", updated.Namespace, updated.Name))
-			errs = append(errs, err)
+			return err
 		}
 	}
 
-	if len(errs) == 0 {
-		c.logger.WithValues("[updateAddon]", fmt.Sprintf("%s/%s succeed.", updated.Namespace, updated.Name))
-		return nil
-	}
-	err = fmt.Errorf("%v", errs)
-	c.logger.Error(err, fmt.Sprintf("[updateAddon] %s/%s failed.", updated.Namespace, updated.Name))
-	return err
+	c.logger.Info(fmt.Sprintf("[updateAddon] %s/%s succeed.", updated.Namespace, updated.Name))
+	return nil
 }
 
 func (c *Controller) mergeResources(res1, res2 []addonv1.ObjectStatus) []addonv1.ObjectStatus {
@@ -356,18 +351,18 @@ func (c *Controller) updateAddonStatusResources(ctx context.Context, key string,
 		return err
 	}
 
-	c.logger.Info("updateAddonStatusResources  ", updating.Namespace, "/", updating.Name, " new resources -- ", resource, " existing resources -- ", updating.Status.Resources)
+	c.logger.Info("updateAddonStatusResources  ", "--", updating.Namespace, "--", updating.Name, " new resources -- ", resource, " existing resources -- ", updating.Status.Resources)
 	newResources := []addonv1.ObjectStatus{resource}
 	updating.Status.Resources = c.mergeResources(newResources, updating.Status.Resources)
 
 	var errs []error
-	if _, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating,
-		metav1.UpdateOptions{}); err != nil {
+	err = c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
+	if err != nil {
 		switch {
 		case errors.IsNotFound(err):
 			return err
 		case strings.Contains(err.Error(), "the object has been modified"):
-			c.logger.Error(err, "[updateAddonStatusResources] retry %s coz the object has been modified", resource)
+			c.logger.Error(err, fmt.Sprintf("[updateAddonStatusResources] retry %s coz the object has been modified", resource))
 			if err := c.updateAddonStatusResources(ctx, key, resource); err != nil {
 				errs = append(errs, fmt.Errorf("[updateAddonStatusResources] failed to update addon %s/%s resources: %w", updating.Namespace,
 					updating.Name, err))
