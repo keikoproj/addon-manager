@@ -298,7 +298,7 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		updating.ObjectMeta.Labels = map[string]string{}
 		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
-		updated, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
+		updated, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
 		if err != nil || updated == nil {
 			switch {
 			case errors.IsNotFound(err):
