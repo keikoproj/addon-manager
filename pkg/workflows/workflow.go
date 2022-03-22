@@ -584,7 +584,7 @@ func (w *workflowLifecycle) injectActiveDeadlineSeconds(wf *unstructured.Unstruc
 	return nil
 }
 
-func IsValidV1WorkFlow(obj interface{}) error {
+func IsValidV1WorkFlow(obj runtime.Object) error {
 	wf, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return fmt.Errorf("error : unstructured type.")
