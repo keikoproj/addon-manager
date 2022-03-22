@@ -208,7 +208,7 @@ func (w *workflowLifecycle) findWorkflowByName(ctx context.Context, name types.N
 	if err != nil && apierrors.IsNotFound(err) {
 		return nil, nil
 	} else if err != nil {
-		return nil, fmt.Errorf("findWorkflowByName finding wf %s err %v", name, err)
+		return nil, fmt.Errorf("error finding wf by name %s err %v", name, err)
 	}
 	if found {
 		return wf.(*unstructured.Unstructured), nil
