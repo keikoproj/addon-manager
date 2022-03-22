@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -21,9 +20,8 @@ import (
 )
 
 var (
-	addonNamespace = "addon-manager-system"
-	addonName      = "cluster-autoscaler"
-	addonKey       = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
+	addonName = "cluster-autoscaler"
+	addonKey  = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
 )
 
 const timeout = time.Second * 5
@@ -51,14 +49,14 @@ var _ = Describe("AddonController", func() {
 
 		It("instance should be reconciled", func() {
 			instance.SetNamespace(addonNamespace)
-			err := k8sClient.Create(context.TODO(), instance)
+			err := k8sClient.Create(ctx, instance)
 			if apierrors.IsInvalid(err) {
 				Fail(fmt.Sprintf("failed to create object, got an invalid object error. %v", err))
 			}
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+				if err := k8sClient.Get(ctx, addonKey, instance); err != nil {
 					return err
 				}
 
@@ -78,7 +76,7 @@ var _ = Describe("AddonController", func() {
 
 			//Update instance params for checksum validation
 			instance.Spec.Params.Context.ClusterRegion = "us-east-2b"
-			err = k8sClient.Update(context.TODO(), instance)
+			err = k8sClient.Update(ctx, instance)
 
 			// This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
 			time.Sleep(5 * time.Second)
@@ -89,7 +87,7 @@ var _ = Describe("AddonController", func() {
 			}
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+				if err := k8sClient.Get(ctx, addonKey, instance); err != nil {
 					return err
 				}
 
@@ -106,20 +104,20 @@ var _ = Describe("AddonController", func() {
 			wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
 			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 			Eventually(func() error {
-				return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+				return k8sClient.Get(ctx, wfv1Key, wfv1)
 			}, timeout).Should(Succeed())
 			Expect(wfv1.GetName()).Should(Equal(wfName))
 
 			By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
-			Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
-			Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
+			Expect(k8sClient.Delete(ctx, wfv1)).To(Succeed())
+			Expect(k8sClient.Get(ctx, wfv1Key, wfv1)).ToNot(Succeed())
 		})
 
 		It("instance should be deleted w/ deleting state", func() {
 			By("Verify deleting instance should set Deleting state")
-			Expect(k8sClient.Delete(context.TODO(), instance)).NotTo(HaveOccurred())
+			Expect(k8sClient.Delete(ctx, instance)).NotTo(HaveOccurred())
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+				if err := k8sClient.Get(ctx, addonKey, instance); err != nil {
 					return err
 				}
 
@@ -133,7 +131,7 @@ var _ = Describe("AddonController", func() {
 			wfName := instance.GetFormattedWorkflowName(v1alpha1.Delete)
 			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 			Eventually(func() error {
-				return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+				return k8sClient.Get(ctx, wfv1Key, wfv1)
 			}, timeout).Should(Succeed())
 			Expect(wfv1.GetName()).Should(Equal(wfName))
 		})
@@ -172,9 +170,9 @@ var _ = Describe("AddonController", func() {
 			var instanceKey2 = types.NamespacedName{Namespace: instance2.Namespace, Name: instance2.Name}
 
 			By("Verify first addon-2 that depends on addon-1 is created and has validation failed state")
-			Expect(k8sClient.Create(context.TODO(), instance2)).NotTo(HaveOccurred())
+			Expect(k8sClient.Create(ctx, instance2)).NotTo(HaveOccurred())
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
+				if err := k8sClient.Get(ctx, instanceKey2, instance2); err != nil {
 					return err
 				}
 
@@ -186,10 +184,10 @@ var _ = Describe("AddonController", func() {
 			}, timeout).Should(Succeed())
 
 			By("Verify addon-1 is submitted and completes successfully")
-			Expect(k8sClient.Create(context.TODO(), instance)).NotTo(HaveOccurred())
-			defer k8sClient.Delete(context.TODO(), instance)
+			Expect(k8sClient.Create(ctx, instance)).NotTo(HaveOccurred())
+			defer k8sClient.Delete(ctx, instance)
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), instanceKey, instance); err != nil {
+				if err := k8sClient.Get(ctx, instanceKey, instance); err != nil {
 					return err
 				}
 
@@ -202,7 +200,7 @@ var _ = Describe("AddonController", func() {
 
 			By("Verify addon-2 succeeds after addon-1 completed")
 			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
+				if err := k8sClient.Get(ctx, instanceKey2, instance2); err != nil {
 					return err
 				}
 

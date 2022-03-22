@@ -558,7 +558,7 @@ func (c *Controller) Finalize(ctx context.Context, addon *addonv1.Addon, wfl wor
 	if addon.Spec.Lifecycle.Delete.Template != "" {
 		_, err := c.runWorkflow(addonv1.Delete, addon, wfl)
 		if err != nil {
-			c.logger.Error(err, "Finalize execute delete %s/%s delete wf %#v", addon.Namespace, addon.Name, err)
+			c.logger.Error(err, fmt.Sprintf("Finalize execute delete %s/%s delete wf", addon.Namespace, addon.Name))
 			return err
 		}
 	}

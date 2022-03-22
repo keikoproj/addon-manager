@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -163,8 +162,7 @@ func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon)
 
 func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
 	c.logger.WithValues("[updateAddonStatus]", fmt.Sprintf(" %s/%s ", addon.Namespace, addon.Name))
-	latest := &addonv1.Addon{}
-	err := c.client.Get(ctx, types.NamespacedName{Namespace: addon.Namespace, Name: addon.Name}, latest)
+	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
 	if err != nil {
 		//msg := fmt.Sprintf("updateAddonStatus failed finding addon %s err %v.", addon.Name, err)
 		//c.logger.Error(err, msg)
@@ -187,8 +185,8 @@ func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon
 		Resources: c.mergeResources(addon.Status.Resources, latest.Status.Resources),
 	}
 
-	err = c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
-	if err != nil {
+	updated, err := c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
+	if err != nil || updated == nil {
 		switch {
 		case errors.IsNotFound(err):
 			msg := fmt.Sprintf("[updateAddonStatus] addon %s/%s is not found. %v", addon.Namespace, addon.Name, err)
@@ -280,8 +278,7 @@ func (c *Controller) mergeFinalizer(old, new []string) []string {
 }
 
 func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) error {
-	latest := &addonv1.Addon{}
-	err := c.client.Get(ctx, types.NamespacedName{Namespace: updated.Namespace, Name: updated.Name}, latest)
+	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
 	if err != nil || latest == nil {
 		// msg := fmt.Sprintf("[updateAddon] failed getting %s err %#v", updated.Name, err)
 		// c.logger.Error(err, msg)
@@ -298,7 +295,7 @@ func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) er
 		updating.ObjectMeta.Labels = map[string]string{}
 		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
-		err := c.client.Update(ctx, updating, &client.UpdateOptions{})
+		_, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Update(ctx, updating, metav1.UpdateOptions{})
 		if err != nil {
 			switch {
 			case errors.IsNotFound(err):
@@ -356,8 +353,8 @@ func (c *Controller) updateAddonStatusResources(ctx context.Context, key string,
 	updating.Status.Resources = c.mergeResources(newResources, updating.Status.Resources)
 
 	var errs []error
-	err = c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
-	if err != nil {
+	if _, err = c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating,
+		metav1.UpdateOptions{}); err != nil {
 		switch {
 		case errors.IsNotFound(err):
 			return err

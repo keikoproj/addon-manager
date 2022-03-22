@@ -918,7 +918,6 @@ func (c *Controller) Start(ctx context.Context) error {
 	for i := 0; i < 5; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-
 	<-ctx.Done()
 	return nil
 }
@@ -962,8 +961,7 @@ func (c *Controller) processItem(ctx context.Context, newEvent Event) error {
 func (c *Controller) initController(ctx context.Context) error {
 	c.logger.Info("initController pre-process addon every restart.")
 
-	addonList := &addonv1.AddonList{}
-	err := c.client.List(ctx, addonList, &client.ListOptions{})
+	addonList, err := c.addoncli.AddonmgrV1alpha1().Addons(c.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		c.logger.Error(err, " failed list addons")
 		panic(err)
