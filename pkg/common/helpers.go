@@ -162,3 +162,16 @@ func FromUnstructuredObj(un *unstructured.Unstructured, v interface{}) error {
 	}
 	return nil
 }
+
+// ToUnstructured converts an workflow to an Unstructured object
+func ToUnstructured(wf *wfv1.Workflow) (*unstructured.Unstructured, error) {
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(wf)
+	if err != nil {
+		return nil, err
+	}
+	un := &unstructured.Unstructured{Object: obj}
+	// we need to add these values so that the `EventRecorder` does not error
+	un.SetKind("Workflow")
+	un.SetAPIVersion("argoproj.io/v1alpha1")
+	return un, nil
+}

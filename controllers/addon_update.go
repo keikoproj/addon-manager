@@ -135,7 +135,7 @@ func (c *Controller) updateAddonStatusLifecycle(ctx context.Context, namespace, 
 }
 
 func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
-	c.logger.Info("resetAddonStatus", addon.Namespace, "/", addon.Name)
+	c.logger.Info(fmt.Sprintf("resetAddonStatus %s/%s", addon.Namespace, addon.Name))
 	addon.Status.StartTime = common.GetCurretTimestamp()
 	addon.Status.Lifecycle.Prereqs = ""
 	addon.Status.Lifecycle.Installed = ""
@@ -152,7 +152,7 @@ func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon)
 
 	err := c.updateAddon(ctx, addon)
 	if err != nil {
-		c.logger.Error(err, "failed resetting ", addon.Namespace, addon.Name, " status ")
+		c.logger.Error(err, "failed resetting status", addon.Namespace, addon.Name)
 		return err
 	}
 
@@ -161,7 +161,7 @@ func (c *Controller) resetAddonStatus(ctx context.Context, addon *addonv1.Addon)
 }
 
 func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon) error {
-	c.logger.WithValues("[updateAddonStatus]", fmt.Sprintf(" %s/%s ", addon.Namespace, addon.Name))
+	c.logger.Info(fmt.Sprintf("[updateAddonStatus] %s/%s ", addon.Namespace, addon.Name))
 	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(addon.Namespace).Get(ctx, addon.Name, metav1.GetOptions{})
 	if err != nil {
 		//msg := fmt.Sprintf("updateAddonStatus failed finding addon %s err %v.", addon.Name, err)
@@ -194,10 +194,10 @@ func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon
 			return err
 		case strings.Contains(err.Error(), "the object has been modified"):
 			//c.logger.Error(err, fmt.Sprintf("[updateAddonStatus] retry updating %s/%s status coz objects has been modified", addon.Namespace, addon.Name))
-			c.logger.WithValues("[updateAddonStatus]", fmt.Sprintf(" retry updating %s/%s status coz objects has been modified", addon.Namespace, addon.Name))
+			c.logger.Info(fmt.Sprintf("[updateAddonStatus] retry updating %s/%s status coz objects has been modified", addon.Namespace, addon.Name))
 			if err := c.updateAddonStatus(ctx, addon); err != nil {
 				//c.logger.Error(err, fmt.Sprintf("[updateAddonStatus] failed retry updating %s/%s status %#v", addon.Namespace, addon.Name, err))
-				c.logger.WithValues("[updateAddonStatus] ", fmt.Sprintf("failed retry updating %s/%s status %#v", addon.Namespace, addon.Name, err))
+				c.logger.Info(fmt.Sprintf("[updateAddonStatus]  failed retry updating %s/%s status %#v", addon.Namespace, addon.Name, err))
 			}
 		default:
 			c.logger.Error(err, fmt.Sprintf("[updateAddonStatus] failed updating %s/%s status ", addon.Namespace, addon.Name))

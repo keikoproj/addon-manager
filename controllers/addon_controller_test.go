@@ -8,15 +8,16 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -76,10 +77,8 @@ var _ = Describe("AddonController", func() {
 
 			//Update instance params for checksum validation
 			instance.Spec.Params.Context.ClusterRegion = "us-east-2b"
-			err = k8sClient.Update(ctx, instance)
-
-			// This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
-			time.Sleep(5 * time.Second)
+			err = k8sClient.Update(ctx, instance, &client.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
 			if apierrors.IsInvalid(err) {
 				log.Error(err, "failed to update object, got an invalid object error")
@@ -94,6 +93,7 @@ var _ = Describe("AddonController", func() {
 				if len(instance.ObjectMeta.Finalizers) > 0 {
 					return nil
 				}
+
 				return fmt.Errorf("addon is not valid")
 			}, timeout).Should(Succeed())
 
@@ -211,7 +211,6 @@ var _ = Describe("AddonController", func() {
 				return fmt.Errorf("addon-2 is not valid")
 			}, timeout*10).Should(Succeed())
 		})
-
 	})
 })
 

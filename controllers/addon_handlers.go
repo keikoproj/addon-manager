@@ -81,7 +81,7 @@ func (c *Controller) isAddonBeingDeleting(ctx context.Context, addon *addonv1.Ad
 			c.logger.WithValues("[isAddonBeingDeleting]", fmt.Sprintf(" %s/%s does not have delete wf. remove finalizer directly.", addon.Namespace, addon.Name))
 			c.removeFinalizer(addon)
 			if err := c.updateAddon(ctx, addon); err != nil {
-				c.logger.Error(err, "handleAddonDeletion failed remove %s/%s finalizer and complete label %#v", addon.Namespace, addon.Name, err)
+				c.logger.Error(err, fmt.Sprintf("handleAddonDeletion failed remove %s/%s finalizer and complete label", addon.Namespace, addon.Name))
 				return true, err
 			}
 			c.logger.Info("[handleAddonDeletion]", fmt.Sprintf("remove %s/%s from cache", addon.Namespace, addon.Name))
@@ -341,7 +341,7 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 		addon.Status.Reason = reason
 
 		if err := c.updateAddonStatus(ctx, addon); err != nil {
-			c.logger.Error(err, "[createAddon] Failed updating ", addon.Namespace, "/", addon.Name, " finalizer error status err ", err)
+			c.logger.Error(err, fmt.Sprintf("[createAddon] Failed updating %s/%s finalizer error status ", addon.Namespace, addon.Name))
 		}
 		return err
 	}
@@ -395,7 +395,7 @@ func (c *Controller) createAddonHelper(ctx context.Context, addon *addonv1.Addon
 
 func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
 
-	c.logger.Info("executePrereqAndInstall %s/%s ", addon.Namespace, addon.Name)
+	c.logger.Info(fmt.Sprintf("executePrereqAndInstall %s/%s ", addon.Namespace, addon.Name))
 	prereqsPhase, err := c.runWorkflow(addonv1.Prereqs, addon, wfl)
 	if err != nil {
 		reason := fmt.Sprintf("Addon %s/%s prereqs wf execution failed. %v", addon.Namespace, addon.Name, err)
@@ -405,7 +405,6 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 		addon.Status.Lifecycle.Prereqs = addonv1.Failed
 		addon.Status.Reason = reason
 		if err := c.updateAddonStatus(ctx, addon); err != nil {
-			c.logger.Error(err, "[executePrereqAndInstall] failed updating ", addon.Namespace, "/", addon.Name, " prereqs workflow execution status err ", err)
 			return err
 		}
 		return err
@@ -426,7 +425,7 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 	}
 
 	addon.Status.Lifecycle.Prereqs = prereqsPhase
-	c.logger.Info("executePrereqAndInstall %s/%s prereqs status %s", addon.Namespace, addon.Name, addon.Status.Lifecycle.Prereqs)
+	c.logger.Info(fmt.Sprintf("executePrereqAndInstall %s/%s prereqs status %s", addon.Namespace, addon.Name, addon.Status.Lifecycle.Prereqs))
 	if addon.Status.Lifecycle.Prereqs == addonv1.Succeeded {
 		c.logger.Info("executePrereqAndInstall %s/%s checking secret", addon.Namespace, addon.Name)
 		if err := c.validateSecrets(ctx, addon); err != nil {
@@ -441,7 +440,7 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 			}
 			return err
 		}
-		c.logger.Info("executePrereqAndInstall %s/%s do install wf", addon.Namespace, addon.Name)
+		c.logger.Info(fmt.Sprintf("executePrereqAndInstall %s/%s do install wf", addon.Namespace, addon.Name))
 		phase, err := c.runWorkflow(addonv1.Install, addon, wfl)
 		if err != nil {
 			reason := fmt.Sprintf("Addon %s/%s wf could not be installed due to error. %v", addon.Namespace, addon.Name, err)
@@ -459,7 +458,7 @@ func (c *Controller) executePrereqAndInstall(ctx context.Context, addon *addonv1
 	}
 
 	if err := c.updateAddonStatus(ctx, addon); err != nil {
-		c.logger.Error(err, "[executePrereqAndInstall] failed updating ", addon.Namespace, "/", addon.Name, "  execute prereq and install status err ", err)
+		// c.logger.Error(err, "[executePrereqAndInstall] failed updating execute prereq and install status ", addon.Namespace, addon.Name)
 		return err
 	}
 

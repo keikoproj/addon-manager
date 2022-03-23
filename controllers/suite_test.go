@@ -22,7 +22,8 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 
 	//"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 
@@ -30,9 +31,7 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/gomega"
 	. "github.com/onsi/gomega"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
@@ -41,9 +40,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	// +kubebuilder:scaffold:imports
-
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -70,80 +71,41 @@ func TestAPIs(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var _ = AfterSuite(func() {
-	By("cleanup instance(s)")
-	if instance != nil {
-		err := k8sClient.Delete(context.TODO(), instance)
-		Expect(err).To(BeNil())
-	}
-	if instance1 != nil {
-		err := k8sClient.Delete(context.TODO(), instance1)
-		Expect(err).To(BeNil())
-	}
-	if instance2 != nil {
-		err := k8sClient.Delete(context.TODO(), instance2)
-		Expect(err).To(BeNil())
-	}
-
-	By("stopping manager")
-	close(stopMgr)
-	cancel()
-
-	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
-
-})
-
-func StartTestManager(mgr manager.Manager) *sync.WaitGroup {
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		Expect(mgr.Start(ctx)).NotTo(gomega.HaveOccurred())
-	}()
-	return wg
-}
-
 var _ = BeforeSuite(func(done Done) {
-	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
-	logf.SetLogger(log)
-
-	ctx, cancel = context.WithCancel(context.Background())
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: true,
+		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
 	}
 
 	err := addonv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	cfg, err := testEnv.Start()
+	cliCfg, err := testEnv.Start()
 	Expect(err).ToNot(HaveOccurred())
-	Expect(cfg).ToNot(BeNil())
+	Expect(cliCfg).ToNot(BeNil())
 
 	By("starting reconciler and manager")
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		NewClient:               NewCachingClient,
-		Scheme:                  common.GetAddonMgrScheme(),
-		MetricsBindAddress:      ":8080",
-		LeaderElection:          true,
-		LeaderElectionID:        "addonmgr.keikoproj.io",
-		LeaderElectionNamespace: addonNamespace,
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
+	ctx, cancel = context.WithCancel(context.Background())
 	stopMgr = make(chan struct{})
-	New(ctx, mgr, stopMgr)
 
-	wg := StartTestManager(mgr)
-	Expect(wg).NotTo(BeNil())
+	mgr, err := ctrl.NewManager(cliCfg, ctrl.Options{
+		Scheme:         common.GetAddonMgrScheme(),
+		LeaderElection: false,
+	})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(mgr).ToNot(BeNil())
 
+	c := NewController(ctx, mgr, stopMgr)
+	go func() {
+		err = c.Start(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	}()
+	wg := &sync.WaitGroup{}
+	StartTestManager(mgr, wg)
+
+	By("Build client")
 	k8sClient = mgr.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
 	ns := &corev1.Namespace{
@@ -151,6 +113,7 @@ var _ = BeforeSuite(func(done Done) {
 			Name: addonNamespace,
 		},
 	}
+
 	err = k8sClient.Create(ctx, ns, &client.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		err = nil
@@ -158,4 +121,60 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).To(BeNil())
 
 	close(done)
-}, 120)
+}, 60)
+
+func StartTestManager(mgr manager.Manager, wg *sync.WaitGroup) {
+	go func() {
+		defer GinkgoRecover()
+		defer wg.Done()
+		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
+	}()
+}
+
+func NewController(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) *Controller {
+	kubeClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+	if kubeClient == nil {
+		panic("kubeClient could not be nil")
+	}
+	dynCli := dynamic.NewForConfigOrDie(mgr.GetConfig())
+	if dynCli == nil {
+		panic("dynCli could not be nil")
+	}
+	wfcli := common.NewWFClient(mgr.GetConfig())
+	if wfcli == nil {
+		panic("wfcli could not be nil")
+	}
+	addoncli := common.NewAddonClient(mgr.GetConfig())
+	if addoncli == nil {
+		panic("addoncli could not be nil")
+	}
+
+	ctrlruntimeclient := mgr.GetClient()
+	logger := mgr.GetLogger().WithName("addon-manager-controller")
+	eventRecorder := mgr.GetEventRecorderFor("addon-manager-controller")
+	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, ctrlruntimeclient, "addon", "addon-manager-system",
+		logger, eventRecorder, mgr.GetConfig(), mgr.GetCache())
+	mgr.Add(c)
+	return c
+}
+
+var _ = AfterSuite(func() {
+	By("cleanup instance(s)")
+	if instance != nil {
+		k8sClient.Delete(ctx, instance)
+	}
+	if instance1 != nil {
+		k8sClient.Delete(ctx, instance1)
+	}
+	if instance2 != nil {
+		k8sClient.Delete(ctx, instance2)
+	}
+
+	By("stopping manager")
+	close(stopMgr)
+	defer cancel()
+
+	By("tearing down the test environment")
+	err := testEnv.Stop()
+	Expect(err).ToNot(HaveOccurred())
+})
