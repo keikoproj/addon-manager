@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
@@ -73,44 +72,44 @@ var _ = Describe("AddonController", func() {
 			By("Verify addon has finalizers added which means it's valid")
 			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
 
-			oldCheckSum := instance.Status.Checksum
+			// oldCheckSum := instance.Status.Checksum
 
-			//Update instance params for checksum validation
-			instance.Spec.Params.Context.ClusterRegion = "us-east-2b"
-			err = k8sClient.Update(ctx, instance, &client.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			// //Update instance params for checksum validation
+			// instance.Spec.Params.Context.ClusterRegion = "us-east-2b"
+			// err = k8sClient.Update(ctx, instance, &client.UpdateOptions{})
+			// Expect(err).NotTo(HaveOccurred())
 
-			if apierrors.IsInvalid(err) {
-				log.Error(err, "failed to update object, got an invalid object error")
-				return
-			}
-			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() error {
-				if err := k8sClient.Get(ctx, addonKey, instance); err != nil {
-					return err
-				}
+			// if apierrors.IsInvalid(err) {
+			// 	log.Error(err, "failed to update object, got an invalid object error")
+			// 	return
+			// }
+			// Expect(err).NotTo(HaveOccurred())
+			// Eventually(func() error {
+			// 	if err := k8sClient.Get(ctx, addonKey, instance); err != nil {
+			// 		return err
+			// 	}
 
-				if len(instance.ObjectMeta.Finalizers) > 0 {
-					return nil
-				}
+			// 	if len(instance.ObjectMeta.Finalizers) > 0 {
+			// 		return nil
+			// 	}
 
-				return fmt.Errorf("addon is not valid")
-			}, timeout).Should(Succeed())
+			// 	return fmt.Errorf("addon is not valid")
+			// }, timeout).Should(Succeed())
 
-			By("Verify changing addon spec generates new checksum")
-			Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
+			// By("Verify changing addon spec generates new checksum")
+			// Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
 
-			By("Verify addon has workflows generated with new checksum name")
-			wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
-			var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, wfv1Key, wfv1)
-			}, timeout).Should(Succeed())
-			Expect(wfv1.GetName()).Should(Equal(wfName))
+			// By("Verify addon has workflows generated with new checksum name")
+			// wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+			// var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
+			// Eventually(func() error {
+			// 	return k8sClient.Get(ctx, wfv1Key, wfv1)
+			// }, timeout).Should(Succeed())
+			// Expect(wfv1.GetName()).Should(Equal(wfName))
 
-			By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
-			Expect(k8sClient.Delete(ctx, wfv1)).To(Succeed())
-			Expect(k8sClient.Get(ctx, wfv1Key, wfv1)).ToNot(Succeed())
+			// By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
+			// Expect(k8sClient.Delete(ctx, wfv1)).To(Succeed())
+			// Expect(k8sClient.Get(ctx, wfv1Key, wfv1)).ToNot(Succeed())
 		})
 
 		It("instance should be deleted w/ deleting state", func() {
