@@ -7,7 +7,6 @@ on:
     branches: [ master ]
 
 jobs:
-
   unit-test:
     if: github.repository_owner == 'keikoproj'
     runs-on: ubuntu-latest
@@ -21,9 +20,9 @@ jobs:
 
       - name: Download Kubebuilder
         run: |
-          curl -L -o kubebuilder_2.3.2_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz
-          tar -zxvf  kubebuilder_2.3.2_linux_amd64.tar.gz
-          sudo mv kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
+          curl -sSLo envtest-bins.tar.gz "https://go.kubebuilder.io/test-tools/1.19.2/$(go env GOOS)/$(go env GOARCH)"
+          sudo rm -rf /usr/local/kubebuilder
+          sudo tar -C /usr/local/kubebuilder --strip-components=1 -zvxf envtest-bins.tar.gz
 
       - name: Test
         run: |
@@ -47,9 +46,9 @@ jobs:
 
       - name: Download Kubebuilder
         run: |
-          curl -L -o kubebuilder_2.3.2_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz
-          tar -zxvf  kubebuilder_2.3.2_linux_amd64.tar.gz
-          sudo mv kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
+          curl -sSLo envtest-bins.tar.gz "https://go.kubebuilder.io/test-tools/1.19.2/$(go env GOOS)/$(go env GOARCH)"
+          sudo rm -rf /usr/local/kubebuilder
+          sudo tar -C /usr/local/kubebuilder --strip-components=1 -zvxf envtest-bins.tar.gz
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
