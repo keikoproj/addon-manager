@@ -25,6 +25,7 @@ jobs:
         run: |
           curl -sSLo envtest-bins.tar.gz "https://go.kubebuilder.io/test-tools/1.19.2/$(go env GOOS)/$(go env GOARCH)"
           sudo rm -rf /usr/local/kubebuilder
+          sudo mkdir -p /usr/local/kubebuilder
           sudo tar -C /usr/local/kubebuilder --strip-components=1 -zvxf envtest-bins.tar.gz
 
       - name: Set up QEMU
