@@ -34,6 +34,7 @@ var (
 	metricsAddr          string
 	enableLeaderElection bool
 	setupLog             = ctrl.Log.WithName("setup")
+	managedNameSpace     = "addon-manager-system"
 )
 
 func init() {
@@ -42,6 +43,7 @@ func init() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&debug, "debug", false, "Debug logging")
 	flag.Parse()
+	flag.StringVar(&managedNameSpace, "managed-namespace", "addon-manager-system", "managed namespace")
 }
 
 func main() {
@@ -63,7 +65,7 @@ func main() {
 	stopChan := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	controllers.New(ctx, mgr, stopChan)
+	controllers.New(ctx, mgr, stopChan, managedNameSpace)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

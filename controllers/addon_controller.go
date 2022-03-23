@@ -367,7 +367,7 @@ func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, 
 	return resourceInformers
 }
 
-func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) {
+func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}, managedNamespace string) {
 	kubeClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	if kubeClient == nil {
 		panic("kubeClient could not be nil")
@@ -388,7 +388,7 @@ func New(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) {
 	ctrlruntimeclient := mgr.GetClient()
 	logger := mgr.GetLogger().WithName("addon-manager-controller")
 	eventRecorder := mgr.GetEventRecorderFor("addon-manager-controller")
-	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, ctrlruntimeclient, "addon", "addon-manager-system",
+	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, ctrlruntimeclient, "addon", managedNamespace,
 		logger, eventRecorder, mgr.GetConfig(), mgr.GetCache())
 	mgr.Add(c)
 }

@@ -16,19 +16,19 @@ import (
 )
 
 func (c *Controller) handleAddonCreation(ctx context.Context, addon *addonv1.Addon) error {
-	c.logger.WithValues("[handleAddonCreation]", fmt.Sprintf(" %s/%s ", addon.Namespace, addon.Name))
+	c.logger.Info(fmt.Sprintf("[handleAddonCreation] %s/%s ", addon.Namespace, addon.Name))
 
 	// check if addon being deletion
 	deleting, err := c.isAddonBeingDeleting(ctx, addon)
 	if deleting {
-		c.logger.WithValues("[handleAddonCreation] ", fmt.Sprintf("%s/%s being deletion. skip", addon.Namespace, addon.Name))
+		c.logger.Info(fmt.Sprintf("[handleAddonCreation]  %s/%s being deletion. skip", addon.Namespace, addon.Name))
 		return err
 	}
 
 	// check if labelled with complete
 	completed := c.isAddonCompleted(addon)
 	if completed {
-		c.logger.WithValues("[handleAddonCreation] ", fmt.Sprintf("%s/%s completed. skip", addon.Namespace, addon.Name))
+		c.logger.Info(fmt.Sprintf("[handleAddonCreation] %s/%s completed. skip", addon.Namespace, addon.Name))
 		return nil
 	}
 
@@ -282,7 +282,7 @@ func (c *Controller) namespacenameFromKey(key string) (string, string) {
 }
 
 func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl workflows.AddonLifecycle) error {
-	c.logger.WithValues("[createAddon]", fmt.Sprintf(" addon %s/%s ", addon.Namespace, addon.Name))
+	c.logger.Info(fmt.Sprintf("[createAddon] addon %s/%s ", addon.Namespace, addon.Name))
 
 	changed, checksum := c.validateChecksum(addon)
 	if changed {

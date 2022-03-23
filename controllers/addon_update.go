@@ -170,7 +170,7 @@ func (c *Controller) updateAddonStatus(ctx context.Context, addon *addonv1.Addon
 	}
 	updating := latest.DeepCopy()
 	if reflect.DeepEqual(updating.Status, addon.Status) {
-		c.logger.WithValues("[updateAddonStatus]", fmt.Sprintf(" %s/%s the same. skip.", addon.Namespace, addon.Name))
+		c.logger.Info(fmt.Sprintf("[updateAddonStatus] %s/%s the same. skip.", addon.Namespace, addon.Name))
 		return nil
 	}
 
@@ -278,6 +278,7 @@ func (c *Controller) mergeFinalizer(old, new []string) []string {
 }
 
 func (c *Controller) updateAddon(ctx context.Context, updated *addonv1.Addon) error {
+	c.logger.Info(fmt.Sprintf("updateAddon %s/%s", updated.Namespace, updated.Name))
 	latest, err := c.addoncli.AddonmgrV1alpha1().Addons(updated.Namespace).Get(ctx, updated.Name, metav1.GetOptions{})
 	if err != nil || latest == nil {
 		// msg := fmt.Sprintf("[updateAddon] failed getting %s err %#v", updated.Name, err)
