@@ -590,7 +590,7 @@ func (c *Controller) isDependenciesReady(ctx context.Context, addon *addonv1.Add
 	addon.Status.Lifecycle.Installed = addonv1.Init
 	addon.Status.Reason = ""
 	if err := c.updateAddonStatus(ctx, addon); err != nil {
-		c.logger.Error(err, "isDependenciesReady failed reset %s/%s status back to init %#v", addon.Namespace, addon.Name, err)
+		c.logger.Error(err, fmt.Sprintf("isDependenciesReady failed reset %s/%s status back to init", addon.Namespace, addon.Name))
 	}
 	return true, nil
 }
