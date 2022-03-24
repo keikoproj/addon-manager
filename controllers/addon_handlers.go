@@ -348,10 +348,10 @@ func (c *Controller) createAddon(ctx context.Context, addon *addonv1.Addon, wfl 
 
 	err = c.createAddonHelper(ctx, addon, wfl)
 	if err != nil {
-		c.logger.Error(err, "[createAddon] failed %s/%s err %#v", addon.Namespace, addon.Name, err)
+		c.logger.Error(err, fmt.Sprintf("[createAddon] failed %s/%s ", addon.Namespace, addon.Name))
 		return err
 	} else {
-		c.logger.WithValues("[createAddon]", fmt.Sprintf(" addon %s/%s successfully", addon.Namespace, addon.Name))
+		c.logger.Info(fmt.Sprintf("[createAddon] addon %s/%s successfully", addon.Namespace, addon.Name))
 		return nil
 	}
 }
