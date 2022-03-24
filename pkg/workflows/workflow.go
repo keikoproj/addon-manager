@@ -267,7 +267,6 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 			return addonmgrv1alpha1.Succeeded, nil
 		} else if err != nil {
 			msg := fmt.Sprintf("failed creating wf %s err %v", wp.GetName(), err)
-			fmt.Println(msg)
 			w.log.Error(err, msg)
 			return addonmgrv1alpha1.Failed, fmt.Errorf(msg)
 		}

@@ -319,7 +319,7 @@ func init() {
 
 func helper() (*wfclientsetfake.Clientset, cache.SharedIndexInformer) {
 	wfcli := wfclientsetfake.NewSimpleClientset([]runtime.Object{}...)
-	wfinformer := utils.NewWorkflowInformer(dynClient, "default", 0, cache.Indexers{}, utils.TweakListOptions)
+	wfinformer := utils.NewWorkflowInformer(dynClient, "default", 0, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	stopCh := make(<-chan struct{})
 	go wfinformer.Run(stopCh)
 	return wfcli, wfinformer

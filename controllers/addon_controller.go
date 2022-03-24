@@ -194,7 +194,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
 	r := NewAddonReconciler(mgr)
-	r.wfinformer = utils.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
+	r.wfinformer = utils.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	go r.wfinformer.Run(stopChan)
 
 	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
