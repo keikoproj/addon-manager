@@ -1,3 +1,17 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package controllers
 
 import (
@@ -124,38 +138,6 @@ func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace s
 	)
 	return informer
 }
-
-// func newAddonInformer(ctx context.Context, dynCli dynamic.Interface, namespace string, config *rest.Config) cache.SharedIndexInformer {
-// 	addongvk := schema.GroupVersionKind{
-// 		Group:   addonapiv1.Group,
-// 		Version: "v1alpha1",
-// 		Kind:    addonapiv1.AddonKind,
-// 	}
-// 	mapper, err := apiutil.NewDiscoveryRESTMapper(config)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	mapping, err := mapper.RESTMapping(addongvk.GroupKind(), addongvk.Version)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-
-// 	informer := cache.NewSharedIndexInformer(
-// 		&cache.ListWatch{
-// 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-// 				return dynCli.Resource(mapping.Resource).Namespace(namespace).List(ctx, options)
-
-// 			},
-// 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-// 				return dynCli.Resource(mapping.Resource).Namespace(namespace).Watch(ctx, options)
-// 			},
-// 		},
-// 		&unstructured.Unstructured{},
-// 		0, //Skip resync
-// 		cache.Indexers{},
-// 	)
-// 	return informer
-// }
 
 // addon dependent resources informers
 func NewResourceInformers(ctx context.Context, kubeClient kubernetes.Interface, namespace string) map[string]cache.SharedIndexInformer {

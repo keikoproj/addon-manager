@@ -22,8 +22,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 
 	//"github.com/keikoproj/addon-manager/pkg/client/clientset/versioned/scheme"
 
@@ -44,6 +42,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	workflowv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -77,9 +76,13 @@ var _ = BeforeSuite(func(done Done) {
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+		Scheme:            common.GetAddonMgrScheme(),
 	}
 
 	err := addonv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = workflowv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	cliCfg, err := testEnv.Start()
@@ -97,11 +100,7 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(mgr).ToNot(BeNil())
 
-	c := NewController(ctx, mgr, stopMgr)
-	go func() {
-		err = c.Start(ctx)
-		Expect(err).ToNot(HaveOccurred())
-	}()
+	New(ctx, mgr, stopMgr, addonNamespace)
 	wg := &sync.WaitGroup{}
 	StartTestManager(mgr, wg)
 
@@ -129,33 +128,6 @@ func StartTestManager(mgr manager.Manager, wg *sync.WaitGroup) {
 		defer wg.Done()
 		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
 	}()
-}
-
-func NewController(ctx context.Context, mgr manager.Manager, stopChan <-chan struct{}) *Controller {
-	kubeClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
-	if kubeClient == nil {
-		panic("kubeClient could not be nil")
-	}
-	dynCli := dynamic.NewForConfigOrDie(mgr.GetConfig())
-	if dynCli == nil {
-		panic("dynCli could not be nil")
-	}
-	wfcli := common.NewWFClient(mgr.GetConfig())
-	if wfcli == nil {
-		panic("wfcli could not be nil")
-	}
-	addoncli := common.NewAddonClient(mgr.GetConfig())
-	if addoncli == nil {
-		panic("addoncli could not be nil")
-	}
-
-	ctrlruntimeclient := mgr.GetClient()
-	logger := mgr.GetLogger().WithName("addon-manager-controller")
-	eventRecorder := mgr.GetEventRecorderFor("addon-manager-controller")
-	c := newResourceController(kubeClient, dynCli, addoncli, wfcli, ctrlruntimeclient, "addon", "addon-manager-system",
-		logger, eventRecorder, mgr.GetConfig(), mgr.GetCache())
-	mgr.Add(c)
-	return c
 }
 
 var _ = AfterSuite(func() {
