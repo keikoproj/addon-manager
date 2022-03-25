@@ -582,35 +582,3 @@ func (w *workflowLifecycle) injectActiveDeadlineSeconds(wf *unstructured.Unstruc
 
 	return nil
 }
-
-func IsValidV1WorkFlow(obj runtime.Object) error {
-	wf, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("error : unstructured type.")
-	}
-
-	if wf.GetKind() != "Workflow" || wf.GetAPIVersion() != "argoproj.io/v1alpha1" {
-		return fmt.Errorf("error : unsupported object from v1workflow update event %v", obj)
-	}
-	return nil
-}
-
-// extract addon-name and lifecyclestep from a workflow name string generated based on
-// api types
-func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string, error) {
-	if strings.Contains(addonworkflowname, "prereqs") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "prereqs")-1]), "prereqs", nil
-	}
-
-	if strings.Contains(addonworkflowname, "install") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "install")-1]), "install", nil
-
-	}
-	if strings.Contains(addonworkflowname, "delete") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "delete")-1]), "delete", nil
-	}
-	if strings.Contains(addonworkflowname, "validate") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "validate")-1]), "validate", nil
-	}
-	return "", "", fmt.Errorf("no recognized lifecyclestep within ")
-}

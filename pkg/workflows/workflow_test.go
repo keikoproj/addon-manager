@@ -750,29 +750,3 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 	// Now try to delete
 	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(Not(HaveOccurred()))
 }
-
-func TestExtractAddOnNameAndLifecycleStep(t *testing.T) {
-	g := NewGomegaWithT(t)
-	table := []struct {
-		input string
-		name  string
-		step  string
-	}{{
-		input: "event-router-4-prereqs-2c13ee7f-wf",
-		name:  "event-router-4",
-		step:  "prereqs",
-	},
-		{
-			input: "event-router-4-install-2c13ee7f-wf",
-			name:  "event-router-4",
-			step:  "install",
-		}}
-
-	for _, entry := range table {
-		name, step, err := ExtractAddOnNameAndLifecycleStep(entry.input)
-		g.Expect(err).To(Not(HaveOccurred()))
-		g.Expect(name).To(Equal(entry.name))
-		g.Expect(step).To(Equal(entry.step))
-	}
-
-}
