@@ -105,7 +105,9 @@ var _ = BeforeSuite(func(done Done) {
 	StartTestManager(mgr, wg)
 
 	By("Build client")
-	k8sClient = mgr.GetClient()
+	k8sClient, err = client.New(cliCfg, client.Options{
+		Scheme: common.GetAddonMgrScheme(),
+	})
 	Expect(k8sClient).ToNot(BeNil())
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
