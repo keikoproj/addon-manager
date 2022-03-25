@@ -52,7 +52,7 @@ func PathToOSFile(relativPath string) (*os.File, error) {
 func KubectlApply(manifestRelativePath string) error {
 	kubectlBinaryPath, err := exec.LookPath("kubectl")
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	path, err := filepath.Abs(manifestRelativePath)

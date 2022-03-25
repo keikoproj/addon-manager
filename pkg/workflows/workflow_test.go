@@ -27,18 +27,19 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	dynfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
+
+	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
 )
 
 var sch = runtime.NewScheme()
-var fclient = runtimefake.NewFakeClientWithScheme(sch)
-var dynClient = dynfake.NewSimpleDynamicClient(sch)
+var dynClient = dynfake.NewSimpleDynamicClient(common.GetAddonMgrScheme())
 var rcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(sch, v1.EventSource{Component: "addons"})
 var ctx = context.TODO()
 
@@ -315,12 +316,20 @@ func init() {
 	metav1.AddToGroupVersion(sch, common.WorkflowGVR().GroupVersion())
 }
 
+func helper() (*wfclientsetfake.Clientset, cache.SharedIndexInformer) {
+	wfcli := wfclientsetfake.NewSimpleClientset([]runtime.Object{}...)
+	wfinformer := common.NewWorkflowInformer(dynClient, "default", 0, cache.Indexers{}, func(options *metav1.ListOptions) {})
+	stopCh := make(<-chan struct{})
+	go wfinformer.Run(stopCh)
+	return wfcli, wfinformer
+}
 func TestNewWorkflowLifecycle(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	a := &v1alpha1.Addon{}
+	wfcli, wfinformer := helper()
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("setup"))
 
 	var expected AddonLifecycle = &workflowLifecycle{}
 	g.Expect(wfl).To(BeAssignableToTypeOf(expected))
@@ -376,7 +385,9 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr, ctrl.Log.WithName("test"))
+
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
@@ -387,23 +398,16 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		g.Expect(err).To(Not(HaveOccurred()))
 		g.Expect(phase).To(Equal(v1alpha1.Pending))
 
-		var wfv1 = &unstructured.Unstructured{}
-		wfv1.SetGroupVersionKind(schema.GroupVersionKind{
-			Kind:    "Workflow",
-			Group:   "argoproj.io",
-			Version: "v1alpha1",
-		})
-		var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
-		g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
-			Should(Succeed())
+		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(wf).NotTo(BeNil())
 
 		// Verify default ttl injected
-		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(ttl).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
+		ttl := *wf.Spec.TTLStrategy.SecondsAfterCompletion
+		g.Expect(int64(ttl)).To(Equal(int64(time.Duration(72 * time.Hour).Seconds())))
 
 		// Verify activeDeadlineSeconds are kept or injected
-		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+		active := *wf.Spec.ActiveDeadlineSeconds
 		g.Expect(err).NotTo(HaveOccurred())
 		if lifecycle == v1alpha1.Install {
 			g.Expect(active).To(Equal(int64(600)))
@@ -412,9 +416,10 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		}
 
 		// Verify workflow variables are injected from addon params
-		wfParams, found, err := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "arguments", "parameters")
+		un, err := common.ToUnstructured(wf)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(found).To(BeTrue())
+		wfParams, _, err := unstructured.NestedSlice(un.UnstructuredContent(), "spec", "arguments", "parameters")
+		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(wfParams).To(ContainElements(map[string]interface{}{
 			"name":  "namespace",
 			"value": "my-addon-ns",
@@ -457,12 +462,12 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		}))
 
 		// Verify workflow labels are kept
-		labels := wfv1.GetLabels()
+		labels := un.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
 		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/component", "workflow-test"))
 
 		// Verify labels and annotations were added to resources
-		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
+		templates, found, _ := unstructured.NestedSlice(un.UnstructuredContent(), "spec", "templates")
 		g.Expect(found).To(BeTrue())
 
 		step := templates[1]
@@ -519,7 +524,8 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, addon, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, addon, sch, rcdr, ctrl.Log.WithName("test"))
 	for _, lifecycle := range []v1alpha1.LifecycleStep{v1alpha1.Prereqs, v1alpha1.Install} {
 
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
@@ -530,33 +536,29 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		g.Expect(err).To(Not(HaveOccurred()))
 		g.Expect(phase).To(Equal(v1alpha1.Pending))
 
-		var wfv1 = &unstructured.Unstructured{}
-		wfv1.SetGroupVersionKind(schema.GroupVersionKind{
-			Kind:    "Workflow",
-			Group:   "argoproj.io",
-			Version: "v1alpha1",
-		})
-		var wfv1Key = types.NamespacedName{Name: wfName, Namespace: "default"}
-		g.Eventually(func() error { return fclient.Get(context.TODO(), wfv1Key, wfv1) }, timeout).
-			Should(Succeed())
+		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(wf).NotTo(BeNil())
 
 		// Verify default ttl injected
-		ttl, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "ttlStrategy", "secondsAfterCompletion")
+		ttl := *wf.Spec.TTLStrategy.SecondsAfterCompletion
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(ttl).To(Equal(int64((72 * time.Hour).Seconds())))
+		g.Expect(int64(ttl)).To(Equal(int64((72 * time.Hour).Seconds())))
 
 		// Verify activeDeadlineSeconds are kept
-		active, found, err := unstructured.NestedInt64(wfv1.UnstructuredContent(), "spec", "activeDeadlineSeconds")
+		active := *wf.Spec.ActiveDeadlineSeconds
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(active).To(Equal(int64(600)))
 
 		// Verify workflow labels are kept
-		labels := wfv1.GetLabels()
+		un, err := common.ToUnstructured(wf)
+		g.Expect(err).NotTo(HaveOccurred())
+		labels := un.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))
 		g.Expect(labels).To(HaveKeyWithValue("app.kubernetes.io/component", "workflow-test"))
 
 		// Verify labels and annotations were added to resources
-		templates, found, _ := unstructured.NestedSlice(wfv1.UnstructuredContent(), "spec", "templates")
+		templates, found, _ := unstructured.NestedSlice(un.UnstructuredContent(), "spec", "templates")
 		g.Expect(found).To(BeTrue())
 		template := templates[0]
 		var manifest string
@@ -624,7 +626,8 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowType(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	// Empty workflow type should fail
 	wt := &v1alpha1.WorkflowType{}
@@ -660,7 +663,8 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowTemplate(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	// Workflow missing "spec" should fail
 	wt := &v1alpha1.WorkflowType{
@@ -697,7 +701,8 @@ func TestWorkflowLifecycle_Delete_NotExists(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	g.Expect(wfl.Delete(ctx, "addon-wf-test")).To(HaveOccurred())
 }
@@ -726,7 +731,8 @@ func TestNewWorkflowLifecycle_Delete(t *testing.T) {
 		},
 	}
 
-	wfl := NewWorkflowLifecycle(fclient, dynClient, a, rcdr, sch)
+	wfcli, wfinformer := helper()
+	wfl := NewWorkflowLifecycle(wfcli, wfinformer, dynClient, a, sch, rcdr, ctrl.Log.WithName("test"))
 
 	wf := &unstructured.Unstructured{}
 	wf.SetGroupVersionKind(schema.GroupVersionKind{

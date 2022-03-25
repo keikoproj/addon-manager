@@ -101,7 +101,7 @@ func (av *addonValidator) Validate() (bool, error) {
 	}
 
 	// Validate dependencies are installed.
-	err = av.validateDependencies()
+	err = av.ValidateDependencies()
 	if err != nil {
 		return false, err
 	}
@@ -186,7 +186,7 @@ func (av *addonValidator) validateAddonNameLength() error {
 	return nil
 }
 
-func (av *addonValidator) validateDependencies() error {
+func (av *addonValidator) ValidateDependencies() error {
 	// Check addon cache to see that addon pkgName:pkgVersion was installed
 	for pkgName, pkgVersion := range av.addon.Spec.PkgDeps {
 		pkgName = strings.TrimSpace(pkgName)
