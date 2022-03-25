@@ -48,7 +48,6 @@ import (
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/pkg/utils"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 
@@ -194,7 +193,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
 	r := NewAddonReconciler(mgr)
-	r.wfinformer = utils.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
+	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	go r.wfinformer.Run(stopChan)
 
 	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
