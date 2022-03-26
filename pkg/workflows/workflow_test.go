@@ -34,7 +34,6 @@ import (
 
 	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/pkg/utils"
 
 	wfclientsetfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
 )
@@ -319,7 +318,7 @@ func init() {
 
 func helper() (*wfclientsetfake.Clientset, cache.SharedIndexInformer) {
 	wfcli := wfclientsetfake.NewSimpleClientset([]runtime.Object{}...)
-	wfinformer := utils.NewWorkflowInformer(dynClient, "default", 0, cache.Indexers{}, utils.TweakListOptions)
+	wfinformer := common.NewWorkflowInformer(dynClient, "default", 0, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	stopCh := make(<-chan struct{})
 	go wfinformer.Run(stopCh)
 	return wfcli, wfinformer
@@ -416,7 +415,7 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		}
 
 		// Verify workflow variables are injected from addon params
-		un, err := utils.ToUnstructured(wf)
+		un, err := common.ToUnstructured(wf)
 		g.Expect(err).NotTo(HaveOccurred())
 		wfParams, _, err := unstructured.NestedSlice(un.UnstructuredContent(), "spec", "arguments", "parameters")
 		g.Expect(err).NotTo(HaveOccurred())
@@ -551,7 +550,7 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		g.Expect(active).To(Equal(int64(600)))
 
 		// Verify workflow labels are kept
-		un, err := utils.ToUnstructured(wf)
+		un, err := common.ToUnstructured(wf)
 		g.Expect(err).NotTo(HaveOccurred())
 		labels := un.GetLabels()
 		g.Expect(labels).To(HaveKeyWithValue("workflows.argoproj.io/controller-instanceid", "addon-manager-workflow-controller"))

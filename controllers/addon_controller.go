@@ -32,7 +32,6 @@ import (
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 
-	"github.com/keikoproj/addon-manager/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 
@@ -849,7 +848,7 @@ func (c *Controller) Start(ctx context.Context) error {
 	c.versionCache = addoninternal.NewAddonVersionCacheClient()
 
 	c.addoninformer = newAddonInformer(ctx, c.dynCli, c.namespace)
-	c.wfinformer = utils.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, utils.TweakListOptions)
+	c.wfinformer = common.NewWorkflowInformer(c.dynCli, c.namespace, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 
 	resourceInformers := NewResourceInformers(ctx, c.clientset, c.namespace)
 	c.nsinformer = resourceInformers["namespace"]
