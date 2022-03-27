@@ -22,10 +22,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
-	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -63,14 +59,6 @@ const (
 
 // Watched resources
 var (
-	resources = [...]runtime.Object{
-		&v1.Service{TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"}},
-		&batchv1.Job{TypeMeta: metav1.TypeMeta{Kind: "Job", APIVersion: "batch/v1"}}, &batchv1beta1.CronJob{TypeMeta: metav1.TypeMeta{Kind: "CronJob", APIVersion: "batch/v1beta1"}},
-		&appsv1.Deployment{TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}},
-		&appsv1.DaemonSet{TypeMeta: metav1.TypeMeta{Kind: "DaemonSet", APIVersion: "apps/v1"}},
-		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
-		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
-	}
 	finalizerName = "delete.addonmgr.keikoproj.io"
 )
 
@@ -192,7 +180,11 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	}
 
 	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
-		return nil, fmt.Errorf("failed to create addon controller: %#v", err)
+		return nil, fmt.Errorf("failed to create addon workflow controller: %#v", err)
+	}
+
+	if _, err := NewResourceController(mgr, stopChan, versionCache); err != nil {
+		return nil, fmt.Errorf("failed to create addon resource controller: %#v", err)
 	}
 
 	return nil, nil
@@ -209,52 +201,11 @@ func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionC
 		return nil, err
 	}
 
-	// Watch for changes to kubernetes Resources matching addon labels.
 	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{}); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, r.enqueueRequestWithAddonLabel()); err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Kind{Type: &v1.Service{}}, r.enqueueRequestWithAddonLabel()); err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Kind{Type: &batchv1.Job{}}, r.enqueueRequestWithAddonLabel()); err != nil {
-		return nil, err
-	}
 	return c, nil
-}
-
-func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
-		var reqs = make([]reconcile.Request, 0)
-		var labels = a.GetLabels()
-		if name, ok := labels["app.kubernetes.io/name"]; ok && strings.TrimSpace(name) != "" {
-			// Let's lookup addon related to this object.
-			if ok, v := r.versionCache.HasVersionName(name); ok {
-				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      v.Name,
-					Namespace: v.Namespace,
-				}})
-			}
-		}
-		return reqs
-	})
 }
 
 func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
@@ -364,22 +315,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-	}
-
-	// Observe resources matching selector labels.
-	observed, err := r.observeResources(ctx, instance)
-	if err != nil {
-		reason := fmt.Sprintf("Addon %s/%s failed to find deployed resources. %v", instance.Namespace, instance.Name, err)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Addon failed to find deployed resources.")
-		instance.Status.Lifecycle.Installed = addonmgrv1alpha1.Failed
-		instance.Status.Reason = reason
-
-		return reconcile.Result{}, err
-	}
-
-	if len(observed) > 0 {
-		instance.Status.Resources = observed
 	}
 
 	return ctrl.Result{}, nil
@@ -524,71 +459,6 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 	}
 
 	return nil
-}
-
-func (r *AddonReconciler) observeResources(ctx context.Context, a *addonmgrv1alpha1.Addon) ([]addonmgrv1alpha1.ObjectStatus, error) {
-	var observed []addonmgrv1alpha1.ObjectStatus
-	var labelSelector = a.Spec.Selector
-
-	if len(labelSelector.MatchLabels) == 0 {
-		labelSelector.MatchLabels = make(map[string]string)
-	}
-	// Always add app.kubernetes.io/managed-by and app.kubernetes.io/name to label selector
-	labelSelector.MatchLabels["app.kubernetes.io/managed-by"] = common.AddonGVR().Group
-	labelSelector.MatchLabels["app.kubernetes.io/name"] = fmt.Sprintf("%s", a.GetName())
-
-	selector, err := metav1.LabelSelectorAsSelector(&labelSelector)
-	if err != nil {
-		return observed, fmt.Errorf("label selector is invalid. %v", err)
-	}
-
-	var errs []error
-	cli := r.Client
-
-	res, err := ObserveService(cli, a.GetNamespace(), selector)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "service", a.GetNamespace(), a.GetName(), err))
-	}
-	observed = append(observed, res...)
-	res, err = ObserveJob(cli, a.GetNamespace(), selector)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "job", a.GetNamespace(), a.GetName(), err))
-	}
-	observed = append(observed, res...)
-	res, err = ObserveCronJob(cli, a.GetNamespace(), selector)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "cronjob", a.GetNamespace(), a.GetName(), err))
-	}
-	observed = append(observed, res...)
-
-	res, err = ObserveStatefulSet(cli, a.GetNamespace(), selector)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "StatefulSet", a.GetNamespace(), a.GetName(), err))
-	}
-	observed = append(observed, res...)
-
-	res, err = ObserveDeployment(cli, a.GetNamespace(), selector)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "Deployment", a.GetNamespace(), a.GetName(), err))
-	}
-	observed = append(observed, res...)
-
-	res, err = ObserveDaemonSet(cli, a.GetNamespace(), selector)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "DaemonSet", a.GetNamespace(), a.GetName(), err))
-	}
-	observed = append(observed, res...)
-
-	res, err = ObserveReplicaSet(cli, a.GetNamespace(), selector)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to observe resource %s for addon %s/%s: %w", "ReplicaSet", a.GetNamespace(), a.GetName(), err))
-	}
-	observed = append(observed, res...)
-
-	if len(errs) > 0 {
-		return observed, fmt.Errorf("observed err %v", errs)
-	}
-	return observed, nil
 }
 
 // Calculates new checksum and validates if there is a diff
