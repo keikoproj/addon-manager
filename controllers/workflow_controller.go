@@ -27,12 +27,14 @@ import (
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -59,11 +61,27 @@ func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversion
 		return nil, err
 	}
 
-	err = c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, r.enqueueRequestForOwner())
+	err = c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &wfv1.Workflow{},
+	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace))
 	if err != nil {
 		return nil, err
 	}
+
 	return c, nil
+}
+
+func (r *wfreconcile) workflowHasMatchingNamespace(obj client.Object) bool {
+	u, _ := obj.(*unstructured.Unstructured)
+	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
+		r.log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
+		return false
+	}
+	if obj.GetNamespace() != workflowDeployedNS {
+		return false
+	}
+	return true
 }
 
 func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
