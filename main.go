@@ -20,15 +20,11 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/controllers"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/version"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -51,18 +47,11 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
 	setupLog.Info(version.ToString())
-
-	nonCached := []client.Object{
-		&wfv1.Workflow{},
-		&addonmgrv1alpha1.Addon{},
-		&apiextensionsv1.CustomResourceDefinition{},
-	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                common.GetAddonMgrScheme(),
-		MetricsBindAddress:    metricsAddr,
-		LeaderElection:        enableLeaderElection,
-		LeaderElectionID:      "addonmgr.keikoproj.io",
-		ClientDisableCacheFor: nonCached, // if any cache is used, to bypass it for the given objects
+		Scheme:             common.GetAddonMgrScheme(),
+		MetricsBindAddress: metricsAddr,
+		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   "addonmgr.keikoproj.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -77,7 +66,6 @@ func main() {
 	}
 
 	// +kubebuilder:scaffold:builder
-
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")

@@ -381,3 +381,30 @@ func (a *Addon) CalculateChecksum() string {
 func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
 }
+
+func (p ApplicationAssemblyPhase) Completed() bool {
+	switch p {
+	case Succeeded, Failed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) Succeeded() bool {
+	switch p {
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) Deleting() bool {
+	switch p {
+	case Deleting:
+		return true
+	default:
+		return false
+	}
+}
