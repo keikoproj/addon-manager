@@ -65,7 +65,7 @@ func (c *AddonUpdate) updateAddon(ctx context.Context, updated *addonv1.Addon) (
 		updating.Finalizers = c.mergeFinalizer(latest.Finalizers, updated.Finalizers)
 		updating.ObjectMeta.Labels = map[string]string{}
 
-		err := c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
+		err := c.client.Update(ctx, updating, &client.UpdateOptions{})
 		if err != nil {
 			switch {
 			case errors.IsNotFound(err):
@@ -140,14 +140,14 @@ func (c *AddonUpdate) UpdateAddonStatusLifecycle(ctx context.Context, namespace,
 	newStatus.Resources = append(newStatus.Resources, prevStatus.Resources...)
 	newStatus.Checksum = prevStatus.Checksum
 	newStatus.StartTime = prevStatus.StartTime
-	if lifecycle == "prereqs" {
+	if lifecycle == string(addonv1.Prereqs) {
 		newStatus.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 		newStatus.Lifecycle.Installed = prevStatus.Lifecycle.Installed
 		if newStatus.Lifecycle.Prereqs == addonv1.Failed {
 			newStatus.Lifecycle.Installed = addonv1.Failed
 			newStatus.Reason = "prereqs wf fails."
 		}
-	} else if lifecycle == "install" || lifecycle == "delete" {
+	} else if lifecycle == string(addonv1.Install) || lifecycle == string(addonv1.Delete) {
 		newStatus.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
 		newStatus.Lifecycle.Prereqs = prevStatus.Lifecycle.Prereqs
 		if addonv1.ApplicationAssemblyPhase(lifecyclestatus) == addonv1.Succeeded {
@@ -155,12 +155,7 @@ func (c *AddonUpdate) UpdateAddonStatusLifecycle(ctx context.Context, namespace,
 		}
 
 		// check whether need patch complete
-		if lifecycle == "install" && newStatus.Lifecycle.Installed.Completed() {
-			labels := updating.GetLabels()
-			if labels == nil {
-				labels = map[string]string{}
-			}
-
+		if lifecycle == string(addonv1.Install) && newStatus.Lifecycle.Installed.Completed() {
 			updating.Status = newStatus
 			if _, err := c.updateAddon(ctx, updating); err != nil {
 				return err
