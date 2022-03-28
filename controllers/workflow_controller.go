@@ -22,12 +22,14 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
-	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
+
+	//addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
-	"k8s.io/apimachinery/pkg/api/errors"
+
+	//"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,13 +50,16 @@ type wfreconcile struct {
 	client       client.Client
 	log          logr.Logger
 	versionCache pkgaddon.VersionCacheClient
+	addonUpdater *pkgaddon.AddonUpdate
 }
 
 func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversioncache pkgaddon.VersionCacheClient) (controller.Controller, error) {
+	addonUpdater := pkgaddon.NewAddonUpdate(mgr.GetClient(), ctrl.Log.WithName(wfcontroller), addonversioncache)
 	r := &wfreconcile{
 		client:       mgr.GetClient(),
 		log:          ctrl.Log.WithName(wfcontroller),
 		versionCache: addonversioncache,
+		addonUpdater: addonUpdater,
 	}
 
 	c, err := controller.New(wfcontroller, mgr, controller.Options{Reconciler: r})
@@ -107,7 +112,7 @@ func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 		return ctrl.Result{}, fmt.Errorf(msg)
 	}
 
-	err = r.updateAddonStatusLifecycle(ctx, wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase)
+	err = r.addonUpdater.UpdateAddonStatusLifecycle(ctx, wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -147,279 +152,4 @@ func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string,
 	}
 
 	return "", "", fmt.Errorf("no recognized lifecyclestep within ")
-}
-
-func (c *wfreconcile) updateAddonStatusLifecycle(ctx context.Context, namespace, name string, lifecycle string, lifecyclestatus wfv1.WorkflowPhase) error {
-
-	key := fmt.Sprintf("%s/%s", namespace, name)
-	latest, err := c.getExistingAddon(ctx, key)
-	if err != nil || latest == nil {
-		return err
-	}
-	updating := latest.DeepCopy()
-	prevStatus := latest.Status
-
-	// addon being deletion, skip non-delete wf update
-	if lifecycle != "delete" &&
-		prevStatus.Lifecycle.Installed == addonv1.Deleting {
-		return nil
-	}
-
-	newStatus := addonv1.AddonStatus{
-		Lifecycle: addonv1.AddonStatusLifecycle{},
-		Resources: []addonv1.ObjectStatus{},
-	}
-	newStatus.Reason = prevStatus.Reason
-	newStatus.Resources = append(newStatus.Resources, prevStatus.Resources...)
-	newStatus.Checksum = prevStatus.Checksum
-	newStatus.StartTime = prevStatus.StartTime
-	if lifecycle == "prereqs" {
-		newStatus.Lifecycle.Prereqs = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
-		newStatus.Lifecycle.Installed = prevStatus.Lifecycle.Installed
-		if newStatus.Lifecycle.Prereqs == addonv1.Failed {
-			newStatus.Lifecycle.Installed = addonv1.Failed
-			newStatus.Reason = "prereqs wf fails."
-		}
-	} else if lifecycle == "install" || lifecycle == "delete" {
-		newStatus.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
-		newStatus.Lifecycle.Prereqs = prevStatus.Lifecycle.Prereqs
-		if addonv1.ApplicationAssemblyPhase(lifecyclestatus) == addonv1.Succeeded {
-			newStatus.Reason = ""
-		}
-
-		// check whether need patch complete
-		if lifecycle == "install" && newStatus.Lifecycle.Installed.Completed() {
-			labels := updating.GetLabels()
-			if labels == nil {
-				labels = map[string]string{}
-			}
-
-			updating.Status = newStatus
-			if _, err := c.updateAddon(ctx, updating); err != nil {
-				return err
-			}
-			return nil
-		}
-	}
-	updating.Status = newStatus
-
-	if lifecycle == "delete" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
-		if prevStatus.Lifecycle.Installed.Completed() || prevStatus.Lifecycle.Installed.Deleting() {
-			c.removeFinalizer(updating)
-			if _, err := c.updateAddon(ctx, updating); err != nil {
-				return err
-			}
-			c.removeFromCache(updating.Name)
-			return nil
-		}
-	}
-
-	var afterupdating *addonv1.Addon
-	patchLabel := false
-	if lifecycle == "install" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
-		labels := updating.GetLabels()
-		if labels == nil {
-			labels = map[string]string{}
-		}
-		afterupdating, err = c.updateAddon(ctx, updating)
-		if err != nil {
-			return err
-		}
-		patchLabel = true
-	}
-
-	if patchLabel {
-		updating = afterupdating.DeepCopy()
-	}
-
-	if reflect.DeepEqual(prevStatus, updating.Status) {
-		return nil
-	}
-
-	_, err = c.updateAddonStatus(ctx, updating)
-	if err != nil {
-		return err
-	}
-	return nil
-
-}
-
-func (c *wfreconcile) updateAddonStatus(ctx context.Context, addon *addonv1.Addon) (*addonv1.Addon, error) {
-	latest := &addonv1.Addon{}
-	err := c.client.Get(ctx, types.NamespacedName{Namespace: addon.Namespace, Name: addon.Name}, latest)
-	if err != nil {
-		msg := fmt.Sprintf("updateAddonStatus failed finding addon %s err %v.", addon.Name, err)
-		return nil, fmt.Errorf(msg)
-	}
-	updating := latest.DeepCopy()
-	if reflect.DeepEqual(updating.Status, addon.Status) {
-		return nil, nil
-	}
-
-	updating.Status = addonv1.AddonStatus{
-		Checksum: addon.Status.Checksum,
-		Lifecycle: addonv1.AddonStatusLifecycle{
-			Installed: addon.Status.Lifecycle.Installed,
-			Prereqs:   addon.Status.Lifecycle.Prereqs,
-		},
-		Reason:    addon.Status.Reason,
-		StartTime: addon.Status.StartTime,
-		Resources: c.mergeResources(addon.Status.Resources, latest.Status.Resources),
-	}
-
-	//updated, err := c.addoncli.AddonmgrV1alpha1().Addons(updating.Namespace).UpdateStatus(ctx, updating, metav1.UpdateOptions{})
-	err = c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
-	if err != nil {
-		switch {
-		case errors.IsNotFound(err):
-			msg := fmt.Sprintf("[updateAddonStatus] addon %s/%s is not found. %v", updating.Namespace, updating.Name, err)
-			return nil, fmt.Errorf(msg)
-		case strings.Contains(err.Error(), "the object has been modified"):
-			if _, err := c.updateAddonStatus(ctx, addon); err != nil {
-				c.log.Error(err, fmt.Sprintf("[updateAddonStatus] failed retry updating %s/%s status", updating.Namespace, updating.Name))
-			}
-		default:
-			//c.logger.Error("[updateAddonStatus] failed updating ", updating.Namespace, updating.Name, " status err ", err)
-			return nil, err
-		}
-	}
-	c.addAddonToCache(updating)
-
-	return updating, nil
-}
-
-// add or remove addon finalizer according to new instance
-func (c *wfreconcile) mergeFinalizer(old, new []string) []string {
-	addFinalize := false
-	for _, f := range new {
-		if f == addonapiv1.FinalizerName {
-			// should add finalizer
-			addFinalize = true
-			break
-		}
-	}
-
-	if addFinalize {
-		needappend := true
-		for _, f := range old {
-			if f == addonapiv1.FinalizerName {
-				needappend = false
-			}
-		}
-		if needappend {
-			old = append(old, addonapiv1.FinalizerName)
-		}
-		//c.logger.Infof("mergeFinalizer after append addon finalizer %#v", old)
-		return old
-	}
-
-	// otherwise, remove finalizer
-	ret := []string{}
-	for _, f := range old {
-		if f == addonapiv1.FinalizerName {
-			continue
-		}
-		ret = append(ret, f)
-	}
-	//c.logger.Infof("mergeFinalizer after remove addon finalizer %#v", ret)
-	return ret
-}
-
-func (c *wfreconcile) mergeResources(res1, res2 []addonv1.ObjectStatus) []addonv1.ObjectStatus {
-	merged := []addonv1.ObjectStatus{}
-	check := make(map[string]addonv1.ObjectStatus)
-	mix := append(res1, res2...)
-	for _, obj := range mix {
-		id := fmt.Sprintf("%s-%s-%s", strings.TrimSpace(obj.Name), strings.TrimSpace(obj.Kind), strings.TrimSpace(obj.Group))
-		check[id] = obj
-	}
-	for _, obj := range check {
-		merged = append(merged, obj)
-	}
-	return merged
-}
-
-func (c *wfreconcile) removeFinalizer(addon *addonv1.Addon) {
-	if common.ContainsString(addon.ObjectMeta.Finalizers, addonapiv1.FinalizerName) {
-		addon.ObjectMeta.Finalizers = common.RemoveString(addon.ObjectMeta.Finalizers, addonapiv1.FinalizerName)
-	}
-}
-
-func (c *wfreconcile) removeFromCache(addonName string) {
-	// Remove version from cache
-	if ok, v := c.versionCache.HasVersionName(addonName); ok {
-		c.versionCache.RemoveVersion(v.PkgName, v.PkgVersion)
-	}
-}
-
-// update addon meta ojbect first, then update status
-func (c *wfreconcile) updateAddon(ctx context.Context, updated *addonv1.Addon) (*addonv1.Addon, error) {
-	var errs []error
-
-	latest := &addonv1.Addon{}
-	err := c.client.Get(ctx, types.NamespacedName{Namespace: updated.Namespace, Name: updated.Name}, latest)
-	if err != nil || latest == nil {
-		return nil, err
-	} else {
-
-		if reflect.DeepEqual(updated, latest) {
-			c.log.Info(fmt.Sprintf("[updateAddon] latest and updated %s/%s is the same, skip", updated.Namespace, updated.Name))
-			return nil, nil
-
-		}
-
-		// update object metata only
-		updating := latest.DeepCopy()
-		updating.Finalizers = c.mergeFinalizer(latest.Finalizers, updated.Finalizers)
-		updating.ObjectMeta.Labels = map[string]string{}
-
-		err := c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
-		if err != nil {
-			switch {
-			case errors.IsNotFound(err):
-				msg := fmt.Sprintf("[updateAddon] Addon %s/%s is not found. %v", updated.Namespace, updated.Name, err)
-				//c.logger.Error(msg)
-				return nil, fmt.Errorf(msg)
-			case strings.Contains(err.Error(), "the object has been modified"):
-				errs = append(errs, err)
-				c.log.Info(fmt.Sprintf("[updateAddon] retry updating object metadata %s/%s coz objects has been modified", updated.Namespace, updated.Name))
-				if _, err := c.updateAddon(ctx, updated); err != nil {
-					//c.logger.Errorf("[updateAddon] retry updating %s/%s, coz err %#v", updated.Namespace, updated.Name, err)
-				}
-			default:
-				//c.logger.Error("[updateAddon] failed  ", updated.Namespace, updated.Name, " err ", err)
-				return nil, err
-			}
-		}
-		_, err = c.updateAddonStatus(ctx, updated)
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if len(errs) == 0 {
-		return updated, nil
-	}
-	c.log.Error(err, fmt.Sprintf("[updateAddon] %s/%s failed.", updated.Namespace, updated.Name))
-	return nil, fmt.Errorf("%v", errs)
-}
-
-func (c *wfreconcile) getExistingAddon(ctx context.Context, key string) (*addonv1.Addon, error) {
-	info := strings.Split(key, "/")
-	updating := &addonv1.Addon{}
-	err := c.client.Get(ctx, types.NamespacedName{Namespace: info[0], Name: info[1]}, updating)
-	if err != nil || updating == nil {
-		return nil, fmt.Errorf("[getExistingAddon] failed converting to addon %s from client err %#v", key, err)
-	}
-	return updating, nil
-}
-
-func (c *wfreconcile) addAddonToCache(addon *addonv1.Addon) {
-	var version = pkgaddon.Version{
-		Name:        addon.GetName(),
-		Namespace:   addon.GetNamespace(),
-		PackageSpec: addon.GetPackageSpec(),
-		PkgPhase:    addon.GetInstallStatus(),
-	}
-	c.versionCache.AddVersion(version)
-	c.log.WithValues("addAddonToCache", fmt.Sprintf("Adding %s/%s package %s version cache phase %s", addon.GetNamespace(), addon.GetName(), addon.GetPackageSpec(), version.PkgPhase))
 }
