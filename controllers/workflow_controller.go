@@ -23,6 +23,7 @@ import (
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
@@ -63,7 +64,7 @@ func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversion
 
 	err = c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &wfv1.Workflow{},
+		OwnerType:    &addonmgrv1alpha1.Addon{},
 	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace))
 	if err != nil {
 		return nil, err
@@ -73,15 +74,15 @@ func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversion
 }
 
 func (r *wfreconcile) workflowHasMatchingNamespace(obj client.Object) bool {
-	u, _ := obj.(*unstructured.Unstructured)
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || u == nil {
+		return false
+	}
 	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
 		r.log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
 		return false
 	}
-	if obj.GetNamespace() != workflowDeployedNS {
-		return false
-	}
-	return true
+	return obj.GetNamespace() == workflowDeployedNS
 }
 
 func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -133,20 +134,18 @@ func (r *wfreconcile) enqueueRequestForOwner() handler.EventHandler {
 // extract addon-name and lifecyclestep from a workflow name string generated based on
 // api types
 func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string, error) {
-	if strings.Contains(addonworkflowname, "prereqs") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "prereqs")-1]), "prereqs", nil
+	if strings.Contains(addonworkflowname, string(addonv1.Prereqs)) {
+		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, string(addonv1.Prereqs))-1]), string(addonv1.Prereqs), nil
 	}
 
-	if strings.Contains(addonworkflowname, "install") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "install")-1]), "install", nil
+	if strings.Contains(addonworkflowname, string(addonv1.Install)) {
+		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, string(addonv1.Install))-1]), string(addonv1.Install), nil
 
 	}
-	if strings.Contains(addonworkflowname, "delete") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "delete")-1]), "delete", nil
+	if strings.Contains(addonworkflowname, string(addonv1.Delete)) {
+		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, string(addonv1.Delete))-1]), string(addonv1.Delete), nil
 	}
-	if strings.Contains(addonworkflowname, "validate") {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, "validate")-1]), "validate", nil
-	}
+
 	return "", "", fmt.Errorf("no recognized lifecyclestep within ")
 }
 
@@ -159,9 +158,6 @@ func (c *wfreconcile) updateAddonStatusLifecycle(ctx context.Context, namespace,
 	}
 	updating := latest.DeepCopy()
 	prevStatus := latest.Status
-	if c.isAddonCompleted(updating) && prevStatus.Lifecycle.Installed != addonv1.Deleting {
-		return nil
-	}
 
 	// addon being deletion, skip non-delete wf update
 	if lifecycle != "delete" &&
@@ -197,8 +193,6 @@ func (c *wfreconcile) updateAddonStatusLifecycle(ctx context.Context, namespace,
 			if labels == nil {
 				labels = map[string]string{}
 			}
-			labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
-			updating.SetLabels(labels)
 
 			updating.Status = newStatus
 			if _, err := c.updateAddon(ctx, updating); err != nil {
@@ -227,8 +221,6 @@ func (c *wfreconcile) updateAddonStatusLifecycle(ctx context.Context, namespace,
 		if labels == nil {
 			labels = map[string]string{}
 		}
-		labels[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
-		updating.SetLabels(labels)
 		afterupdating, err = c.updateAddon(ctx, updating)
 		if err != nil {
 			return err
@@ -294,39 +286,6 @@ func (c *wfreconcile) updateAddonStatus(ctx context.Context, addon *addonv1.Addo
 	c.addAddonToCache(updating)
 
 	return updating, nil
-}
-
-// add or remove complete label according to new instance
-func (c *wfreconcile) mergeLabels(old, new map[string]string, merged map[string]string) {
-
-	needAddComplete := false
-	if _, ok := new[addonapiv1.AddonCompleteLabel]; ok {
-		needAddComplete = true
-	}
-
-	if needAddComplete {
-		if old != nil {
-			if _, ok := old[addonapiv1.AddonCompleteLabel]; !ok {
-				//c.logger.Infof("mergeLabels add complete label.")
-				old[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
-			}
-
-			for k, v := range old {
-				merged[k] = v
-			}
-			return
-		}
-		merged[addonapiv1.AddonCompleteLabel] = addonapiv1.AddonCompleteTrueKey
-		return
-	}
-
-	if _, ok := old[addonapiv1.AddonCompleteLabel]; ok {
-		//c.logger.Infof("mergeLabels remove complete label.")
-		delete(old, addonapiv1.AddonCompleteLabel)
-	}
-	for k, v := range old {
-		merged[k] = v
-	}
 }
 
 // add or remove addon finalizer according to new instance
@@ -413,7 +372,6 @@ func (c *wfreconcile) updateAddon(ctx context.Context, updated *addonv1.Addon) (
 		updating := latest.DeepCopy()
 		updating.Finalizers = c.mergeFinalizer(latest.Finalizers, updated.Finalizers)
 		updating.ObjectMeta.Labels = map[string]string{}
-		c.mergeLabels(latest.GetLabels(), updated.GetLabels(), updating.ObjectMeta.Labels)
 
 		err := c.client.Status().Update(ctx, updating, &client.UpdateOptions{})
 		if err != nil {
@@ -453,11 +411,6 @@ func (c *wfreconcile) getExistingAddon(ctx context.Context, key string) (*addonv
 		return nil, fmt.Errorf("[getExistingAddon] failed converting to addon %s from client err %#v", key, err)
 	}
 	return updating, nil
-}
-
-func (c *wfreconcile) isAddonCompleted(addon *addonv1.Addon) bool {
-	_, ok := addon.Labels[addonapiv1.AddonCompleteLabel]
-	return ok && addon.Labels[addonapiv1.AddonCompleteLabel] == addonapiv1.AddonCompleteTrueKey
 }
 
 func (c *wfreconcile) addAddonToCache(addon *addonv1.Addon) {

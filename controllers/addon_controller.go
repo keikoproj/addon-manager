@@ -89,20 +89,21 @@ type AddonReconciler struct {
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
+func NewAddonReconciler(mgr manager.Manager, versionCache addon.VersionCacheClient) *AddonReconciler {
 	wfcli := common.NewWFClient(mgr.GetConfig())
 	if wfcli == nil {
 		panic("workflow client could not be nil")
 	}
 
 	return &AddonReconciler{
-		Client:      mgr.GetClient(),
-		Log:         ctrl.Log.WithName(controllerName),
-		Scheme:      mgr.GetScheme(),
-		dynClient:   dynamic.NewForConfigOrDie(mgr.GetConfig()),
-		recorder:    mgr.GetEventRecorderFor("addons"),
-		statusWGMap: map[string]*sync.WaitGroup{},
-		wfcli:       wfcli,
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName(controllerName),
+		Scheme:       mgr.GetScheme(),
+		dynClient:    dynamic.NewForConfigOrDie(mgr.GetConfig()),
+		recorder:     mgr.GetEventRecorderFor("addons"),
+		statusWGMap:  map[string]*sync.WaitGroup{},
+		wfcli:        wfcli,
+		versionCache: versionCache,
 	}
 }
 
@@ -199,8 +200,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 }
 
 func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionCache addon.VersionCacheClient) (controller.Controller, error) {
-	r := NewAddonReconciler(mgr)
-	r.versionCache = versionCache
+	r := NewAddonReconciler(mgr, versionCache)
 	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	go r.wfinformer.Run(stopChan)
 
