@@ -17,27 +17,23 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
 
-	//addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	//addonapiv1 "github.com/keikoproj/addon-manager/api/addon
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
-	"github.com/keikoproj/addon-manager/pkg/common"
 
 	//"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -62,42 +58,30 @@ func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversion
 		addonUpdater: addonUpdater,
 	}
 
-	c, err := controller.New(wfcontroller, mgr, controller.Options{Reconciler: r})
+	c, err := controller.New(wfcontroller, mgr, controller.Options{Reconciler: r,
+		CacheSyncTimeout: controllerCacheSyncTimedOut})
 	if err != nil {
 		return nil, err
 	}
 
-	err = c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &addonmgrv1alpha1.Addon{},
-	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace))
-	if err != nil {
+	if err := c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForObject{}); err != nil {
 		return nil, err
 	}
 
 	return c, nil
 }
 
-func (r *wfreconcile) workflowHasMatchingNamespace(obj client.Object) bool {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || u == nil {
-		return false
-	}
-	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
-		r.log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
-		return false
-	}
-	return obj.GetNamespace() == workflowDeployedNS
-}
-
 func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log.Info("reconciling", "request", req)
+	if req.Namespace != workflowDeployedNS {
+		return ctrl.Result{}, nil
+	}
+
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get workflow %s: %#v", req, err)
 	}
-
+	r.log.Info("reconciling", "request", req, " workflow ", wfobj.Name)
 	if len(string(wfobj.Status.Phase)) == 0 {
 		r.log.Info("workflow ", wfobj.GetNamespace(), wfobj.GetName(), " status", " is empty")
 		return ctrl.Result{}, nil

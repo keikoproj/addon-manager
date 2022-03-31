@@ -1,7 +1,22 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package common
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/keikoproj/addon-manager/pkg/client/informers/externalversions/internalinterfaces"
@@ -68,4 +83,17 @@ func ToUnstructured(wf *wfv1.Workflow) (*unstructured.Unstructured, error) {
 	un.SetKind("Workflow")
 	un.SetAPIVersion("argoproj.io/v1alpha1")
 	return un, nil
+}
+
+func GetAddonNamespacesList2() ([]string, error) {
+	config := &ControllerConfig{}
+	if err := config.LoadYaml(configMap, ""); err != nil {
+		panic(err)
+	}
+	ret := []string{}
+	namelist := strings.Split(config.ManagedNamespaces, " ")
+	for _, namespace := range namelist {
+		ret = append(ret, strings.TrimSpace(namespace))
+	}
+	return ret, nil
 }

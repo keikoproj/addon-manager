@@ -16,10 +16,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/keikoproj/addon-manager/controllers"
@@ -47,11 +49,21 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(debug)))
 
 	setupLog.Info(version.ToString())
+	namespaces, err := common.GetAddonNamespacesList2()
+	if err != nil {
+		setupLog.Error(err, "unable to fetch controller config.")
+		os.Exit(1)
+	}
+
+	for _, ns := range namespaces {
+		setupLog.Info(fmt.Sprintf("managed namespaces <%s>", ns))
+	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             common.GetAddonMgrScheme(),
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		LeaderElectionID:   "addonmgr.keikoproj.io",
+		NewCache:           cache.MultiNamespacedCacheBuilder(namespaces),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

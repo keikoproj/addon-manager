@@ -58,7 +58,8 @@ const (
 
 	workflowDeployedNS = "addon-manager-system"
 
-	workflowResyncPeriod = 20 * time.Minute
+	workflowResyncPeriod        = 20 * time.Minute
+	controllerCacheSyncTimedOut = 5 * time.Minute
 )
 
 // Watched resources
@@ -141,7 +142,7 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
+			log.Info(fmt.Sprintf("Error: Panic occurred during execAdd %s/%s due to %v", instance.Namespace, instance.Name, err))
 		}
 	}()
 
@@ -204,7 +205,11 @@ func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionC
 	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	go r.wfinformer.Run(stopChan)
 
-	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
+	// addon-manager deployed at earliest stage
+	// watched namespace workflow deployed much later
+	c, err := controller.New(controllerName, mgr,
+		controller.Options{Reconciler: r,
+			CacheSyncTimeout: controllerCacheSyncTimedOut})
 	if err != nil {
 		return nil, err
 	}

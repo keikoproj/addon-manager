@@ -11,6 +11,36 @@ spec:
   ports:
     - port: 8443
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: addon-manager-configmap
+  namespace: addon-manager-system
+data:
+  addon-manager-controller.yaml: |
+    addon-namespaces:
+      addon-active-monitor-ns
+      addon-alb-ingress-controller-ns
+      addon-chaos-system
+      addon-cluster-autoscaler-ns
+      addon-event-router-ns
+      addon-external-dns-ns
+      addon-lifecycle-manager-ns
+      addon-manager-system
+      addon-nodereaper-ns
+      addon-pdbreaper-ns
+      addon-podreaper-ns
+      addon-upgrademgr-ns
+      addon-wavefront-s3-adapter-ns
+      addon-wavefrontcollectors-ns
+      addon-gpu-ns
+      addon-hpa-algo-ns
+      iam-manager-system
+      addon-kube-forensics-system-ns
+      addon-efs-csi-ns
+      addon-oil-ns
+      addon-metricset-ns
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,10 +65,20 @@ spec:
         - --enable-leader-election
         image: keikoproj/addon-manager:latest
         name: manager
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/manager
         resources:
           requests:
             cpu: 100m
             memory: 20Mi
+      volumes:
+      - configMap:
+          items:
+          - key: addon-manager-controller.yaml
+            path: addon-manager-controller.yaml
+          name: addon-manager-configmap
+        name: config-volume
       terminationGracePeriodSeconds: 10
 ---
 apiVersion: v1
