@@ -59,7 +59,7 @@ const (
 	workflowDeployedNS = "addon-manager-system"
 
 	workflowResyncPeriod        = 20 * time.Minute
-	controllerCacheSyncTimedOut = 5 * time.Minute
+	controllerCacheSyncTimedOut = 45 * time.Minute
 )
 
 // Watched resources
