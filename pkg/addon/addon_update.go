@@ -127,7 +127,7 @@ func (c *AddonUpdate) UpdateAddonStatusLifecycle(ctx context.Context, namespace,
 	prevStatus := latest.Status
 
 	// addon being deletion, skip non-delete wf update
-	if lifecycle != "delete" &&
+	if lifecycle != string(addonv1.Delete) &&
 		prevStatus.Lifecycle.Installed == addonv1.Deleting {
 		return nil
 	}
@@ -241,7 +241,6 @@ func (c *AddonUpdate) updateAddonStatus(ctx context.Context, addon *addonv1.Addo
 				c.log.Error(err, fmt.Sprintf("[updateAddonStatus] failed retry updating %s/%s status", updating.Namespace, updating.Name))
 			}
 		default:
-			//c.logger.Error("[updateAddonStatus] failed updating ", updating.Namespace, updating.Name, " status err ", err)
 			return nil, err
 		}
 	}
@@ -271,7 +270,6 @@ func (c *AddonUpdate) mergeFinalizer(old, new []string) []string {
 		if needappend {
 			old = append(old, addonapiv1.FinalizerName)
 		}
-		//c.logger.Infof("mergeFinalizer after append addon finalizer %#v", old)
 		return old
 	}
 
@@ -283,7 +281,6 @@ func (c *AddonUpdate) mergeFinalizer(old, new []string) []string {
 		}
 		ret = append(ret, f)
 	}
-	//c.logger.Infof("mergeFinalizer after remove addon finalizer %#v", ret)
 	return ret
 }
 
