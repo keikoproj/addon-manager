@@ -19,27 +19,9 @@ metadata:
 data:
   addon-manager-controller.yaml: |
     addon-namespaces:
-      addon-active-monitor-ns
-      addon-alb-ingress-controller-ns
-      addon-chaos-system
-      addon-cluster-autoscaler-ns
-      addon-event-router-ns
-      addon-external-dns-ns
-      addon-lifecycle-manager-ns
-      addon-manager-system
-      addon-nodereaper-ns
-      addon-pdbreaper-ns
-      addon-podreaper-ns
-      addon-upgrademgr-ns
-      addon-wavefront-s3-adapter-ns
-      addon-wavefrontcollectors-ns
-      addon-gpu-ns
-      addon-hpa-algo-ns
-      iam-manager-system
-      addon-kube-forensics-system-ns
-      addon-efs-csi-ns
-      addon-oil-ns
-      addon-metricset-ns
+      addon-sample-1-ns
+      addon-sample-2-ns
+      addon-sample-3-ns
 ---
 apiVersion: apps/v1
 kind: Deployment
