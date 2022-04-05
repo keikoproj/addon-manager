@@ -190,11 +190,11 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	versionCache := addon.NewAddonVersionCacheClient()
 	_, err := NewAddonCrontroller(mgr, stopChan, versionCache)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create addon controller: %#v", err)
+		return nil, fmt.Errorf("failed to create addon controller: %v", err)
 	}
 
 	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
-		return nil, fmt.Errorf("failed to create addon controller: %#v", err)
+		return nil, fmt.Errorf("failed to create addon controller: %v", err)
 	}
 
 	return nil, nil
