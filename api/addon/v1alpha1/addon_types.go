@@ -123,6 +123,8 @@ const (
 	CnabPkg PackageType = "cnab"
 	// CompositePkg is a package type representing a composite package structure, just yamls
 	CompositePkg PackageType = "composite"
+	// Error used to indicate system error
+	Error ApplicationAssemblyPhase = "error"
 )
 
 // CmdType represents a function that can be performed with arguments
@@ -139,18 +141,29 @@ type ApplicationAssemblyPhase string
 // Constants
 const (
 	// Pending Used to indicate that not all of application's components have been deployed yet.
+	Init ApplicationAssemblyPhase = ""
+
+	// Pending Used to indicate that addon is pending - wf is pending etc.
 	Pending ApplicationAssemblyPhase = "Pending"
 	// Succeeded Used to indicate that all of application's components have already been deployed.
 	Succeeded ApplicationAssemblyPhase = "Succeeded"
 	// Failed Used to indicate that deployment of application's components failed. Some components
 	// might be present, but deployment of the remaining ones will not be re-attempted.
 	Failed ApplicationAssemblyPhase = "Failed"
-	// ValidationFailed Used to indicate validation failed
+
+	// DepPending indicates Dep package is being pending
+	DepPending ApplicationAssemblyPhase = "DepPending"
+	// DepPending indicates Dep package is not installed
+	DepNotInstalled ApplicationAssemblyPhase = "DepNotInstalled"
+	// ValidationFailed Used to indicate validation failed: duplicate, invalid name etc
 	ValidationFailed ApplicationAssemblyPhase = "Validation Failed"
+
 	// Deleting Used to indicate that all application's components are being deleted.
 	Deleting ApplicationAssemblyPhase = "Deleting"
 	// DeleteFailed Used to indicate that delete failed.
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
+	// Running indicating associated wf is running
+	Running ApplicationAssemblyPhase = "Running"
 )
 
 // DeploymentPhase represents the status of observed resources
@@ -380,4 +393,40 @@ func (a *Addon) CalculateChecksum() string {
 // GetInstallStatus returns the install phase for addon
 func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
+}
+
+func (p ApplicationAssemblyPhase) Succeeded() bool {
+	switch p {
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) Completed() bool {
+	switch p {
+	case Succeeded, Failed, Error:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) Deleting() bool {
+	switch p {
+	case Deleting:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p ApplicationAssemblyPhase) DepPending() bool {
+	switch p {
+	case DepPending, DepNotInstalled:
+		return true
+	default:
+		return false
+	}
 }

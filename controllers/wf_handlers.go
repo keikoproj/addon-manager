@@ -10,21 +10,21 @@ import (
 )
 
 func (c *AddonReconciler) handleWorkFlowUpdate(ctx context.Context, obj interface{}) error {
-	c.logger.Info("[handleWorkFlowUpdate] ")
+	//c.logger.Info("[handleWorkFlowUpdate] ")
 
 	wfobj, err := common.WorkFlowFromUnstructured(obj.(*unstructured.Unstructured))
 	if err != nil {
 		msg := fmt.Sprintf("[handleWorkFlowUpdate] converting to workflow object err %#v", err)
-		c.logger.Info(msg)
+		//c.logger.Info(msg)
 		return fmt.Errorf(msg)
 	}
 
 	// check the associated addons and update its status
-	msg := fmt.Sprintf("[handleWorkFlowUpdate] %s/%s status.phase %s", wfobj.GetNamespace(), wfobj.GetName(), wfobj.Status.Phase)
-	c.logger.Info(msg)
+	//msg := fmt.Sprintf("[handleWorkFlowUpdate] %s/%s status.phase %s", wfobj.GetNamespace(), wfobj.GetName(), wfobj.Status.Phase)
+	//c.logger.Info(msg)
 
 	if len(string(wfobj.Status.Phase)) == 0 {
-		c.logger.Info("[handleWorkFlowUpdate] skip ", wfobj.GetNamespace(), "/", wfobj.GetName(), " empty status.")
+		//c.logger.Info("[handleWorkFlowUpdate] skip ", wfobj.GetNamespace(), "/", wfobj.GetName(), " empty status.")
 		return nil
 	}
 
@@ -34,7 +34,7 @@ func (c *AddonReconciler) handleWorkFlowUpdate(ctx context.Context, obj interfac
 		msg := fmt.Sprintf("[handleWorkFlowUpdate] could not extract addon/lifecycle from %s/%s workflow.",
 			wfobj.GetNamespace(),
 			wfobj.GetName())
-		c.logger.Info(msg)
+		//c.logger.Info(msg)
 		return fmt.Errorf(msg)
 	}
 
@@ -42,21 +42,21 @@ func (c *AddonReconciler) handleWorkFlowUpdate(ctx context.Context, obj interfac
 }
 
 func (c *AddonReconciler) handleWorkFlowAdd(ctx context.Context, obj interface{}) error {
-	c.logger.Info("[handleWorkFlowAdd] ")
+	//c.logger.Info("[handleWorkFlowAdd] ")
 	wfobj, err := common.WorkFlowFromUnstructured(obj.(*unstructured.Unstructured))
 	if err != nil {
 		msg := fmt.Sprintf("\n[handleWorkFlowAdd] converting to workflow object %#v", err)
-		c.logger.Info(msg)
+		//c.logger.Info(msg)
 		return fmt.Errorf(msg)
 	}
 
 	// check the associated addons and update its status
-	msg := fmt.Sprintf("[handleWorkFlowAdd] workflow %s/%s  status.phase %s", wfobj.GetNamespace(), wfobj.GetName(), wfobj.Status.Phase)
-	c.logger.Info(msg)
+	//_ := fmt.Sprintf("[handleWorkFlowAdd] workflow %s/%s  status.phase %s", wfobj.GetNamespace(), wfobj.GetName(), wfobj.Status.Phase)
+	//c.logger.Info(msg)
 	if len(string(wfobj.Status.Phase)) == 0 {
-		msg := fmt.Sprintf("[handleWorkFlowAdd] skip %s/%s workflow empty status.", wfobj.GetNamespace(),
-			wfobj.GetName())
-		c.logger.Info(msg)
+		//msg := fmt.Sprintf("[handleWorkFlowAdd] skip %s/%s workflow empty status.", wfobj.GetNamespace(),
+		//	wfobj.GetName())
+		//c.logger.Info(msg)
 		return nil
 	}
 	addonName, lifecycle, err := addonwfutility.ExtractAddOnNameAndLifecycleStep(wfobj.GetName())
@@ -64,7 +64,7 @@ func (c *AddonReconciler) handleWorkFlowAdd(ctx context.Context, obj interface{}
 		msg := fmt.Sprintf("[handleWorkFlowAdd] could not extract addon/lifecycle from %s/%s workflow.",
 			wfobj.GetNamespace(),
 			wfobj.GetName())
-		c.logger.Info(msg)
+		//c.logger.Info(msg)
 		return fmt.Errorf(msg)
 	}
 

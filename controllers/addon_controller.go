@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/sirupsen/logrus"
+	// "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -208,22 +208,22 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	wfInf := nsInformers.ForResource(common.WorkflowGVR())
 	wfInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(obj)
+			_, err := cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {
-				newEvent.key = key
-				newEvent.eventType = "create"
+				//newEvent.key = key
+				//newEvent.eventType = "create"
 
-				logrus.WithField("controllers", "workflow").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				//logrus.WithField("controllers", "workflow").Infof("Processing add to %v: %s", resourceType, newEvent.key)
 				c.handleWorkFlowAdd(ctx, obj)
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(new)
+			_, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
-				newEvent.key = key
-				newEvent.eventType = "update"
+				//newEvent.key = key
+				//newEvent.eventType = "update"
 
-				logrus.WithField("controllers", "workflow").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				//logrus.WithField("controllers", "workflow").Infof("Processing update to %v: %s", resourceType, newEvent.key)
 				c.handleWorkFlowUpdate(ctx, new)
 			}
 		},
