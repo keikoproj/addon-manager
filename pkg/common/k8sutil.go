@@ -16,7 +16,6 @@ package common
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/keikoproj/addon-manager/pkg/client/informers/externalversions/internalinterfaces"
@@ -83,17 +82,4 @@ func ToUnstructured(wf *wfv1.Workflow) (*unstructured.Unstructured, error) {
 	un.SetKind("Workflow")
 	un.SetAPIVersion("argoproj.io/v1alpha1")
 	return un, nil
-}
-
-func GetAddonNamespacesList2() ([]string, error) {
-	config := &ControllerConfig{}
-	if err := config.LoadYaml(configMap, ""); err != nil {
-		panic(err)
-	}
-	ret := []string{}
-	namelist := strings.Split(config.ManagedNamespaces, " ")
-	for _, namespace := range namelist {
-		ret = append(ret, strings.TrimSpace(namespace))
-	}
-	return ret, nil
 }
