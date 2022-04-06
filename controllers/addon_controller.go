@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -202,8 +203,31 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	}
 
 	// Watch workflows created by addon only in addon-manager-system namespace
+	ctx := context.Background()
 	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
 	wfInf := nsInformers.ForResource(common.WorkflowGVR())
+	wfInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "create"
+
+				logrus.WithField("controllers", "workflow").Infof("Processing add to %v: %s", resourceType, newEvent.key)
+				c.handleWorkFlowAdd(ctx, obj)
+			}
+		},
+		UpdateFunc: func(old, new interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				newEvent.key = key
+				newEvent.eventType = "update"
+
+				logrus.WithField("controllers", "workflow").Infof("Processing update to %v: %s", resourceType, newEvent.key)
+				c.handleWorkFlowUpdate(ctx, new)
+			}
+		},
+	})
 	if err := c.Watch(&source.Informer{Informer: wfInf.Informer()}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonmgrv1alpha1.Addon{},
