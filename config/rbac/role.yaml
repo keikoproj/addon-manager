@@ -16,7 +16,6 @@ rules:
   - pods
   - serviceaccounts
   - services
-  - workflows
   verbs:
   - create
   - get
