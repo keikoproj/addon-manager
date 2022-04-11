@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func (c *AddonReconciler) handleWorkFlowUpdate(ctx context.Context, obj interface{}) error {
+func (r *AddonReconciler) handleWorkFlowUpdate(ctx context.Context, obj interface{}) error {
 	//c.logger.Info("[handleWorkFlowUpdate] ")
 
 	wfobj, err := common.WorkFlowFromUnstructured(obj.(*unstructured.Unstructured))
@@ -38,7 +38,7 @@ func (c *AddonReconciler) handleWorkFlowUpdate(ctx context.Context, obj interfac
 		return fmt.Errorf(msg)
 	}
 
-	return c.updateAddonStatusLifecycle(ctx, wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase)
+	return r.updateAddonStatusLifecycle(ctx, wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase)
 }
 
 func (c *AddonReconciler) handleWorkFlowAdd(ctx context.Context, obj interface{}) error {

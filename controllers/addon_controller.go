@@ -54,6 +54,8 @@ import (
 
 	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	"k8s.io/client-go/tools/cache"
+
+	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 )
 
 const (
@@ -92,6 +94,10 @@ type AddonReconciler struct {
 
 	wfcli      wfclientset.Interface
 	wfinformer cache.SharedIndexInformer
+
+	addoncli      addonv1versioned.Interface
+	client        client.Client
+	addoninformer cache.SharedIndexInformer
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
@@ -102,6 +108,8 @@ func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
 		panic("workflow client could not be nil")
 	}
 
+	addoncli := common.NewAddonClient(mgr.GetConfig())
+
 	return &AddonReconciler{
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName(controllerName),
@@ -111,6 +119,8 @@ func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
 		recorder:     mgr.GetEventRecorderFor("addons"),
 		statusWGMap:  map[string]*sync.WaitGroup{},
 		wfcli:        wfcli,
+		addoncli:     addoncli,
+		client:       mgr.GetClient(),
 	}
 }
 
@@ -181,7 +191,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	ret, procErr := r.processAddon(ctx, log, instance, wfl)
 
 	// Always update cache, status except errors
-	r.addAddonToCache(log, instance)
+	r.addAddonToCache(instance)
 
 	err := r.updateAddonStatus(ctx, log, instance)
 	if err != nil {
@@ -196,6 +206,8 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	r := NewAddonReconciler(mgr)
 	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	go r.wfinformer.Run(stopChan)
+
+	r.addoninformer = r.wfinformer
 
 	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
@@ -214,7 +226,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 				//newEvent.eventType = "create"
 
 				//logrus.WithField("controllers", "workflow").Infof("Processing add to %v: %s", resourceType, newEvent.key)
-				c.handleWorkFlowAdd(ctx, obj)
+				r.handleWorkFlowAdd(ctx, obj)
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
@@ -224,7 +236,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 				//newEvent.eventType = "update"
 
 				//logrus.WithField("controllers", "workflow").Infof("Processing update to %v: %s", resourceType, newEvent.key)
-				c.handleWorkFlowUpdate(ctx, new)
+				r.handleWorkFlowUpdate(ctx, new)
 			}
 		},
 	})
@@ -505,7 +517,7 @@ func (r *AddonReconciler) updateAddonStatus(ctx context.Context, log logr.Logger
 	return nil
 }
 
-func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1alpha1.Addon) {
+func (r *AddonReconciler) addAddonToCache(instance *addonmgrv1alpha1.Addon) {
 	var version = addon.Version{
 		Name:        instance.GetName(),
 		Namespace:   instance.GetNamespace(),
@@ -513,7 +525,7 @@ func (r *AddonReconciler) addAddonToCache(log logr.Logger, instance *addonmgrv1a
 		PkgPhase:    instance.GetInstallStatus(),
 	}
 	r.versionCache.AddVersion(version)
-	log.Info("Adding version cache", "phase", version.PkgPhase)
+	//log.Info("Adding version cache", "phase", version.PkgPhase)
 }
 
 func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
