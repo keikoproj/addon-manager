@@ -5,6 +5,7 @@
 ## [v0.5.0] - 2022-04-26
 ### Fixed
 - Build Fix (#102)
+- Fix UTC build date (#135)
 ### Changed
 - Upgrade to Go 1.17+ (#116)
 - Upgrade Kubernetes APIs (apimachinery, api, etc.) to 0.21 (#116)
@@ -15,6 +16,7 @@
 - update build badge to use GitHub Action status (#109)
 - Migrate to GitHub Actions to gate PRs. (#105)
 - bumps actions/checkout from 2 to 3 (#119)
+- addon-manager refactor pkg/ directory (#123)
 
 <a name="v0.4.3"></a>
 ## [v0.4.3] - 2021-07-15
