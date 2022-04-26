@@ -17,6 +17,8 @@
 - Migrate to GitHub Actions to gate PRs. (#105)
 - bumps actions/checkout from 2 to 3 (#119)
 - addon-manager refactor pkg/ directory (#123)
+- Bump actions/setup-go from 2 to 3 (#132)
+- Bump codecov/codecov-action from 2.1.0 to 3 (#128)
 
 <a name="v0.4.3"></a>
 ## [v0.4.3] - 2021-07-15
