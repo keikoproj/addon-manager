@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	wfcontroller = "workflow-controller"
+	wfcontroller = "addon-manager-wf-controller"
 )
 
 type wfreconcile struct {

@@ -145,7 +145,6 @@ func (c *AddonUpdate) UpdateAddonStatusLifecycle(ctx context.Context, namespace,
 		newStatus.Lifecycle.Installed = prevStatus.Lifecycle.Installed
 		if newStatus.Lifecycle.Prereqs == addonv1.Failed {
 			newStatus.Lifecycle.Installed = addonv1.Failed
-			newStatus.Reason = "prereqs wf fails."
 		}
 	} else if lifecycle == string(addonv1.Install) || lifecycle == string(addonv1.Delete) {
 		newStatus.Lifecycle.Installed = addonv1.ApplicationAssemblyPhase(lifecyclestatus)
@@ -165,7 +164,7 @@ func (c *AddonUpdate) UpdateAddonStatusLifecycle(ctx context.Context, namespace,
 	}
 	updating.Status = newStatus
 
-	if lifecycle == "delete" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
+	if lifecycle == string(addonv1.Delete) && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
 		if prevStatus.Lifecycle.Installed.Completed() || prevStatus.Lifecycle.Installed.Deleting() {
 			c.removeFinalizer(updating)
 			if _, err := c.updateAddon(ctx, updating); err != nil {
@@ -178,7 +177,7 @@ func (c *AddonUpdate) UpdateAddonStatusLifecycle(ctx context.Context, namespace,
 
 	var afterupdating *addonv1.Addon
 	patchLabel := false
-	if lifecycle == "install" && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
+	if lifecycle == string(addonv1.Install) && addonv1.ApplicationAssemblyPhase(lifecyclestatus).Succeeded() {
 		labels := updating.GetLabels()
 		if labels == nil {
 			labels = map[string]string{}
