@@ -2,7 +2,7 @@
 ## [Unreleased]
 
 <a name="v0.5.0"></a>
-## [v0.5.0] - 2022-03-08
+## [v0.5.0] - 2022-04-26
 ### Fixed
 - Build Fix (#102)
 ### Changed
