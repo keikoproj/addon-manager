@@ -32,11 +32,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
@@ -76,7 +74,6 @@ type AddonReconciler struct {
 	wfcli      wfclientset.Interface
 	wfinformer cache.SharedIndexInformer
 }
-
 
 func NewAddonReconciler(mgr manager.Manager, versionCache addon.VersionCacheClient) *AddonReconciler {
 	wfcli := common.NewWFClient(mgr.GetConfig())
@@ -176,14 +173,16 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
 	versionCache := addon.NewAddonVersionCacheClient()
-	_, err := NewAddonCrontroller(mgr, stopChan, versionCache)
-
-	if err != nil {
+	if _, err := NewAddonCrontroller(mgr, stopChan, versionCache); err != nil {
 		return nil, fmt.Errorf("failed to create addon controller: %v", err)
 	}
 
 	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
 		return nil, fmt.Errorf("failed to create addon controller: %v", err)
+	}
+
+	if _, err := NewResourceController(mgr, stopChan, versionCache); err != nil {
+		return nil, fmt.Errorf("failed to create addon resource controller: %#v", err)
 	}
 
 	return nil, nil
@@ -203,50 +202,7 @@ func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionC
 		return nil, err
 	}
 
-	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
-		return nil, fmt.Errorf("failed to create addon workflow controller: %#v", err)
-	}
-
-	if _, err := NewResourceController(mgr, stopChan, versionCache); err != nil {
-		return nil, fmt.Errorf("failed to create addon resource controller: %#v", err)
-	}
-
-	return nil, nil
-}
-
-func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionCache addon.VersionCacheClient) (controller.Controller, error) {
-	r := NewAddonReconciler(mgr)
-	r.versionCache = versionCache
-	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
-	go r.wfinformer.Run(stopChan)
-
-	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{}); err != nil {
-		return nil, err
-	}
-
 	return c, nil
-}
-
-func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
-		var reqs = make([]reconcile.Request, 0)
-		var labels = a.GetLabels()
-		if name, ok := labels["app.kubernetes.io/name"]; ok && strings.TrimSpace(name) != "" {
-			// Let's lookup addon related to this object.
-			if ok, v := r.versionCache.HasVersionName(name); ok {
-				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      v.Name,
-					Namespace: v.Namespace,
-				}})
-			}
-		}
-		return reqs
-	})
 }
 
 func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
