@@ -17,7 +17,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -29,11 +28,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,7 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -49,7 +46,6 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
-	"k8s.io/client-go/dynamic/dynamicinformer"
 
 	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	"k8s.io/client-go/tools/cache"
@@ -62,7 +58,8 @@ const (
 
 	workflowDeployedNS = "addon-manager-system"
 
-	workflowResyncPeriod = 20 * time.Minute
+	workflowResyncPeriod        = 20 * time.Minute
+	controllerCacheSyncTimedOut = 45 * time.Minute
 )
 
 // Watched resources
@@ -75,8 +72,7 @@ var (
 		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
 		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
 	}
-	finalizerName      = "delete.addonmgr.keikoproj.io"
-	generatedInformers informers.SharedInformerFactory
+	finalizerName = "delete.addonmgr.keikoproj.io"
 )
 
 // AddonReconciler reconciles a Addon object
@@ -94,8 +90,7 @@ type AddonReconciler struct {
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
-
+func NewAddonReconciler(mgr manager.Manager, versionCache addon.VersionCacheClient) *AddonReconciler {
 	wfcli := common.NewWFClient(mgr.GetConfig())
 	if wfcli == nil {
 		panic("workflow client could not be nil")
@@ -105,11 +100,11 @@ func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName(controllerName),
 		Scheme:       mgr.GetScheme(),
-		versionCache: addon.NewAddonVersionCacheClient(),
 		dynClient:    dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		recorder:     mgr.GetEventRecorderFor("addons"),
 		statusWGMap:  map[string]*sync.WaitGroup{},
 		wfcli:        wfcli,
+		versionCache: versionCache,
 	}
 }
 
@@ -147,7 +142,7 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
+			log.Info(fmt.Sprintf("Error: Panic occurred during execAdd %s/%s due to %v", instance.Namespace, instance.Name, err))
 		}
 	}()
 
@@ -192,29 +187,31 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 }
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
-	r := NewAddonReconciler(mgr)
+	versionCache := addon.NewAddonVersionCacheClient()
+	_, err := NewAddonCrontroller(mgr, stopChan, versionCache)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create addon controller: %v", err)
+	}
+
+	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
+		return nil, fmt.Errorf("failed to create addon controller: %v", err)
+	}
+
+	return nil, nil
+}
+
+func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionCache addon.VersionCacheClient) (controller.Controller, error) {
+	r := NewAddonReconciler(mgr, versionCache)
 	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	go r.wfinformer.Run(stopChan)
 
-	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
+	// addon-manager deployed at earliest stage
+	// watched namespace workflow deployed much later
+	c, err := controller.New(controllerName, mgr,
+		controller.Options{Reconciler: r,
+			CacheSyncTimeout: controllerCacheSyncTimedOut})
 	if err != nil {
 		return nil, err
-	}
-
-	// Watch workflows created by addon only in addon-manager-system namespace
-	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynClient, time.Minute*30, workflowDeployedNS, nil)
-	wfInf := nsInformers.ForResource(common.WorkflowGVR())
-	if err := c.Watch(&source.Informer{Informer: wfInf.Informer()}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &addonmgrv1alpha1.Addon{},
-	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
-		return nil, err
-	}
-
-	wfInforms := NewWfInformers(nsInformers, stopChan)
-	err = mgr.Add(wfInforms)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start workflowinformers")
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
@@ -246,18 +243,6 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 		return nil, err
 	}
 	return c, nil
-}
-
-func (r *AddonReconciler) workflowHasMatchingNamespace(obj client.Object) bool {
-	u, _ := obj.(*unstructured.Unstructured)
-	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
-		r.Log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
-		return false
-	}
-	if obj.GetNamespace() != workflowDeployedNS {
-		return false
-	}
-	return true
 }
 
 func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
