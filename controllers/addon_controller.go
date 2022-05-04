@@ -32,7 +32,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -199,6 +201,11 @@ func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionC
 		controller.Options{Reconciler: r,
 			CacheSyncTimeout: controllerCacheSyncTimedOut})
 	if err != nil {
+		return nil, err
+	}
+
+	// Watch for changes to kubernetes Resources matching addon labels.
+	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{}); err != nil {
 		return nil, err
 	}
 
