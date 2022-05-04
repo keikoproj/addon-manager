@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -101,7 +100,6 @@ func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get workflow %s: %#v", req, err)
 	}
-  
 	r.log.Info("reconciling", "request", req, " workflow ", wfobj.Name)
 	if len(string(wfobj.Status.Phase)) == 0 {
 		r.log.Info("workflow ", wfobj.GetNamespace(), wfobj.GetName(), " status", " is empty")
@@ -144,7 +142,6 @@ func (r *wfreconcile) enqueueRequestForOwner() handler.EventHandler {
 // extract addon-name and lifecyclestep from a workflow name string generated based on
 // api types
 func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string, error) {
-
 	if strings.Contains(addonworkflowname, string(addonv1.Prereqs)) {
 		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, string(addonv1.Prereqs))-1]), string(addonv1.Prereqs), nil
 	}
