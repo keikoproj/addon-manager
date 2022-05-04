@@ -228,13 +228,11 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 
 	// Check if the same Addon spec was submitted and completed previously
 	if wfv1 != nil {
-		deleted, err := w.deleteCollisionWorkflows(ctx)
+		existingwf, err := common.WorkFlowFromUnstructured(wfv1)
 		if err != nil {
 			return addonmgrv1alpha1.Failed, err
 		}
-		if deleted {
-			return addonmgrv1alpha1.Pending, nil
-		}
+		return addonmgrv1alpha1.ApplicationAssemblyPhase(existingwf.Status.Phase), nil
 	}
 
 	if wfv1 == nil {
@@ -481,52 +479,6 @@ func (w *workflowLifecycle) addRoleAnnotationToResource(resource *unstructured.U
 	}
 
 	resource.SetAnnotations(annotations)
-}
-
-func (w *workflowLifecycle) deleteCollisionWorkflows(ctx context.Context) (bool, error) {
-	var mostRecentWorkflowTime time.Time
-	var mostRecentWorkflow unstructured.Unstructured
-	var deleted = false
-
-	workflows, err := w.dynClient.Resource(common.WorkflowGVR()).Namespace(w.addon.GetNamespace()).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return false, fmt.Errorf("failed to list workflows. %v", err)
-	}
-
-	// Get the most recently run workflow for this addon
-	for _, workflow := range workflows.Items {
-		if strings.Contains(workflow.GetName(), w.addon.Name) {
-			if workflow.UnstructuredContent()["status"] == nil {
-				return false, nil
-			}
-			startedAt := workflow.UnstructuredContent()["status"].(map[string]interface{})["startedAt"].(string)
-			t, err := time.Parse(time.RFC3339, startedAt)
-			if err != nil {
-				return false, err
-			}
-			if !t.Before(mostRecentWorkflowTime) {
-				mostRecentWorkflowTime = t
-				mostRecentWorkflow = workflow
-			}
-		}
-	}
-
-	if mostRecentWorkflow.Object == nil {
-		return false, nil
-	}
-
-	// If the most recently run workflow doesn't have the current checksum, delete the old checksum workflows
-	if !strings.Contains(mostRecentWorkflow.GetName(), w.addon.Status.Checksum) {
-		for _, workflow := range workflows.Items {
-			phase := workflow.UnstructuredContent()["status"].(map[string]interface{})["phase"].(string)
-			if strings.Contains(workflow.GetName(), w.addon.Status.Checksum) && phase != "Pending" {
-				_ = w.Delete(ctx, workflow.GetName())
-				deleted = true
-			}
-		}
-	}
-
-	return deleted, nil
 }
 
 func (w *workflowLifecycle) injectTTLs(wf *unstructured.Unstructured) error {

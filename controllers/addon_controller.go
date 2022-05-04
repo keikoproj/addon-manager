@@ -54,7 +54,8 @@ const (
 
 	workflowDeployedNS = "addon-manager-system"
 
-	workflowResyncPeriod = 20 * time.Minute
+	workflowResyncPeriod        = 20 * time.Minute
+	controllerCacheSyncTimedOut = 45 * time.Minute
 )
 
 // Watched resources
@@ -76,21 +77,22 @@ type AddonReconciler struct {
 	wfinformer cache.SharedIndexInformer
 }
 
-// NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager) *AddonReconciler {
+
+func NewAddonReconciler(mgr manager.Manager, versionCache addon.VersionCacheClient) *AddonReconciler {
 	wfcli := common.NewWFClient(mgr.GetConfig())
 	if wfcli == nil {
 		panic("workflow client could not be nil")
 	}
 
 	return &AddonReconciler{
-		Client:      mgr.GetClient(),
-		Log:         ctrl.Log.WithName(controllerName),
-		Scheme:      mgr.GetScheme(),
-		dynClient:   dynamic.NewForConfigOrDie(mgr.GetConfig()),
-		recorder:    mgr.GetEventRecorderFor("addons"),
-		statusWGMap: map[string]*sync.WaitGroup{},
-		wfcli:       wfcli,
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName(controllerName),
+		Scheme:       mgr.GetScheme(),
+		dynClient:    dynamic.NewForConfigOrDie(mgr.GetConfig()),
+		recorder:     mgr.GetEventRecorderFor("addons"),
+		statusWGMap:  map[string]*sync.WaitGroup{},
+		wfcli:        wfcli,
+		versionCache: versionCache,
 	}
 }
 
@@ -128,7 +130,7 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Info("Error: Panic occurred during execAdd %s/%s due to %s", instance.Namespace, instance.Name, err)
+			log.Info(fmt.Sprintf("Error: Panic occurred during execAdd %s/%s due to %v", instance.Namespace, instance.Name, err))
 		}
 	}()
 
@@ -175,8 +177,30 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
 	versionCache := addon.NewAddonVersionCacheClient()
 	_, err := NewAddonCrontroller(mgr, stopChan, versionCache)
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to create addon controller: %#v", err)
+		return nil, fmt.Errorf("failed to create addon controller: %v", err)
+	}
+
+	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
+		return nil, fmt.Errorf("failed to create addon controller: %v", err)
+	}
+
+	return nil, nil
+}
+
+func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionCache addon.VersionCacheClient) (controller.Controller, error) {
+	r := NewAddonReconciler(mgr, versionCache)
+	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
+	go r.wfinformer.Run(stopChan)
+
+	// addon-manager deployed at earliest stage
+	// watched namespace workflow deployed much later
+	c, err := controller.New(controllerName, mgr,
+		controller.Options{Reconciler: r,
+			CacheSyncTimeout: controllerCacheSyncTimedOut})
+	if err != nil {
+		return nil, err
 	}
 
 	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
@@ -206,6 +230,23 @@ func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionC
 	}
 
 	return c, nil
+}
+
+func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
+		var reqs = make([]reconcile.Request, 0)
+		var labels = a.GetLabels()
+		if name, ok := labels["app.kubernetes.io/name"]; ok && strings.TrimSpace(name) != "" {
+			// Let's lookup addon related to this object.
+			if ok, v := r.versionCache.HasVersionName(name); ok {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+					Name:      v.Name,
+					Namespace: v.Namespace,
+				}})
+			}
+		}
+		return reqs
+	})
 }
 
 func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
