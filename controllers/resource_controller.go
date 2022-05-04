@@ -64,7 +64,6 @@ func NewResourceController(mgr manager.Manager, stopChan <-chan struct{}, addonv
 		return nil, err
 	}
 
-	// Watch for changes to kubernetes Resources matching addon labels.
 	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
@@ -254,7 +253,6 @@ func (c *resourceReconcile) handleNamespace(ctx context.Context, ns *v1.Namespac
 		addonName, ok = ns.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
 			msg := "[handleNamespaceAdd] failed getting addon name, should not happen"
-			//c.logger.Error(err, msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -267,7 +265,6 @@ func (c *resourceReconcile) handleNamespace(ctx context.Context, ns *v1.Namespac
 	}
 	err := c.updateAddonStatusResources(ctx, key, nsStatus)
 	if err != nil {
-		//c.logger.Error(err, " failed updating namespace resource", " addon ", key)
 		return err
 	}
 	return nil
@@ -279,9 +276,7 @@ func (c *resourceReconcile) handleDeployment(ctx context.Context, deploy *appsv1
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = deploy.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleDeploymentAdd] failed getting addon name, should not happen"
-			//c.logger.Error(err, msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleDeploymentAdd] failed getting addon name, should not happen")
 		}
 	}
 	nsStatus := addonv1.ObjectStatus{
@@ -298,16 +293,13 @@ func (c *resourceReconcile) handleDeployment(ctx context.Context, deploy *appsv1
 	return nil
 }
 
-// attention: start/re-start, filter existing already processed resources
 func (c *resourceReconcile) handleServiceAccount(ctx context.Context, srvacnt *v1.ServiceAccount) error {
 	addonName, ok := srvacnt.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
 	if !ok {
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = srvacnt.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleServiceAccountAdd] failed getting addon name, should not happen"
-			//c.logger.Error(err, msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleServiceAccountAdd] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -324,16 +316,13 @@ func (c *resourceReconcile) handleServiceAccount(ctx context.Context, srvacnt *v
 	return nil
 }
 
-// attention: start/re-start, filter existing already processed resources
 func (c *resourceReconcile) handleConfigMap(ctx context.Context, configmap *v1.ConfigMap) error {
 	addonName, ok := configmap.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
 	if !ok {
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = configmap.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleConfigMapAdd] failed getting addon name, should not happen"
-			//c.logger.Error(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleConfigMapAdd] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -350,16 +339,13 @@ func (c *resourceReconcile) handleConfigMap(ctx context.Context, configmap *v1.C
 	return nil
 }
 
-// attention: start/re-start, filter existing already processed resources
 func (c *resourceReconcile) handleClusterRole(ctx context.Context, clsRole *rbac_v1.ClusterRole) error {
 	addonName, ok := clsRole.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
 	if !ok {
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = clsRole.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleClusterRoleAdd] failed getting addon name, should not happen"
-			//c.logger.Error(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleClusterRoleAdd] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -382,9 +368,7 @@ func (c *resourceReconcile) handleClusterRoleBinding(ctx context.Context, clsRol
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = clsRoleBnd.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleClusterRoleBindingAdd] failed getting addon name, should not happen"
-			//c.logger.Error(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleClusterRoleBindingAdd] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -407,9 +391,7 @@ func (c *resourceReconcile) handleJobAdd(ctx context.Context, job *batch_v1.Job)
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = job.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleJobAdd] failed getting addon name, should not happen"
-			//c.logger.Error(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleJobAdd] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -421,7 +403,6 @@ func (c *resourceReconcile) handleJobAdd(ctx context.Context, job *batch_v1.Job)
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		//c.logger.Error(err, "failed job ", "addon", key)
 		return err
 	}
 	return nil
@@ -433,9 +414,7 @@ func (c *resourceReconcile) handleCronJob(ctx context.Context, cjob *batch_v1.Cr
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = cjob.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleCronJobAdd] failed getting addon name, should not happen"
-			//.logger.Error(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleCronJobAdd] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -447,7 +426,6 @@ func (c *resourceReconcile) handleCronJob(ctx context.Context, cjob *batch_v1.Cr
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		//c.logger.Error(err, "failed CronJob ", " addon ", key)
 		return err
 	}
 	return nil
@@ -459,9 +437,7 @@ func (c *resourceReconcile) handleReplicaSet(ctx context.Context, replicaSet *ap
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = replicaSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleReplicaSet] failed getting addon name, should not happen"
-			//c.logger.Error(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleReplicaSet] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -473,7 +449,6 @@ func (c *resourceReconcile) handleReplicaSet(ctx context.Context, replicaSet *ap
 	}
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
 	if err != nil {
-		//c.logger.Error(err, "failed DaemonSet ", " addon ", key)
 		return err
 	}
 	return nil
@@ -485,9 +460,7 @@ func (c *resourceReconcile) handleDaemonSet(ctx context.Context, daemonSet *apps
 		c.log.Info("owner is not set. checking part of")
 		addonName, ok = daemonSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
 		if !ok {
-			msg := "[handleDaemonSet] failed getting addon name, should not happen"
-			//c.logger.Error(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("[handleDaemonSet] failed getting addon name, should not happen")
 		}
 	}
 	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
@@ -496,33 +469,6 @@ func (c *resourceReconcile) handleDaemonSet(ctx context.Context, daemonSet *apps
 		Group: "apps/v1",
 		Name:  daemonSet.GetName(),
 		Link:  daemonSet.GetSelfLink(),
-	}
-
-	err := c.updateAddonStatusResources(ctx, key, objStatus)
-	if err != nil {
-		//c.logger.Error(err, "failed DaemonSet ", key, " resource status.  err : ", err)
-		return err
-	}
-	return nil
-}
-
-func (c *resourceReconcile) handleStatefulSet(ctx context.Context, statefulSet *appsv1.StatefulSet) error {
-	addonName, ok := statefulSet.GetLabels()[addonapiv1.ResourceDefaultOwnLabel]
-	if !ok {
-		c.log.Info("owner is not set. checking part of")
-		addonName, ok = statefulSet.GetLabels()[addonapiv1.ResourceDefaultPartLabel]
-		if !ok {
-			msg := "[handleStatefulSet] failed getting addon name, should not happen"
-			//c.logger.Error(msg)
-			return fmt.Errorf(msg)
-		}
-	}
-	key := fmt.Sprintf("%s/%s", workflowDeployedNS, addonName)
-	objStatus := addonv1.ObjectStatus{
-		Kind:  "StatefulSet",
-		Group: "apps/v1",
-		Name:  statefulSet.GetName(),
-		Link:  statefulSet.GetSelfLink(),
 	}
 
 	err := c.updateAddonStatusResources(ctx, key, objStatus)
