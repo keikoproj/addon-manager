@@ -156,6 +156,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "Deployment" && gvk.Version == "apps/v1" {
@@ -169,6 +170,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "ServiceAccount" && gvk.Version == "v1" {
@@ -182,6 +184,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "ConfigMap" && gvk.Version == "v1" {
@@ -195,6 +198,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "ClusterRole" && gvk.Version == "rbac/v1" {
@@ -208,6 +212,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "ClusterRoleBinding" && gvk.Version == "rbac/v1" {
@@ -221,6 +226,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "Job" && gvk.Version == "batch/v1" {
@@ -234,6 +240,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "CronJob" && gvk.Version == "batch/v1" {
@@ -247,6 +254,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "ReplicaSet" && gvk.Version == "apps/v1" {
@@ -260,6 +268,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	if gvk.Kind == "DaemonSet" && gvk.Version == "apps/v1" {
@@ -273,6 +282,7 @@ func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
