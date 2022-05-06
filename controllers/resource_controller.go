@@ -25,11 +25,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -135,154 +133,96 @@ func (r *resourceReconcile) enqueueRequestWithAddonLabel() handler.EventHandler 
 func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.log.Info("reconciling", "request", req)
 
-	obj := &unstructured.Unstructured{}
-	err := r.client.Get(ctx, req.NamespacedName, obj)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	gvk, err := apiutil.GVKForObject(obj, r.client.Scheme())
-	if err != nil {
-		return reconcile.Result{}, err
+	namespace := &v1.Namespace{}
+	if err := r.client.Get(ctx, req.NamespacedName, namespace); err == nil {
+		r.log.Info(fmt.Sprintf("processing namespace %s", namespace.Name))
+		if err = r.handleNamespace(ctx, namespace); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling namespace %#v", err)
+		}
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "Namespace" && gvk.Version == "v1" {
-		namespace := &v1.Namespace{}
-		err := r.client.Get(ctx, req.NamespacedName, namespace)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing namespace %s", namespace.Name))
-			err = r.handleNamespace(ctx, namespace)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling namespace %#v", err)
-			}
-			return reconcile.Result{}, nil
+	deploy := &appsv1.Deployment{}
+	if err := r.client.Get(ctx, req.NamespacedName, deploy); err == nil {
+		r.log.Info(fmt.Sprintf("processing Deployment %s", deploy.Name))
+		err = r.handleDeployment(ctx, deploy)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling Deployment %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "Deployment" && gvk.Version == "apps/v1" {
-		deploy := &appsv1.Deployment{}
-		err = r.client.Get(ctx, req.NamespacedName, deploy)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing Deployment %s", deploy.Name))
-			err = r.handleDeployment(ctx, deploy)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling Deployment %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var srvacnt *v1.ServiceAccount
+	if err := r.client.Get(ctx, req.NamespacedName, srvacnt); err == nil {
+		r.log.Info(fmt.Sprintf("processing ServiceAccount %s", srvacnt.Name))
+		err = r.handleServiceAccount(ctx, srvacnt)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling ServiceAccount %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "ServiceAccount" && gvk.Version == "v1" {
-		var srvacnt *v1.ServiceAccount
-		err = r.client.Get(ctx, req.NamespacedName, srvacnt)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing ServiceAccount %s", srvacnt.Name))
-			err = r.handleServiceAccount(ctx, srvacnt)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling ServiceAccount %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var configmap *v1.ConfigMap
+	if err := r.client.Get(ctx, req.NamespacedName, configmap); err == nil {
+		r.log.Info(fmt.Sprintf("processing ConfigMap %s", namespace.Name))
+		if err = r.handleConfigMap(ctx, configmap); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling ConfigMap %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "ConfigMap" && gvk.Version == "v1" {
-		var configmap *v1.ConfigMap
-		err = r.client.Get(ctx, req.NamespacedName, configmap)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing ConfigMap %s", configmap.Name))
-			err = r.handleConfigMap(ctx, configmap)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling ConfigMap %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var clsRole *rbac_v1.ClusterRole
+	if err := r.client.Get(ctx, req.NamespacedName, clsRole); err == nil {
+		r.log.Info(fmt.Sprintf("processing ClusterRole %s", clsRole.Name))
+		if err = r.handleClusterRole(ctx, clsRole); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling ClusterRole %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "ClusterRole" && gvk.Version == "rbac/v1" {
-		var clsRole *rbac_v1.ClusterRole
-		err = r.client.Get(ctx, req.NamespacedName, clsRole)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing ClusterRole %s", clsRole.Name))
-			err = r.handleClusterRole(ctx, clsRole)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling ClusterRole %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var clsRoleBnd *rbac_v1.ClusterRoleBinding
+	if err := r.client.Get(ctx, req.NamespacedName, clsRoleBnd); err == nil {
+		r.log.Info(fmt.Sprintf("processing ClusterRoleBinding %s", clsRoleBnd.Name))
+		if err = r.handleClusterRoleBinding(ctx, clsRoleBnd); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling ClusterRoleBinding %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "ClusterRoleBinding" && gvk.Version == "rbac/v1" {
-		var clsRoleBnd *rbac_v1.ClusterRoleBinding
-		err = r.client.Get(ctx, req.NamespacedName, clsRoleBnd)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing ClusterRoleBinding %s", clsRoleBnd.Name))
-			err = r.handleClusterRoleBinding(ctx, clsRoleBnd)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling ClusterRoleBinding %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var job *batch_v1.Job
+	if err := r.client.Get(ctx, req.NamespacedName, job); err == nil {
+		r.log.Info(fmt.Sprintf("processing Job %s", job.Name))
+		if err = r.handleJobAdd(ctx, job); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling Job %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "Job" && gvk.Version == "batch/v1" {
-		var job *batch_v1.Job
-		err = r.client.Get(ctx, req.NamespacedName, job)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing Job %s", job.Name))
-			err = r.handleJobAdd(ctx, job)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling Job %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var cjob *batch_v1.CronJob
+	if err := r.client.Get(ctx, req.NamespacedName, cjob); err == nil {
+		r.log.Info(fmt.Sprintf("processing CronJob %s", cjob.Name))
+		if err = r.handleCronJob(ctx, cjob); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling CronJob %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "CronJob" && gvk.Version == "batch/v1" {
-		var cjob *batch_v1.CronJob
-		err = r.client.Get(ctx, req.NamespacedName, cjob)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing CronJob %s", cjob.Name))
-			err = r.handleCronJob(ctx, cjob)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling CronJob %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var replicaSet *appsv1.ReplicaSet
+	if err := r.client.Get(ctx, req.NamespacedName, replicaSet); err == nil {
+		r.log.Info(fmt.Sprintf("processing ReplicaSet %s", replicaSet.Name))
+		if err = r.handleReplicaSet(ctx, replicaSet); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling ReplicaSet %#v", err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if gvk.Kind == "ReplicaSet" && gvk.Version == "apps/v1" {
-		var replicaSet *appsv1.ReplicaSet
-		err = r.client.Get(ctx, req.NamespacedName, replicaSet)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing ReplicaSet %s", replicaSet.Name))
-			err = r.handleReplicaSet(ctx, replicaSet)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling ReplicaSet %#v", err)
-			}
-			return reconcile.Result{}, nil
+	var daemonSet *appsv1.DaemonSet
+	if err := r.client.Get(ctx, req.NamespacedName, daemonSet); err == nil {
+		r.log.Info(fmt.Sprintf("processing daemonSet %s", daemonSet.Name))
+		if err := r.handleDaemonSet(ctx, daemonSet); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed handling daemonSet %#v", err)
 		}
-		return reconcile.Result{}, err
-	}
-
-	if gvk.Kind == "DaemonSet" && gvk.Version == "apps/v1" {
-		var daemonSet *appsv1.DaemonSet
-		err = r.client.Get(ctx, req.NamespacedName, daemonSet)
-		if err == nil {
-			r.log.Info(fmt.Sprintf("processing daemonSet %s", daemonSet.Name))
-			err = r.handleDaemonSet(ctx, daemonSet)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed handling daemonSet %#v", err)
-			}
-			return reconcile.Result{}, nil
-		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
 	return reconcile.Result{}, nil
