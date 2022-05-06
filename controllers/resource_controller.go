@@ -130,6 +130,7 @@ func (r *resourceReconcile) enqueueRequestWithAddonLabel() handler.EventHandler 
 	})
 }
 
+// Reconcile addon dependent resources
 func (r *resourceReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.log.Info("reconciling", "request", req)
 
