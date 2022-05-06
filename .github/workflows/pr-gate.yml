@@ -52,7 +52,7 @@ jobs:
           sudo mv kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
         with:
           platforms: arm64,amd64
 
