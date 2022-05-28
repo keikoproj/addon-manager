@@ -138,6 +138,8 @@ data:
 apiVersion: v1
 kind: Service
 metadata:
+  labels:
+    app: workflow-controller
   name: workflow-controller-metrics
   namespace: system
 spec:
@@ -168,7 +170,7 @@ spec:
         - --configmap
         - addon-manager-workflow-controller-configmap
         - --executor-image
-        - argoproj/argoexec:v3.2.6
+        - quay.io/argoproj/argoexec:v3.2.11
         - --namespaced
         command:
         - workflow-controller
@@ -178,7 +180,7 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.name
-        image: docker.io/argoproj/workflow-controller:v3.2.6
+        image: quay.io/argoproj/workflow-controller:v3.2.11
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -212,7 +214,7 @@ metadata:
   namespace: system
 spec:
   pkgName: addon-argo-workflow
-  pkgVersion: v3.2.6
+  pkgVersion: v3.2.11
   pkgType: composite
   pkgDescription: "Argo Workflow Controller for Addon Controller."
   params:
