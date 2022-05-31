@@ -11,7 +11,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.2.1
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.21.5
 	k8s.io/apiextensions-apiserver v0.21.2
 	k8s.io/apimachinery v0.21.5
