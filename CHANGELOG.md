@@ -1,6 +1,19 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.5.1"></a>
+## [v0.5.1] - 2022-05-31
+### Fixed
+- Bump github.com/argoproj/argo-workflows/v3 from 3.2.6 to 3.2.11 (#142)
+- Upgrade Argo Workflows to v3.2.11 (#143)
+- Fix GHSA-hp87-p4gw-j4gq security issue 7 (#144)
+### Changed
+- Update addon status based on workflow lifecycle and status change (#126)
+- Bump docker/setup-buildx-action from 1 to 2 (#138)
+- Bump docker/login-action from 1 to 2 (#139)
+- Bump docker/setup-qemu-action from 1 to 2 (#140)
+- Bump goreleaser/goreleaser-action from 2 to 3 (#141)
+
 <a name="v0.5.0"></a>
 ## [v0.5.0] - 2022-04-26
 ### Fixed
@@ -94,7 +107,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.5.1...HEAD
+[v0.5.1]: https://github.com/keikoproj/addon-manager/compare/v0.5.0...v0.5.1
 [v0.5.0]: https://github.com/keikoproj/addon-manager/compare/v0.4.3...v0.5.0
 [v0.4.3]: https://github.com/keikoproj/addon-manager/compare/v0.4.2...v0.4.3
 [v0.4.2]: https://github.com/keikoproj/addon-manager/compare/v0.4.1...v0.4.2
