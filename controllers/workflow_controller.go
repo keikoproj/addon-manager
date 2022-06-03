@@ -22,6 +22,9 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/cache"
 
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
@@ -45,6 +48,7 @@ const (
 
 type wfreconcile struct {
 	client       client.Client
+	dynClient    dynamic.Interface
 	log          logr.Logger
 	versionCache pkgaddon.VersionCacheClient
 	addonUpdater *pkgaddon.AddonUpdate
@@ -54,6 +58,7 @@ func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversion
 	addonUpdater := pkgaddon.NewAddonUpdate(mgr.GetClient(), ctrl.Log.WithName(wfcontroller), addonversioncache)
 	r := &wfreconcile{
 		client:       mgr.GetClient(),
+		dynClient:    dynamic.NewForConfigOrDie(mgr.GetConfig()),
 		log:          ctrl.Log.WithName(wfcontroller),
 		versionCache: addonversioncache,
 		addonUpdater: addonUpdater,
@@ -65,7 +70,14 @@ func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversion
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
+	wfInf := common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{},
+		func(options *metav1.ListOptions) {
+			options.Watch = true
+		},
+	)
+	go wfInf.Run(stopChan)
+
+	if err := c.Watch(&source.Informer{Informer: wfInf}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonv1.Addon{},
 	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
@@ -139,7 +151,7 @@ func (r *wfreconcile) enqueueRequestForOwner() handler.EventHandler {
 	})
 }
 
-// extract addon-name and lifecyclestep from a workflow name string generated based on
+// ExtractAddOnNameAndLifecycleStep extract addon-name and lifecyclestep from a workflow name string generated based on
 // api types
 func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string, error) {
 	if strings.Contains(addonworkflowname, string(addonv1.Prereqs)) {
