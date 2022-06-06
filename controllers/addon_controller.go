@@ -188,7 +188,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 
 func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
 	versionCache := addon.NewAddonVersionCacheClient()
-	_, err := NewAddonCrontroller(mgr, stopChan, versionCache)
+	_, err := NewAddonController(mgr, stopChan, versionCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create addon controller: %v", err)
 	}
@@ -200,7 +200,7 @@ func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, 
 	return nil, nil
 }
 
-func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionCache addon.VersionCacheClient) (controller.Controller, error) {
+func NewAddonController(mgr manager.Manager, stopChan <-chan struct{}, versionCache addon.VersionCacheClient) (controller.Controller, error) {
 	r := NewAddonReconciler(mgr, versionCache)
 	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
 	go r.wfinformer.Run(stopChan)
