@@ -17,28 +17,21 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
+	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
 
-	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
-	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
-	"github.com/keikoproj/addon-manager/pkg/common"
-
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -54,59 +47,33 @@ type wfreconcile struct {
 	addonUpdater *pkgaddon.AddonUpdate
 }
 
-func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversioncache pkgaddon.VersionCacheClient) (controller.Controller, error) {
+func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cache.SharedIndexInformer, addonversioncache pkgaddon.VersionCacheClient) (controller.Controller, error) {
 	addonUpdater := pkgaddon.NewAddonUpdate(mgr.GetClient(), ctrl.Log.WithName(wfcontroller), addonversioncache)
 	r := &wfreconcile{
 		client:       mgr.GetClient(),
-		dynClient:    dynamic.NewForConfigOrDie(mgr.GetConfig()),
+		dynClient:    dynClient,
 		log:          ctrl.Log.WithName(wfcontroller),
 		versionCache: addonversioncache,
 		addonUpdater: addonUpdater,
 	}
 
 	c, err := controller.New(wfcontroller, mgr, controller.Options{Reconciler: r,
-		CacheSyncTimeout: controllerCacheSyncTimedOut})
+		CacheSyncTimeout: addonapiv1.CacheSyncTimeout})
 	if err != nil {
 		return nil, err
 	}
 
-	wfInf := common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{},
-		func(options *metav1.ListOptions) {
-			options.Watch = true
-		},
-	)
-	go wfInf.Run(stopChan)
-
 	if err := c.Watch(&source.Informer{Informer: wfInf}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &addonv1.Addon{},
-	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
 	return c, nil
 }
 
-func (r *wfreconcile) workflowHasMatchingNamespace(obj client.Object) bool {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok && u == nil {
-		return false
-	}
-	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
-		r.log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
-		return false
-	}
-	if obj.GetNamespace() != workflowDeployedNS {
-		return false
-	}
-	return true
-}
-
 func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if req.Namespace != workflowDeployedNS {
-		return ctrl.Result{}, nil
-	}
-
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
 	if err != nil {
@@ -132,23 +99,6 @@ func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
-}
-
-func (r *wfreconcile) enqueueRequestForOwner() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
-		var namespace = a.GetNamespace()
-		if namespace == workflowDeployedNS {
-			// Let's lookup addon related to this object.
-			return []reconcile.Request{
-				{NamespacedName: types.NamespacedName{
-					Name:      a.GetName(),
-					Namespace: namespace,
-				},
-				},
-			}
-		}
-		return []reconcile.Request{}
-	})
 }
 
 // ExtractAddOnNameAndLifecycleStep extract addon-name and lifecyclestep from a workflow name string generated based on
