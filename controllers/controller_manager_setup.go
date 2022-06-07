@@ -22,15 +22,15 @@ func New(mgr manager.Manager) error {
 		nsInformers.WaitForCacheSync(ctx.Done())
 		return nil
 	})); err != nil {
-		return err
+		return fmt.Errorf("failed to run informer sync: %w", err)
 	}
 
 	if _, err := NewAddonController(mgr, dynClient, wfInf, versionCache); err != nil {
-		return fmt.Errorf("failed to create addon controller: %v", err)
+		return fmt.Errorf("failed to create addon controller: %w", err)
 	}
 
 	if _, err := NewWFController(mgr, dynClient, wfInf, versionCache); err != nil {
-		return fmt.Errorf("failed to create addon wf controller: %v", err)
+		return fmt.Errorf("failed to create addon wf controller: %w", err)
 	}
 
 	return nil
