@@ -21,16 +21,18 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
+	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
@@ -56,10 +58,16 @@ func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cac
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		Watches(&source.Informer{Informer: wfInf}, &handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &addonv1.Addon{},
-		}).Complete(r)
+		For(&wfv1.Workflow{}, builder.WithPredicates(predicate.NewPredicateFuncs(func(w client.Object) bool {
+			// Only watch workflows in addon-manager-system namespace
+			return w.GetNamespace() == addonapiv1.ManagedNameSpace
+		}))).
+		WithOptions(controller.Options{CacheSyncTimeout: addonapiv1.CacheSyncTimeout}).
+		//Watches(&source.Informer{Informer: wfInf}, &handler.EnqueueRequestForOwner{
+		//	IsController: true,
+		//	OwnerType:    &addonv1.Addon{},
+		//}).
+		Complete(r)
 }
 
 func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
