@@ -21,7 +21,6 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
-	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"k8s.io/client-go/dynamic"
@@ -29,7 +28,6 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -39,7 +37,7 @@ const (
 	wfcontroller = "addon-manager-wf-controller"
 )
 
-type wfreconcile struct {
+type WorkflowReconciler struct {
 	client       client.Client
 	dynClient    dynamic.Interface
 	log          logr.Logger
@@ -47,9 +45,9 @@ type wfreconcile struct {
 	addonUpdater *pkgaddon.AddonUpdate
 }
 
-func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cache.SharedIndexInformer, addonversioncache pkgaddon.VersionCacheClient) (controller.Controller, error) {
+func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cache.SharedIndexInformer, addonversioncache pkgaddon.VersionCacheClient) error {
 	addonUpdater := pkgaddon.NewAddonUpdate(mgr.GetClient(), ctrl.Log.WithName(wfcontroller), addonversioncache)
-	r := &wfreconcile{
+	r := &WorkflowReconciler{
 		client:       mgr.GetClient(),
 		dynClient:    dynClient,
 		log:          ctrl.Log.WithName(wfcontroller),
@@ -57,23 +55,14 @@ func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cac
 		addonUpdater: addonUpdater,
 	}
 
-	c, err := controller.New(wfcontroller, mgr, controller.Options{Reconciler: r,
-		CacheSyncTimeout: addonapiv1.CacheSyncTimeout})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Informer{Informer: wfInf}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &addonv1.Addon{},
-	}); err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return ctrl.NewControllerManagedBy(mgr).
+		Watches(&source.Informer{Informer: wfInf}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &addonv1.Addon{},
+		}).Complete(r)
 }
 
-func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
 	if err != nil {
