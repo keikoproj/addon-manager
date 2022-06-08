@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -31,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,18 +50,10 @@ import (
 	"github.com/keikoproj/addon-manager/pkg/workflows"
 
 	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
-	"k8s.io/client-go/tools/cache"
 )
 
 const (
 	controllerName = "addon-manager-controller"
-	// addon ttl time
-	TTL = time.Duration(1) * time.Hour // 1 hour
-
-	workflowDeployedNS = "addon-manager-system"
-
-	workflowResyncPeriod        = 20 * time.Minute
-	controllerCacheSyncTimedOut = 45 * time.Minute
 )
 
 // Watched resources
@@ -90,7 +84,7 @@ type AddonReconciler struct {
 }
 
 // NewAddonReconciler returns an instance of AddonReconciler
-func NewAddonReconciler(mgr manager.Manager, versionCache addon.VersionCacheClient) *AddonReconciler {
+func NewAddonReconciler(mgr manager.Manager, dynClient dynamic.Interface, wfInf cache.SharedIndexInformer, versionCache addon.VersionCacheClient) *AddonReconciler {
 	wfcli := common.NewWFClient(mgr.GetConfig())
 	if wfcli == nil {
 		panic("workflow client could not be nil")
@@ -100,10 +94,11 @@ func NewAddonReconciler(mgr manager.Manager, versionCache addon.VersionCacheClie
 		Client:       mgr.GetClient(),
 		Log:          ctrl.Log.WithName(controllerName),
 		Scheme:       mgr.GetScheme(),
-		dynClient:    dynamic.NewForConfigOrDie(mgr.GetConfig()),
+		dynClient:    dynClient,
 		recorder:     mgr.GetEventRecorderFor("addons"),
 		statusWGMap:  map[string]*sync.WaitGroup{},
 		wfcli:        wfcli,
+		wfinformer:   wfInf,
 		versionCache: versionCache,
 	}
 }
@@ -186,30 +181,14 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	return ret, procErr
 }
 
-func New(mgr manager.Manager, stopChan <-chan struct{}) (controller.Controller, error) {
-	versionCache := addon.NewAddonVersionCacheClient()
-	_, err := NewAddonCrontroller(mgr, stopChan, versionCache)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create addon controller: %v", err)
-	}
-
-	if _, err := NewWFController(mgr, stopChan, versionCache); err != nil {
-		return nil, fmt.Errorf("failed to create addon controller: %v", err)
-	}
-
-	return nil, nil
-}
-
-func NewAddonCrontroller(mgr manager.Manager, stopChan <-chan struct{}, versionCache addon.VersionCacheClient) (controller.Controller, error) {
-	r := NewAddonReconciler(mgr, versionCache)
-	r.wfinformer = common.NewWorkflowInformer(r.dynClient, workflowDeployedNS, workflowResyncPeriod, cache.Indexers{}, func(options *metav1.ListOptions) {})
-	go r.wfinformer.Run(stopChan)
+func NewAddonController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cache.SharedIndexInformer, versionCache addon.VersionCacheClient) (controller.Controller, error) {
+	r := NewAddonReconciler(mgr, dynClient, wfInf, versionCache)
 
 	// addon-manager deployed at earliest stage
 	// watched namespace workflow deployed much later
 	c, err := controller.New(controllerName, mgr,
 		controller.Options{Reconciler: r,
-			CacheSyncTimeout: controllerCacheSyncTimedOut})
+			CacheSyncTimeout: addonapiv1.CacheSyncTimeout})
 	if err != nil {
 		return nil, err
 	}
@@ -289,8 +268,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	}
 
 	// Check if addon installation expired.
-	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, TTL.Milliseconds()) {
-		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, TTL.String())
+	if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending && common.IsExpired(instance.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
+		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, addonapiv1.TTL.String())
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		err := fmt.Errorf(reason)
 		log.Error(err, reason)

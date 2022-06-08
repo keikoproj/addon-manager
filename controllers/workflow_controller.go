@@ -17,84 +17,57 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
-
+	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
-	"github.com/keikoproj/addon-manager/pkg/common"
+	"k8s.io/client-go/dynamic"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
 	wfcontroller = "addon-manager-wf-controller"
 )
 
-type wfreconcile struct {
+type WorkflowReconciler struct {
 	client       client.Client
+	dynClient    dynamic.Interface
 	log          logr.Logger
 	versionCache pkgaddon.VersionCacheClient
 	addonUpdater *pkgaddon.AddonUpdate
 }
 
-func NewWFController(mgr manager.Manager, stopChan <-chan struct{}, addonversioncache pkgaddon.VersionCacheClient) (controller.Controller, error) {
+func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonversioncache pkgaddon.VersionCacheClient) error {
 	addonUpdater := pkgaddon.NewAddonUpdate(mgr.GetClient(), ctrl.Log.WithName(wfcontroller), addonversioncache)
-	r := &wfreconcile{
+	r := &WorkflowReconciler{
 		client:       mgr.GetClient(),
+		dynClient:    dynClient,
 		log:          ctrl.Log.WithName(wfcontroller),
 		versionCache: addonversioncache,
 		addonUpdater: addonUpdater,
 	}
 
-	c, err := controller.New(wfcontroller, mgr, controller.Options{Reconciler: r,
-		CacheSyncTimeout: controllerCacheSyncTimedOut})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := c.Watch(&source.Kind{Type: &wfv1.Workflow{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &addonv1.Addon{},
-	}, predicate.NewPredicateFuncs(r.workflowHasMatchingNamespace)); err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&wfv1.Workflow{}, builder.WithPredicates(predicate.NewPredicateFuncs(func(w client.Object) bool {
+			// Only watch workflows in addon-manager-system namespace
+			return w.GetNamespace() == addonapiv1.ManagedNameSpace
+		}))).
+		WithOptions(controller.Options{CacheSyncTimeout: addonapiv1.CacheSyncTimeout}).
+		Complete(r)
 }
 
-func (r *wfreconcile) workflowHasMatchingNamespace(obj client.Object) bool {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok && u == nil {
-		return false
-	}
-	if u.GetObjectKind().GroupVersionKind() != common.WorkflowType().GroupVersionKind() {
-		r.log.Error(fmt.Errorf("unexpected object type in workflow watch predicates"), "expected", "*wfv1.Workflow", "found", reflect.TypeOf(obj))
-		return false
-	}
-	if obj.GetNamespace() != workflowDeployedNS {
-		return false
-	}
-	return true
-}
+// +kubebuilder:rbac:groups=argoproj.io,resources=workflows,verbs=get;list;watch
 
-func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if req.Namespace != workflowDeployedNS {
-		return ctrl.Result{}, nil
-	}
-
+func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
 	if err != nil {
@@ -122,24 +95,7 @@ func (r *wfreconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 	return ctrl.Result{}, nil
 }
 
-func (r *wfreconcile) enqueueRequestForOwner() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
-		var namespace = a.GetNamespace()
-		if namespace == workflowDeployedNS {
-			// Let's lookup addon related to this object.
-			return []reconcile.Request{
-				{NamespacedName: types.NamespacedName{
-					Name:      a.GetName(),
-					Namespace: namespace,
-				},
-				},
-			}
-		}
-		return []reconcile.Request{}
-	})
-}
-
-// extract addon-name and lifecyclestep from a workflow name string generated based on
+// ExtractAddOnNameAndLifecycleStep extract addon-name and lifecyclestep from a workflow name string generated based on
 // api types
 func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string, error) {
 	if strings.Contains(addonworkflowname, string(addonv1.Prereqs)) {

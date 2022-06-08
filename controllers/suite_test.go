@@ -96,7 +96,7 @@ var _ = BeforeSuite(func(done Done) {
 
 	stopMgr, wg = StartTestManager(mgr)
 
-	_, err = New(mgr, stopMgr)
+	err = New(mgr)
 	Expect(err).ToNot(HaveOccurred())
 
 	close(done)
