@@ -25,7 +25,6 @@ import (
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -47,7 +46,7 @@ type WorkflowReconciler struct {
 	addonUpdater *pkgaddon.AddonUpdate
 }
 
-func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cache.SharedIndexInformer, addonversioncache pkgaddon.VersionCacheClient) error {
+func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonversioncache pkgaddon.VersionCacheClient) error {
 	addonUpdater := pkgaddon.NewAddonUpdate(mgr.GetClient(), ctrl.Log.WithName(wfcontroller), addonversioncache)
 	r := &WorkflowReconciler{
 		client:       mgr.GetClient(),
@@ -63,12 +62,10 @@ func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, wfInf cac
 			return w.GetNamespace() == addonapiv1.ManagedNameSpace
 		}))).
 		WithOptions(controller.Options{CacheSyncTimeout: addonapiv1.CacheSyncTimeout}).
-		//Watches(&source.Informer{Informer: wfInf}, &handler.EnqueueRequestForOwner{
-		//	IsController: true,
-		//	OwnerType:    &addonv1.Addon{},
-		//}).
 		Complete(r)
 }
+
+// +kubebuilder:rbac:groups=argoproj.io,resources=workflows,verbs=get;list;watch
 
 func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	wfobj := &wfv1.Workflow{}

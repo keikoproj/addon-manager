@@ -29,7 +29,7 @@ func New(mgr manager.Manager) error {
 		return fmt.Errorf("failed to create addon controller: %w", err)
 	}
 
-	if err := NewWFController(mgr, dynClient, wfInf, versionCache); err != nil {
+	if err := NewWFController(mgr, dynClient, versionCache); err != nil {
 		return fmt.Errorf("failed to create addon wf controller: %w", err)
 	}
 
