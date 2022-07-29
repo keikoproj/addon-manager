@@ -58,14 +58,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - argoproj.io
-  resources:
-  - workflows
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - batch
   resources:
   - cronjobs

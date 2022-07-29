@@ -18,6 +18,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/keikoproj/addon-manager/api/addon"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -52,6 +53,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		LeaderElectionID:   "addonmgr.keikoproj.io",
+		Namespace:          addon.ManagedNameSpace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
