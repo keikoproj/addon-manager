@@ -1,6 +1,11 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.6.1"></a>
+## [v0.6.1] - 2022-08-01
+### Fixed
+-  Handle notfound workflow use case (#154)
+
 <a name="v0.6.0"></a>
 ## [v0.6.0] - 2022-07-29
 ### Fixed
@@ -117,7 +122,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.6.1...HEAD
+[v0.6.1]: https://github.com/keikoproj/addon-manager/compare/v0.6.0...v0.6.1
 [v0.6.0]: https://github.com/keikoproj/addon-manager/compare/v0.5.2...v0.6.0
 [v0.5.2]: https://github.com/keikoproj/addon-manager/compare/v0.5.1...v0.5.2
 [v0.5.1]: https://github.com/keikoproj/addon-manager/compare/v0.5.0...v0.5.1
