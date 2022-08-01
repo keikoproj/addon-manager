@@ -1,6 +1,11 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.6.2"></a>
+## [v0.6.2] - 2022-08-01
+### Fixed
+-  Remove verbose logging for workflow reconcile (#156)
+
 <a name="v0.6.1"></a>
 ## [v0.6.1] - 2022-08-01
 ### Fixed
@@ -122,7 +127,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.6.2...HEAD
+[v0.6.2]: https://github.com/keikoproj/addon-manager/compare/v0.6.1...v0.6.2
 [v0.6.1]: https://github.com/keikoproj/addon-manager/compare/v0.6.0...v0.6.1
 [v0.6.0]: https://github.com/keikoproj/addon-manager/compare/v0.5.2...v0.6.0
 [v0.5.2]: https://github.com/keikoproj/addon-manager/compare/v0.5.1...v0.5.2
