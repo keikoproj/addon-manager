@@ -63,7 +63,6 @@ func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonvers
 // +kubebuilder:rbac:groups=argoproj.io,resources=workflows,namespace=system,verbs=get;list;watch;create;update;patch;delete
 
 func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.log = r.log.WithValues("workflow", req.NamespacedName)
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
 	if apierrors.IsNotFound(err) {
