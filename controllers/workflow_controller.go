@@ -24,6 +24,7 @@ import (
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -62,9 +63,12 @@ func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonvers
 // +kubebuilder:rbac:groups=argoproj.io,resources=workflows,namespace=system,verbs=get;list;watch;create;update;patch;delete
 
 func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.log = r.log.WithValues("workflow", req.NamespacedName)
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
-	if err != nil {
+	if apierrors.IsNotFound(err) {
+		return ctrl.Result{}, nil
+	} else if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get workflow %s: %#v", req, err)
 	}
 	r.log.Info("reconciling", "request", req, " workflow ", wfobj.Name)
