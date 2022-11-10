@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"hash/adler32"
 	"strconv"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -382,29 +383,59 @@ func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
 }
 
-func (p ApplicationAssemblyPhase) Completed() bool {
-	switch p {
-	case Succeeded, Failed:
-		return true
+// SetInstallStatus sets the install phase for addon
+func (a *Addon) SetInstallStatus(phase ApplicationAssemblyPhase, reasons ...string) {
+	a.Status.Lifecycle.Installed = phase
+
+	switch phase {
+	case ValidationFailed, DeleteFailed, Failed:
+		a.Status.Reason = strings.Join(reasons, ", ")
 	default:
-		return false
+		// Always clear the reason when the phase is not failed
+		a.Status.Reason = ""
 	}
+}
+
+// GetPrereqStatus returns the prereq phase for addon
+func (a *Addon) GetPrereqStatus() ApplicationAssemblyPhase {
+	return a.Status.Lifecycle.Prereqs
+}
+
+// SetPrereqStatus sets the prereq phase for addon
+func (a *Addon) SetPrereqStatus(phase ApplicationAssemblyPhase, reasons ...string) error {
+
+	switch phase {
+	case Pending:
+		a.Status.Lifecycle.Prereqs = Pending
+		a.SetInstallStatus(Pending)
+	case Failed:
+		a.Status.Lifecycle.Prereqs = Failed
+		a.SetInstallStatus(Failed, reasons...)
+	case Succeeded:
+		a.Status.Lifecycle.Prereqs = Succeeded
+		a.SetInstallStatus(Pending)
+	default:
+		a.Status.Lifecycle.Prereqs = ""
+		return fmt.Errorf("unknown phase %v, is not supported for prereqs status", phase)
+	}
+
+	return nil
+}
+
+func (a *Addon) ClearStatus() {
+	a.Status.Lifecycle.Prereqs = ""
+	a.Status.Lifecycle.Installed = ""
+	a.Status.Reason = ""
+}
+
+func (p ApplicationAssemblyPhase) Completed() bool {
+	return p == Succeeded || p == Failed || p == ValidationFailed || p == DeleteFailed
 }
 
 func (p ApplicationAssemblyPhase) Succeeded() bool {
-	switch p {
-	case Succeeded:
-		return true
-	default:
-		return false
-	}
+	return p == Succeeded
 }
 
 func (p ApplicationAssemblyPhase) Deleting() bool {
-	switch p {
-	case Deleting:
-		return true
-	default:
-		return false
-	}
+	return p == Deleting
 }

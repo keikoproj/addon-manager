@@ -18,20 +18,19 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var (
@@ -88,8 +87,14 @@ func TestUpdateAddonStatusLifecycle(t *testing.T) {
 	if err != nil || cl == nil {
 		t.Fatalf("failed to create client %#v", err)
 	}
-	log := zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
-	updater := NewAddonUpdate(cl, log, NewAddonVersionCacheClient())
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme:         scheme,
+		LeaderElection: false,
+	})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(mgr).ToNot(BeNil())
+	updater := NewAddonUpdater(mgr, cl, NewAddonVersionCacheClient())
 	ctx := context.TODO()
 	testAddon := &addonmgrv1alpha1.Addon{
 		ObjectMeta: metav1.ObjectMeta{
@@ -112,11 +117,11 @@ func TestUpdateAddonStatusLifecycle(t *testing.T) {
 	err = updater.client.Create(ctx, testAddon, &client.CreateOptions{})
 	Expect(err).To(BeNil())
 
-	existingAddon, err := updater.getExistingAddon(ctx, fmt.Sprintf("%s/%s", testNamespace, testAddonName))
+	existingAddon, err := updater.getExistingAddon(ctx, testNamespace, testAddonName)
 	Expect(err).To(BeNil())
 	Expect(existingAddon).NotTo(BeNil())
 
-	err = updater.UpdateAddonStatusLifecycle(ctx, testNamespace, testAddonName, "install", "Succeeded")
+	err = updater.UpdateAddonStatusLifecycle(ctx, testNamespace, testAddonName, addonmgrv1alpha1.Install, addonmgrv1alpha1.Succeeded)
 	if err != nil {
 		fmt.Printf(" update addon status err %#v", err)
 	}

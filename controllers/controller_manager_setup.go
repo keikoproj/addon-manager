@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
@@ -17,6 +16,7 @@ func New(mgr manager.Manager) error {
 	dynClient := dynamic.NewForConfigOrDie(mgr.GetConfig())
 	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dynClient, addonapiv1.AddonResyncPeriod, addonapiv1.ManagedNameSpace, nil)
 	wfInf := nsInformers.ForResource(common.WorkflowGVR()).Informer()
+	addonUpdater := addon.NewAddonUpdater(mgr, mgr.GetClient(), versionCache)
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		nsInformers.Start(ctx.Done())
 		nsInformers.WaitForCacheSync(ctx.Done())
@@ -25,11 +25,11 @@ func New(mgr manager.Manager) error {
 		return fmt.Errorf("failed to run informer sync: %w", err)
 	}
 
-	if _, err := NewAddonController(mgr, dynClient, wfInf, versionCache); err != nil {
+	if _, err := NewAddonController(mgr, dynClient, wfInf, versionCache, addonUpdater); err != nil {
 		return fmt.Errorf("failed to create addon controller: %w", err)
 	}
 
-	if err := NewWFController(mgr, dynClient, versionCache); err != nil {
+	if err := NewWFController(mgr, dynClient, addonUpdater); err != nil {
 		return fmt.Errorf("failed to create addon wf controller: %w", err)
 	}
 
