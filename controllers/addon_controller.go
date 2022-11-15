@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
 	"sync"
 	"time"
@@ -610,8 +611,8 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 	r.versionCache.RemoveVersion(addon.Spec.PkgName, addon.Spec.PkgVersion)
 
 	// Remove finalizer from the list and update it.
-	if removeFinalizer && common.ContainsString(addon.ObjectMeta.Finalizers, finalizerName) {
-		addon.ObjectMeta.Finalizers = common.RemoveString(addon.ObjectMeta.Finalizers, finalizerName)
+	if removeFinalizer {
+		controllerutil.RemoveFinalizer(addon, finalizerName)
 		if err := r.Update(ctx, addon); err != nil {
 			return err
 		}
@@ -625,9 +626,9 @@ func (r *AddonReconciler) SetFinalizer(ctx context.Context, addon *addonmgrv1alp
 	// Resource is not being deleted
 	if addon.ObjectMeta.DeletionTimestamp.IsZero() {
 		// And does not contain finalizer
-		if !common.ContainsString(addon.ObjectMeta.Finalizers, finalizerName) {
+		if !controllerutil.ContainsFinalizer(addon, finalizerName) {
 			// Set Finalizer
-			addon.ObjectMeta.Finalizers = append(addon.ObjectMeta.Finalizers, finalizerName)
+			controllerutil.AddFinalizer(addon, finalizerName)
 			if err := r.Update(ctx, addon); err != nil {
 				return err
 			}
