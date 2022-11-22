@@ -92,6 +92,7 @@ func TestUpdateAddonStatusLifecycle(t *testing.T) {
 		Scheme:         scheme,
 		LeaderElection: false,
 	})
+	fmt.Printf("err: %v", err)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(mgr).ToNot(BeNil())
 	updater := NewAddonUpdater(mgr, cl, NewAddonVersionCacheClient())
