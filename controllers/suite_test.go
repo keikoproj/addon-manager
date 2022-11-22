@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -91,6 +92,7 @@ var _ = BeforeSuite(func(done Done) {
 		Scheme:         scheme.Scheme,
 		LeaderElection: false,
 	})
+	fmt.Printf("err: %v", err)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(mgr).ToNot(BeNil())
 
