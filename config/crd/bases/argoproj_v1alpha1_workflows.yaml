@@ -9,31 +9,31 @@ spec:
     listKind: ClusterWorkflowTemplateList
     plural: clusterworkflowtemplates
     shortNames:
-      - clusterwftmpl
-      - cwft
+    - clusterwftmpl
+    - cwft
     singular: clusterworkflowtemplate
   scope: Cluster
   versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -46,35 +46,35 @@ spec:
     listKind: CronWorkflowList
     plural: cronworkflows
     shortNames:
-      - cwf
-      - cronwf
+    - cwf
+    - cronwf
     singular: cronworkflow
   scope: Namespaced
   versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-            status:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -87,30 +87,30 @@ spec:
     listKind: WorkflowEventBindingList
     plural: workfloweventbindings
     shortNames:
-      - wfeb
+    - wfeb
     singular: workfloweventbinding
   scope: Namespaced
   versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -123,45 +123,45 @@ spec:
     listKind: WorkflowList
     plural: workflows
     shortNames:
-      - wf
+    - wf
     singular: workflow
   scope: Namespaced
   versions:
-    - additionalPrinterColumns:
-        - description: Status of the workflow
-          jsonPath: .status.phase
-          name: Status
-          type: string
-        - description: When the workflow was started
-          format: date-time
-          jsonPath: .status.startedAt
-          name: Age
-          type: date
-      name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-            status:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
-      subresources: {}
+  - additionalPrinterColumns:
+    - description: Status of the workflow
+      jsonPath: .status.phase
+      name: Status
+      type: string
+    - description: When the workflow was started
+      format: date-time
+      jsonPath: .status.startedAt
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -174,34 +174,36 @@ spec:
     listKind: WorkflowTaskSetList
     plural: workflowtasksets
     shortNames:
-      - wfts
+    - wfts
     singular: workflowtaskset
   scope: Namespaced
   versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-            status:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -214,27 +216,27 @@ spec:
     listKind: WorkflowTemplateList
     plural: workflowtemplates
     shortNames:
-      - wftmpl
+    - wftmpl
     singular: workflowtemplate
   scope: Namespaced
   versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            x-kubernetes-map-type: atomic
+            x-kubernetes-preserve-unknown-fields: true
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
