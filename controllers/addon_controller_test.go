@@ -223,7 +223,7 @@ var _ = Describe("AddonController", func() {
 				}
 
 				return fmt.Errorf("addon-2 is not valid")
-			}, timeout*10).Should(Succeed())
+			}, timeout*30).Should(Succeed())
 		})
 
 	})
