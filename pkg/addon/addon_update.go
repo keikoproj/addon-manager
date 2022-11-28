@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -36,12 +35,13 @@ type AddonUpdater struct {
 	statusWGMap  map[string]*sync.WaitGroup
 }
 
-func NewAddonUpdater(mgr manager.Manager, cli client.Client, versionCache VersionCacheClient) *AddonUpdater {
+func NewAddonUpdater(recorder record.EventRecorder, cli client.Client, versionCache VersionCacheClient, logger logr.Logger) *AddonUpdater {
 	return &AddonUpdater{
 		client:       cli,
 		versionCache: versionCache,
-		recorder:     mgr.GetEventRecorderFor("addons"),
+		recorder:     recorder,
 		statusWGMap:  make(map[string]*sync.WaitGroup),
+		log:          logger.WithName("addon-updater"),
 	}
 }
 

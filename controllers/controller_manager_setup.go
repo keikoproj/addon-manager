@@ -16,7 +16,7 @@ func New(mgr manager.Manager) error {
 	dynClient := dynamic.NewForConfigOrDie(mgr.GetConfig())
 	nsInformers := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dynClient, addonapiv1.AddonResyncPeriod, addonapiv1.ManagedNameSpace, nil)
 	wfInf := nsInformers.ForResource(common.WorkflowGVR()).Informer()
-	addonUpdater := addon.NewAddonUpdater(mgr, mgr.GetClient(), versionCache)
+	addonUpdater := addon.NewAddonUpdater(mgr.GetEventRecorderFor("addons"), mgr.GetClient(), versionCache, mgr.GetLogger())
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		nsInformers.Start(ctx.Done())
 		nsInformers.WaitForCacheSync(ctx.Done())
