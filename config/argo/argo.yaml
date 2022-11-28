@@ -4,12 +4,6 @@ metadata:
   name: argo
   namespace: system
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: argo-server
-  namespace: system
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -136,74 +130,6 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: argo-server-role
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - watch
-  - list
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-  - create
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/exec
-  - pods/log
-  verbs:
-  - get
-  - list
-  - watch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - watch
-  - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - argoproj.io
-  resources:
-  - eventsources
-  - sensors
-  - workflows
-  - workfloweventbindings
-  - workflowtemplates
-  - cronworkflows
-  - cronworkflows/finalizers
-  verbs:
-  - create
-  - get
-  - list
-  - watch
-  - update
-  - patch
-  - delete
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: argo-binding
@@ -215,18 +141,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: argo
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: argo-server-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: argo-server-role
-subjects:
-- kind: ServiceAccount
-  name: argo-server
 ---
 apiVersion: v1
 kind: ConfigMap
