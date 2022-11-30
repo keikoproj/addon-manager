@@ -12,6 +12,8 @@ Addons are critical components within a Kubernetes cluster that provide critical
 DNS, Ingress, Metrics, Logging, etc. Addon Manager provides a CRD for lifecycle management of such addons using 
 Argo Workflows.
 
+![AddonManagerImg]
+
 ## Important!
 This is Alpha state software, anything can change at any time. Our deprecation and removal policy during Alpha is very aggressive, see below:
 * Any changes to the api types will result in an iterative version bump e.g., `v1alpha1` -> `v1alpha2`
@@ -248,3 +250,5 @@ Please see [DEVELOPER.md](.github/DEVELOPER.md).
 
 [GoReportImg]: https://goreportcard.com/badge/github.com/keikoproj/addon-manager
 [GoReportUrl]: https://goreportcard.com/report/github.com/keikoproj/addon-manager
+
+[AddonManagerImg]: docs/img/addon-manager-arch.png
