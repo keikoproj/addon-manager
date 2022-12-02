@@ -33,7 +33,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -race $(PKGS) -coverprofile cover.out
 
 # Run E2E tests
-bdd: fmt vet deploy
+bdd: clean fmt vet deploy
 	go test -timeout 5m -v ./test-bdd/...
 
 loadtest: fmt vet deploy
@@ -60,8 +60,10 @@ deploy: install
 	kubectl kustomize config/default | kubectl apply -f -
 
 clean:
-	kubectl delete addons -n addon-manager-system --all
-	kubectl kustomize config/deploy | kubectl delete -f - || true
+	@echo "Cleaning up addons and deployments..."
+	kubectl delete addons -n addon-manager-system --all --wait=true --timeout=60s || true
+	@for addon in $(kubectl get addons -n addon-manager-system -o jsonpath='{.items[*].metadata.name}'); do kubectl patch addon ${addon} -n addon-manager-system -p '{"metadata":{"finalizers":null}}' --type=merge; done
+	@kubectl kustomize config/default | kubectl delete -f - 2> /dev/null || true
 
 kops-cluster-setup:
 	kops replace --force --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
