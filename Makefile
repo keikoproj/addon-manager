@@ -1,13 +1,15 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= keikoproj/addon-manager:latest
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
-KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.21.2
+# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION = 1.24
+
+KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.24.7
 KOPS_STATE_STORE=s3://kops-state-store-233444812205-us-west-2
 KOPS_CLUSTER_NAME=kops-aws-usw2.cluster.k8s.local
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+PKGS := $(shell go list ./...|grep -v test-)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -26,24 +28,12 @@ GO111MODULE=on
 all: test manager addonctl
 
 # Run tests
-test: generate fmt vet manifests
-	go test ./api/... ./controllers/... ./pkg/... ./cmd/... -v -coverprofile cover.out
-
-# tests both controllers and api
-.PHONY: test.controllers
-test.controllers:
-	go test -v -race ./controllers/... -coverprofile cover.out
-
-.PHONY: test.pkg
-test.pkg:
-	go test -v -race ./pkg/... -coverprofile cover.out
-
-.PHONY: test.cmd
-test.cmd:
-	go test -v -race ./cmd/... -coverprofile cover.out
+.PHONY: test
+test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -race $(PKGS) -coverprofile cover.out
 
 # Run E2E tests
-bdd: fmt vet deploy
+bdd: clean fmt vet deploy
 	go test -timeout 5m -v ./test-bdd/...
 
 loadtest: fmt vet deploy
@@ -70,8 +60,10 @@ deploy: install
 	kubectl kustomize config/default | kubectl apply -f -
 
 clean:
-	kubectl delete addons -n addon-manager-system --all
-	kubectl kustomize config/deploy | kubectl delete -f - || true
+	@echo "Cleaning up addons and deployments..."
+	kubectl delete addons -n addon-manager-system --all --wait=true --timeout=60s || true
+	@for addon in $(kubectl get addons -n addon-manager-system -o jsonpath='{.items[*].metadata.name}'); do kubectl patch addon ${addon} -n addon-manager-system -p '{"metadata":{"finalizers":null}}' --type=merge; done
+	@kubectl kustomize config/default | kubectl delete -f - 2> /dev/null || true
 
 kops-cluster-setup:
 	kops replace --force --state=${KOPS_STATE_STORE} -f hack/kops-aws-usw2.cluster.yaml
@@ -96,8 +88,9 @@ kind-cluster-delete: kind-cluster-config
 	kind delete cluster
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+.PHONY: manifests
+manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -108,8 +101,9 @@ vet:
 	go vet ./...
 
 # Generate code
-generate: controller-gen types
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
+.PHONY: generate
+generate: controller-gen types ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # generates many other files (listers, informers, client etc).
 api/addon/v1alpha1/zz_generated.deepcopy.go: $(TYPES)
@@ -140,23 +134,6 @@ release:
 snapshot:
 	goreleaser release --rm-dist --snapshot
 
-# find or download controller-gen
-# download controller-gen if necessary
-controller-gen:
-ifeq (, $(shell which controller-gen))
-	@{ \
-	set -e ;\
-	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1 ;\
-	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
-	}
-CONTROLLER_GEN=$(GOBIN)/controller-gen
-else
-CONTROLLER_GEN=$(shell which controller-gen)
-endif
-
 code-generator:
 ifeq (, $(shell which code-generator))
 	@{ \
@@ -172,3 +149,36 @@ CODE_GENERATOR_GEN=$(GOBIN)/code-generator-0.21.5
 else
 CODE_GENERATOR_GEN=$(shell which code-generator)
 endif
+
+##@ Build Dependencies
+
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+## Tool Binaries
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+ENVTEST ?= $(LOCALBIN)/setup-envtest
+
+## Tool Versions
+KUSTOMIZE_VERSION ?= v4.5.5
+CONTROLLER_TOOLS_VERSION ?= v0.9.2
+
+KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
+.PHONY: kustomize
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+$(KUSTOMIZE): $(LOCALBIN)
+	test -s $(LOCALBIN)/kustomize || { curl -Ss $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN); }
+
+.PHONY: controller-gen
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+$(CONTROLLER_GEN): $(LOCALBIN)
+	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+
+.PHONY: envtest
+envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
+$(ENVTEST): $(LOCALBIN)
+	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
