@@ -67,7 +67,6 @@ var (
 		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
 		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
 	}
-	finalizerName = "delete.addonmgr.keikoproj.io"
 )
 
 // AddonReconciler reconciles a Addon object
@@ -153,7 +152,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 			return reconcile.Result{}, err
 		}
 
-		err := r.Finalize(ctx, instance, wfl, finalizerName)
+		err := r.Finalize(ctx, instance, wfl, addonapiv1.FinalizerName)
 		if err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
@@ -328,7 +327,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	r.recorder.Event(instance, "Normal", "Completed", fmt.Sprintf("Addon %s/%s is valid.", instance.Namespace, instance.Name))
 
 	// Set finalizer only after addon is valid
-	if err := r.SetFinalizer(ctx, instance, finalizerName); err != nil {
+	if err := r.SetFinalizer(ctx, instance, addonapiv1.FinalizerName); err != nil {
 		reason := fmt.Sprintf("Addon %s/%s could not add finalizer. %v", instance.Namespace, instance.Name, err)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Failed to add finalizer for addon.")
