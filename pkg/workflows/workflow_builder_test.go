@@ -15,16 +15,9 @@
 package workflows
 
 import (
-	"testing"
-	"time"
-
 	"github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"testing"
 )
-
-var c client.Client
-
-const timeout = time.Second * 5
 
 // Verify the default workflow after calling Build()
 func TestWorkflowBuilder(t *testing.T) {
