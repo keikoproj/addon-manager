@@ -253,7 +253,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	}
 
 	// Update status that we have started reconciling this addon.
-	if instance.GetInstallStatus() == "" {
+	if instance.GetInstallStatus() != addonmgrv1alpha1.Pending {
 		instance.SetInstallStatus(addonmgrv1alpha1.Pending)
 		log.Info("Requeue to set pending status")
 		return reconcile.Result{Requeue: true}, nil
