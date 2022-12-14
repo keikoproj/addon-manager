@@ -248,6 +248,8 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 
 		// Clear out status and reason
 		instance.ClearStatus()
+
+		log.Info("Checksum changed, addon will be installed...")
 	}
 
 	// Update status that we have started reconciling this addon.
