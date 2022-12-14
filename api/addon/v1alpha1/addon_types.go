@@ -388,10 +388,10 @@ func (a *Addon) SetInstallStatus(phase ApplicationAssemblyPhase, reasons ...stri
 	a.Status.Lifecycle.Installed = phase
 
 	switch phase {
-	case ValidationFailed, DeleteFailed, Failed:
+	case Pending, ValidationFailed, DeleteFailed, Failed:
 		a.Status.Reason = strings.Join(reasons, ", ")
 	default:
-		// Always clear the reason when the phase is not failed
+		// Always clear the reason when the phase is not pending or failed
 		a.Status.Reason = ""
 	}
 }
