@@ -220,7 +220,7 @@ func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
 		var reqs = make([]reconcile.Request, 0)
 		var labels = a.GetLabels()
-		if name, ok := labels["app.kubernetes.io/name"]; ok && strings.TrimSpace(name) != "" {
+		if name, ok := labels[addonapiv1.ResourceDefaultOwnLabel]; ok && strings.TrimSpace(name) != "" {
 			// Lookup addon related to this object.
 			if ok, v := r.versionCache.HasVersionName(name); ok {
 				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
