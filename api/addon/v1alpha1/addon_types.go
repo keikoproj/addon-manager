@@ -429,7 +429,7 @@ func (a *Addon) ClearStatus() {
 }
 
 func (p ApplicationAssemblyPhase) Completed() bool {
-	return p == Succeeded || p == Failed || p == ValidationFailed || p == DeleteFailed
+	return p == Succeeded || p == Failed || p == DeleteFailed
 }
 
 func (p ApplicationAssemblyPhase) Succeeded() bool {
