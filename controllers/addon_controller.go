@@ -250,10 +250,6 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		instance.ClearStatus()
 
 		log.Info("Checksum changed, addon will be installed...")
-	}
-
-	// Update status that we have started reconciling this addon.
-	if instance.GetInstallStatus() != addonmgrv1alpha1.Pending {
 		instance.SetInstallStatus(addonmgrv1alpha1.Pending)
 		log.Info("Requeue to set pending status")
 		return reconcile.Result{Requeue: true}, nil
@@ -311,21 +307,21 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		return reconcile.Result{}, err
 	}
 
-	// Check if addon installation expired.
-	if !instance.Status.Lifecycle.Installed.Completed() && common.IsExpired(instance.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
-		reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, addonapiv1.TTL.String())
-		r.recorder.Event(instance, "Warning", "Failed", reason)
-		err := fmt.Errorf(reason)
-		log.Error(err, reason)
-		instance.SetInstallStatus(addonmgrv1alpha1.Failed, reason)
-
-		return reconcile.Result{}, err
-	}
-
 	// Execute PreReq and Install workflow, if spec body has changed.
 	// In the case when validation failed and continued here we should execute.
-	// Also if workflow is in Pending state, execute it to update status to terminal state.
+	// Also, if workflow is in Pending state, execute it to update status to terminal state.
 	if changedStatus || instance.Status.Lifecycle.Installed.Completed() == false {
+		// Check if addon installation expired.
+		if common.IsExpired(instance.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
+			reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, addonapiv1.TTL.String())
+			r.recorder.Event(instance, "Warning", "Failed", reason)
+			err := fmt.Errorf(reason)
+			log.Error(err, reason)
+			instance.SetInstallStatus(addonmgrv1alpha1.Failed, reason)
+
+			return reconcile.Result{}, err
+		}
+
 		log.Info("Addon spec is updated, workflows will be generated")
 
 		err := r.executePrereqAndInstall(ctx, log, instance, wfl)
