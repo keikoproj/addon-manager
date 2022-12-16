@@ -52,7 +52,6 @@ func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon 
 	defer m.Unlock()
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-
 		// Get the latest version of Addon before attempting update
 		currentAddon := &addonmgrv1alpha1.Addon{}
 		err := c.client.Get(ctx, addonName, currentAddon)
