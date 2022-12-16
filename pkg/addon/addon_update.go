@@ -32,7 +32,7 @@ type AddonUpdater struct {
 	log          logr.Logger
 	versionCache VersionCacheClient
 	recorder     record.EventRecorder
-	statusWGMap  map[string]*sync.WaitGroup
+	statusMap    map[string]*sync.Mutex
 }
 
 func NewAddonUpdater(recorder record.EventRecorder, cli client.Client, versionCache VersionCacheClient, logger logr.Logger) *AddonUpdater {
@@ -40,17 +40,19 @@ func NewAddonUpdater(recorder record.EventRecorder, cli client.Client, versionCa
 		client:       cli,
 		versionCache: versionCache,
 		recorder:     recorder,
-		statusWGMap:  make(map[string]*sync.WaitGroup),
+		statusMap:    make(map[string]*sync.Mutex),
 		log:          logger.WithName("addon-updater"),
 	}
 }
 
 func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
 	addonName := types.NamespacedName{Name: addon.Name, Namespace: addon.Namespace}
-	wg := c.getStatusWaitGroup(addonName.Name)
+	m := c.getStatusMutex(addonName.Name)
+	m.Lock()
+	defer m.Unlock()
+
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		wg.Add(1)
-		defer wg.Done()
+
 		// Get the latest version of Addon before attempting update
 		currentAddon := &addonmgrv1alpha1.Addon{}
 		err := c.client.Get(ctx, addonName, currentAddon)
@@ -69,19 +71,16 @@ func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon 
 	// Always update the version cache
 	c.addAddonToCache(log, addon)
 
-	// Wait to process addon updates until we have finished updating same addon
-	wg.Wait()
-
 	return nil
 }
 
-func (c *AddonUpdater) getStatusWaitGroup(addonName string) *sync.WaitGroup {
-	wg, ok := c.statusWGMap[addonName]
+func (c *AddonUpdater) getStatusMutex(addonName string) *sync.Mutex {
+	m, ok := c.statusMap[addonName]
 	if !ok {
-		wg = &sync.WaitGroup{}
-		c.statusWGMap[addonName] = wg
+		m = &sync.Mutex{}
+		c.statusMap[addonName] = m
 	}
-	return wg
+	return m
 }
 
 func (c *AddonUpdater) removeStatusWaitGroup(addonName string) {
