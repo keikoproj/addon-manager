@@ -84,7 +84,7 @@ func (c *AddonUpdater) getStatusMutex(addonName string) *sync.Mutex {
 }
 
 func (c *AddonUpdater) removeStatusWaitGroup(addonName string) {
-	delete(c.statusWGMap, addonName)
+	delete(c.statusMap, addonName)
 }
 
 func (c *AddonUpdater) getExistingAddon(ctx context.Context, namespace, name string) (*addonmgrv1alpha1.Addon, error) {
