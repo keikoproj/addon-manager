@@ -17,6 +17,8 @@ package addon
 import (
 	"context"
 	"fmt"
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"sync"
@@ -107,20 +109,39 @@ func (c *AddonUpdater) addAddonToCache(log logr.Logger, addon *addonmgrv1alpha1.
 	log.Info("Adding version cache", "phase", version.PkgPhase)
 }
 
-// UpdateAddonStatusLifecycle updates the status of the addon
-func (c *AddonUpdater) UpdateAddonStatusLifecycle(ctx context.Context, namespace, name string, lifecycle addonmgrv1alpha1.LifecycleStep, phase addonmgrv1alpha1.ApplicationAssemblyPhase, reasons ...string) error {
-	existingAddon, err := c.getExistingAddon(ctx, namespace, name)
+// UpdateAddonStatusLifecycleFromWorkflow updates the status of the addon
+func (c *AddonUpdater) UpdateAddonStatusLifecycleFromWorkflow(ctx context.Context, namespace, addonName string, wf *wfv1.Workflow) error {
+	existingAddon, err := c.getExistingAddon(ctx, namespace, addonName)
 	if err != nil {
 		return err
 	}
 
+	checksum, lifecycle, err := common.ExtractChecksumAndLifecycleStep(addonName, wf.GetName())
+	if err != nil {
+		return err
+	}
+
+	if existingAddon.GetFormattedWorkflowName(lifecycle) != wf.GetName() {
+		return nil
+	}
+
+	if existingAddon.CalculateChecksum() != checksum {
+		return nil
+	}
+
+	phase := common.ConvertWorkflowPhaseToAddonPhase(wf.Status.Phase)
+	reason := ""
+	if phase == addonmgrv1alpha1.Failed {
+		reason = wf.Status.Message
+	}
+
 	if lifecycle == addonmgrv1alpha1.Prereqs {
-		err := existingAddon.SetPrereqStatus(phase, reasons...)
+		err := existingAddon.SetPrereqStatus(phase, reason)
 		if err != nil {
 			return fmt.Errorf("failed to update prereqs status. %w", err)
 		}
 	} else {
-		existingAddon.SetInstallStatus(phase, reasons...)
+		existingAddon.SetInstallStatus(phase, reason)
 	}
 
 	return c.UpdateStatus(ctx, c.log, existingAddon)

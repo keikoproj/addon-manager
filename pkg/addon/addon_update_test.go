@@ -16,6 +16,8 @@ package addon
 
 import (
 	"context"
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/workflows"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,7 +46,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 }
 
-func TestUpdateAddonStatusLifecycle(t *testing.T) {
+func TestUpdateAddonStatusLifecycleFromWorkflow(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
 	testNamespace := "default"
@@ -77,6 +78,23 @@ func TestUpdateAddonStatusLifecycle(t *testing.T) {
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 	g.Expect(existingAddon).ToNot(gomega.BeNil())
 
-	err = updater.UpdateAddonStatusLifecycle(ctx, testNamespace, testAddonName, addonmgrv1alpha1.Install, addonmgrv1alpha1.Succeeded)
+	var wfSucceeded = &wfv1.Workflow{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Workflow",
+			APIVersion: "argoproj.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-addon-123456-prereqs-wf",
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				workflows.WfInstanceIdLabelKey: workflows.WfInstanceId,
+			},
+		},
+		Status: wfv1.WorkflowStatus{
+			Phase: wfv1.WorkflowSucceeded,
+		},
+	}
+
+	err = updater.UpdateAddonStatusLifecycleFromWorkflow(ctx, testNamespace, testAddonName, wfSucceeded)
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 }
