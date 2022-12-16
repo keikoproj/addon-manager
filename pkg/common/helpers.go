@@ -16,6 +16,8 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
@@ -120,4 +122,31 @@ func ConvertWorkflowPhaseToAddonPhase(phase wfv1.WorkflowPhase) addonv1.Applicat
 	default:
 		return ""
 	}
+}
+
+// ExtractChecksumAndLifecycleStep extracts the checksum and lifecycle step from the workflow name
+func ExtractChecksumAndLifecycleStep(addonName, addonWorkflowName string) (string, addonv1.LifecycleStep, error) {
+	// addonWorkflowName is of the form <addon-name>-<checksum>-<lifecycle>-wf
+	// e.g. my-addon-12345678-prereqs-wf
+	wfParts := strings.Split(addonWorkflowName[len(addonName+"-"):], "-")
+	if len(wfParts) != 3 {
+		return "", "", fmt.Errorf("invalid workflow name %s", addonWorkflowName)
+	}
+
+	var checksum = strings.TrimSpace(wfParts[0])
+	var lifecycle addonv1.LifecycleStep
+	switch strings.TrimSpace(wfParts[1]) {
+	case "prereqs":
+		lifecycle = addonv1.Prereqs
+	case "install":
+		lifecycle = addonv1.Install
+	case "validate":
+		lifecycle = addonv1.Validate
+	case "delete":
+		lifecycle = addonv1.Delete
+	default:
+		return "", "", fmt.Errorf("invalid lifecycle in workflow name %s", addonWorkflowName)
+	}
+
+	return checksum, lifecycle, nil
 }

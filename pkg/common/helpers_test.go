@@ -134,3 +134,47 @@ func Test_ConvertWorkflowPhasetoAddonPhase(t *testing.T) {
 	addonPhase = ConvertWorkflowPhaseToAddonPhase(wfv1.WorkflowUnknown)
 	g.Expect(addonPhase).To(gomega.BeEmpty())
 }
+
+func Test_ExtractChecksumAndLifecycleStep(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	testAddonName := "test-addon-1"
+
+	// Test 1: Checksum and Lifecycle step is Prereqs
+	checksum, lifecycleStep, err := ExtractChecksumAndLifecycleStep(testAddonName, "test-addon-1-1234567890-prereqs-wf")
+	g.Expect(err).ToNot(gomega.HaveOccurred())
+	g.Expect(checksum).To(gomega.Equal("1234567890"))
+	g.Expect(lifecycleStep).To(gomega.Equal(addonv1.Prereqs))
+
+	// Test 2: Checksum and Lifecycle step is Install
+	checksum, lifecycleStep, err = ExtractChecksumAndLifecycleStep(testAddonName, "test-addon-1-1234567890-install-wf")
+	g.Expect(err).ToNot(gomega.HaveOccurred())
+	g.Expect(checksum).To(gomega.Equal("1234567890"))
+	g.Expect(lifecycleStep).To(gomega.Equal(addonv1.Install))
+
+	// Test 3: Checksum and Lifecycle step is Validate
+	checksum, lifecycleStep, err = ExtractChecksumAndLifecycleStep(testAddonName, "test-addon-1-1234567890-validate-wf")
+	g.Expect(err).ToNot(gomega.HaveOccurred())
+	g.Expect(checksum).To(gomega.Equal("1234567890"))
+	g.Expect(lifecycleStep).To(gomega.Equal(addonv1.Validate))
+
+	// Test 4: Checksum and Lifecycle step is Delete
+	checksum, lifecycleStep, err = ExtractChecksumAndLifecycleStep(testAddonName, "test-addon-1-1234567890-delete-wf")
+	g.Expect(err).ToNot(gomega.HaveOccurred())
+	g.Expect(checksum).To(gomega.Equal("1234567890"))
+	g.Expect(lifecycleStep).To(gomega.Equal(addonv1.Delete))
+
+	// Test 5: Checksum and Lifecycle step is invalid
+	checksum, lifecycleStep, err = ExtractChecksumAndLifecycleStep(testAddonName, "test-addon-1-1234567890-unknown-wf")
+	g.Expect(err).To(gomega.HaveOccurred())
+	g.Expect(err.Error()).To(gomega.Equal("invalid lifecycle in workflow name test-addon-1-1234567890-unknown-wf"))
+	g.Expect(checksum).To(gomega.BeEmpty())
+	g.Expect(lifecycleStep).To(gomega.BeEmpty())
+
+	// Test 6: Workflow name is invalid
+	checksum, lifecycleStep, err = ExtractChecksumAndLifecycleStep(testAddonName, "test-addon-1-1234567890")
+	g.Expect(err).To(gomega.HaveOccurred())
+	g.Expect(err.Error()).To(gomega.Equal("invalid workflow name test-addon-1-1234567890"))
+	g.Expect(checksum).To(gomega.BeEmpty())
+	g.Expect(lifecycleStep).To(gomega.BeEmpty())
+}
