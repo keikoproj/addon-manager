@@ -15,8 +15,9 @@
 package workflows
 
 import (
-	"github.com/onsi/gomega"
 	"testing"
+
+	"github.com/onsi/gomega"
 )
 
 // Verify the default workflow after calling Build()

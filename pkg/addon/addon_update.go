@@ -17,11 +17,12 @@ package addon
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	"sync"
 
 	"github.com/go-logr/logr"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
