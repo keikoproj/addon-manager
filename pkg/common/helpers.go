@@ -107,3 +107,17 @@ func FromUnstructuredObj(un *unstructured.Unstructured, v interface{}) error {
 	}
 	return nil
 }
+
+func ConvertWorkflowPhaseToAddonPhase(phase wfv1.WorkflowPhase) addonv1.ApplicationAssemblyPhase {
+
+	switch phase {
+	case wfv1.WorkflowPending, wfv1.WorkflowRunning:
+		return addonv1.Pending
+	case wfv1.WorkflowSucceeded:
+		return addonv1.Succeeded
+	case wfv1.WorkflowFailed, wfv1.WorkflowError:
+		return addonv1.Failed
+	default:
+		return ""
+	}
+}
