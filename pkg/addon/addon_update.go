@@ -47,12 +47,10 @@ func NewAddonUpdater(recorder record.EventRecorder, cli client.Client, versionCa
 
 func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
 	addonName := types.NamespacedName{Name: addon.Name, Namespace: addon.Namespace}
-	wg := c.getStatusWaitGroup(addonName.String())
-	// Wait to process addon updates until we have finished updating same addon
-	wg.Wait()
-	wg.Add(1)
-	defer wg.Done()
+	wg := c.getStatusWaitGroup(addonName.Name)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		wg.Add(1)
+		defer wg.Done()
 		// Get the latest version of Addon before attempting update
 		currentAddon := &addonmgrv1alpha1.Addon{}
 		err := c.client.Get(ctx, addonName, currentAddon)
@@ -70,6 +68,9 @@ func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon 
 
 	// Always update the version cache
 	c.addAddonToCache(log, addon)
+
+	// Wait to process addon updates until we have finished updating same addon
+	wg.Wait()
 
 	return nil
 }
