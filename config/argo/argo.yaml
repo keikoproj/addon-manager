@@ -141,10 +141,8 @@ metadata:
   name: workflow-controller-configmap
   namespace: system
 data:
-  config: |
-    namespace: addon-manager-system
-    instanceID: addon-manager-workflow-controller
-    containerRuntimeExecutor: emissary
+  namespace: addon-manager-system
+  instanceID: addon-manager-workflow-controller
 ---
 apiVersion: v1
 kind: Service
