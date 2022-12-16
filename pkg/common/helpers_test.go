@@ -14,10 +14,11 @@
 package common
 
 import (
-	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-	"github.com/onsi/gomega"
 	"reflect"
 	"testing"
+
+	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/onsi/gomega"
 
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
