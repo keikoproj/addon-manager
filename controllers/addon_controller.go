@@ -256,6 +256,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// Check if addon is already completed, if so, skip further reconcile
+	if instance.Status.Lifecycle.Installed.Completed() {
+		return reconcile.Result{}, nil
+	}
+
 	// Validate Addon
 	if ok, err := addon.NewAddonValidator(instance, r.versionCache, r.dynClient).Validate(); !ok {
 		// if an addons dependency is in a Pending state then make the parent addon Pending
