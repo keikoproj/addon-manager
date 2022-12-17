@@ -117,7 +117,7 @@ func (c *AddonUpdater) UpdateAddonStatusLifecycleFromWorkflow(ctx context.Contex
 		return err
 	}
 
-	checksum, lifecycle, err := common.ExtractChecksumAndLifecycleStep(addonName, wf.GetName())
+	checksum, lifecycle, err := common.ExtractChecksumAndLifecycleStep(wf.GetName())
 	if err != nil {
 		return err
 	}

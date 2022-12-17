@@ -125,17 +125,17 @@ func ConvertWorkflowPhaseToAddonPhase(phase wfv1.WorkflowPhase) addonv1.Applicat
 }
 
 // ExtractChecksumAndLifecycleStep extracts the checksum and lifecycle step from the workflow name
-func ExtractChecksumAndLifecycleStep(addonName, addonWorkflowName string) (string, addonv1.LifecycleStep, error) {
-	// addonWorkflowName is of the form <addon-name>-<checksum>-<lifecycle>-wf
-	// e.g. my-addon-12345678-prereqs-wf
-	wfParts := strings.Split(addonWorkflowName[len(addonName+"-"):], "-")
-	if len(wfParts) != 3 {
+func ExtractChecksumAndLifecycleStep(addonWorkflowName string) (string, addonv1.LifecycleStep, error) {
+	// addonWorkflowName is of the form <addon-name>-<lifecycle>-<checksum>-wf
+	// e.g. my-addon-prereqs-12345678-wf
+	wfParts := strings.Split(addonWorkflowName, "-")
+	if len(wfParts) < 4 || strings.TrimSpace(wfParts[len(wfParts)-1]) != "wf" {
 		return "", "", fmt.Errorf("invalid workflow name %s", addonWorkflowName)
 	}
 
-	var checksum = strings.TrimSpace(wfParts[0])
+	var checksum = strings.TrimSpace(wfParts[len(wfParts)-2])
 	var lifecycle addonv1.LifecycleStep
-	switch strings.TrimSpace(wfParts[1]) {
+	switch strings.TrimSpace(wfParts[len(wfParts)-3]) {
 	case "prereqs":
 		lifecycle = addonv1.Prereqs
 	case "install":

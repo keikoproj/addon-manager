@@ -85,7 +85,7 @@ func TestUpdateAddonStatusLifecycleFromWorkflow(t *testing.T) {
 			APIVersion: "argoproj.io/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-addon-123456-prereqs-wf",
+			Name:      "test-addon--prereqs-123456-wf",
 			Namespace: testNamespace,
 			Labels: map[string]string{
 				workflows.WfInstanceIdLabelKey: workflows.WfInstanceId,
