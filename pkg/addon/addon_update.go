@@ -117,6 +117,11 @@ func (c *AddonUpdater) UpdateAddonStatusLifecycleFromWorkflow(ctx context.Contex
 		return err
 	}
 
+	if existingAddon.Status.Lifecycle.Installed.Completed() {
+		// If the addon is already installed, we don't want to update the status
+		return nil
+	}
+
 	checksum, lifecycle, err := common.ExtractChecksumAndLifecycleStep(wf.GetName())
 	if err != nil {
 		return err
