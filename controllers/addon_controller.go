@@ -316,7 +316,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Execute PreReq and Install workflow, if spec body has changed.
 	// In the case when validation failed and continued here we should execute.
 	// Also, if workflow is in Pending state, execute it to update status to terminal state.
-	if changedStatus || instance.Status.Lifecycle.Installed.Completed() == false {
+	if instance.Status.Lifecycle.Installed.Completed() == false {
 		// Check if addon installation expired.
 		if common.IsExpired(instance.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
 			reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, addonapiv1.TTL.String())
