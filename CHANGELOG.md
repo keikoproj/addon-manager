@@ -1,6 +1,23 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.7.0"></a>
+## [v0.7.0] - 2022-12-19
+### Fixed
+- Fix local bdd testing (#170) 
+- Refactor addon status updates (#173) 
+
+### Changed
+- Bump actions/checkout from 2 to 3.1.0 (#160)
+- Change to use controllerutil finalizer methods (#165) 
+- Use controller-gen version v0.4.1 (#166)
+- Switch to emissary workflow-executor and workflow-controller v3.3.x (#168)
+- Bump actions/checkout from 3.1.0 to 3.2.0 (#172)
+- Bump goreleaser/goreleaser-action from 3 to 4 (#171)
+
+### Added
+- Add addon-manager architecture diagram (#169)
+
 <a name="v0.6.2"></a>
 ## [v0.6.2] - 2022-08-01
 ### Fixed
@@ -127,7 +144,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.7.0...HEAD
+[v0.7.0]: https://github.com/keikoproj/addon-manager/compare/v0.6.2...v0.7.0
 [v0.6.2]: https://github.com/keikoproj/addon-manager/compare/v0.6.1...v0.6.2
 [v0.6.1]: https://github.com/keikoproj/addon-manager/compare/v0.6.0...v0.6.1
 [v0.6.0]: https://github.com/keikoproj/addon-manager/compare/v0.5.2...v0.6.0
