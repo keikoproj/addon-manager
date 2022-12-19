@@ -35,9 +35,9 @@ const (
 	FinalizerName = "delete.addonmgr.keikoproj.io"
 
 	ResourceDefaultManageByLabel = "app.kubernetes.io/managed-by"
-	ResourceDefaultManageByValue = "addonmgr.keikoproj.io"
 	ResourceDefaultOwnLabel      = "app.kubernetes.io/name"
 	ResourceDefaultPartLabel     = "app.kubernetes.io/part-of"
+	ResourceDefaultVersionLabel  = "app.kubernetes.io/version"
 
 	TTL = time.Duration(1) * time.Hour // 1 hour
 

@@ -17,14 +17,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/go-logr/logr"
 	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
-	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,17 +39,14 @@ type WorkflowReconciler struct {
 	client       client.Client
 	dynClient    dynamic.Interface
 	log          logr.Logger
-	versionCache pkgaddon.VersionCacheClient
-	addonUpdater *pkgaddon.AddonUpdate
+	addonUpdater *pkgaddon.AddonUpdater
 }
 
-func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonversioncache pkgaddon.VersionCacheClient) error {
-	addonUpdater := pkgaddon.NewAddonUpdate(mgr.GetClient(), ctrl.Log.WithName(wfcontroller), addonversioncache)
+func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonUpdater *pkgaddon.AddonUpdater) error {
 	r := &WorkflowReconciler{
 		client:       mgr.GetClient(),
 		dynClient:    dynClient,
 		log:          ctrl.Log.WithName(wfcontroller),
-		versionCache: addonversioncache,
 		addonUpdater: addonUpdater,
 	}
 
@@ -70,42 +66,28 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	} else if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get workflow %s: %#v", req, err)
 	}
+
+	// Resource is being deleted, skip reconciling.
+	if !wfobj.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.log.Info("workflow ", wfobj.GetNamespace(), wfobj.GetName(), " is being deleted skip reconciling")
+		return ctrl.Result{}, nil
+	}
+
 	r.log.Info("reconciling", "request", req, " workflow ", wfobj.Name)
 	if len(string(wfobj.Status.Phase)) == 0 {
 		r.log.Info("workflow ", wfobj.GetNamespace(), wfobj.GetName(), " status", " is empty")
 		return ctrl.Result{}, nil
 	}
 
-	addonName, lifecycle, err := ExtractAddOnNameAndLifecycleStep(wfobj.GetName())
-	if err != nil {
-		msg := fmt.Sprintf("could not extract addon/lifecycle from %s/%s workflow.",
-			wfobj.GetNamespace(),
-			wfobj.GetName())
-		r.log.Info(msg)
-		return ctrl.Result{}, fmt.Errorf(msg)
+	owner := metav1.GetControllerOf(wfobj)
+	if owner.Kind != "Addon" {
+		r.log.Info("workflow ", wfobj.GetNamespace(), wfobj.GetName(), " owner ", owner.Kind, " is not an addon")
+		return ctrl.Result{}, nil
 	}
 
-	err = r.addonUpdater.UpdateAddonStatusLifecycle(ctx, wfobj.GetNamespace(), addonName, lifecycle, wfobj.Status.Phase)
+	err = r.addonUpdater.UpdateAddonStatusLifecycleFromWorkflow(ctx, wfobj.GetNamespace(), owner.Name, wfobj)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
-}
-
-// ExtractAddOnNameAndLifecycleStep extract addon-name and lifecyclestep from a workflow name string generated based on
-// api types
-func ExtractAddOnNameAndLifecycleStep(addonworkflowname string) (string, string, error) {
-	if strings.Contains(addonworkflowname, string(addonv1.Prereqs)) {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, string(addonv1.Prereqs))-1]), string(addonv1.Prereqs), nil
-	}
-
-	if strings.Contains(addonworkflowname, string(addonv1.Install)) {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, string(addonv1.Install))-1]), string(addonv1.Install), nil
-
-	}
-	if strings.Contains(addonworkflowname, string(addonv1.Delete)) {
-		return strings.TrimSpace(addonworkflowname[:strings.Index(addonworkflowname, string(addonv1.Delete))-1]), string(addonv1.Delete), nil
-	}
-
-	return "", "", fmt.Errorf("no recognized lifecyclestep within ")
 }

@@ -37,6 +37,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/go-logr/logr"
+	"github.com/keikoproj/addon-manager/api/addon"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/common"
 
@@ -459,10 +460,10 @@ func (w *workflowLifecycle) addDefaultLabelsToResource(resource *unstructured.Un
 	}
 
 	// Set default labels
-	labels["app.kubernetes.io/name"] = w.addon.Name
-	labels["app.kubernetes.io/version"] = packageSpec.PkgVersion
-	labels["app.kubernetes.io/part-of"] = w.addon.Name
-	labels["app.kubernetes.io/managed-by"] = common.AddonGVR().Group
+	labels[addon.ResourceDefaultOwnLabel] = w.addon.Name
+	labels[addon.ResourceDefaultVersionLabel] = packageSpec.PkgVersion
+	labels[addon.ResourceDefaultPartLabel] = w.addon.Name
+	labels[addon.ResourceDefaultManageByLabel] = addon.Group
 
 	resource.SetLabels(labels)
 }

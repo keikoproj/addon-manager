@@ -16,26 +16,29 @@ package addon
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
 	"testing"
+	"time"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/workflows"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	"github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var (
-	scheme = runtime.NewScheme()
+	scheme   = runtime.NewScheme()
+	fakeRcdr = record.NewBroadcasterForTests(1*time.Second).NewRecorder(scheme, v1.EventSource{Component: "addons"})
+	fakeCli  = fake.NewClientBuilder().WithScheme(scheme).Build()
+	ctx      = context.TODO()
 )
 
 func init() {
@@ -44,53 +47,13 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 }
 
-func setup(testEnv *envtest.Environment) *rest.Config {
-	cfg, err := testEnv.Start()
-	if err != nil || cfg == nil {
-		panic(err)
-	}
-	return cfg
-}
-
-func cleanup(testEnv *envtest.Environment) {
-	defer GinkgoRecover()
-	err := testEnv.Stop()
-	if err != nil {
-		panic(err)
-	}
-
-}
-
-func newClient(cfg *rest.Config) (client.Client, error) {
-	opts := client.Options{
-		Scheme: scheme,
-	}
-	k8sclient, err := client.New(cfg, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kube client: %#v", err)
-	}
-	return k8sclient, nil
-}
-
-func TestUpdateAddonStatusLifecycle(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	testEnv := &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: true,
-	}
+func TestUpdateAddonStatusLifecycleFromWorkflow(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
 
 	testNamespace := "default"
 	testAddonName := "test-addon"
 
-	cfg := setup(testEnv)
-	cl, err := newClient(cfg)
-	if err != nil || cl == nil {
-		t.Fatalf("failed to create client %#v", err)
-	}
-	log := zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
-	updater := NewAddonUpdate(cl, log, NewAddonVersionCacheClient())
-	ctx := context.TODO()
+	updater := NewAddonUpdater(fakeRcdr, fakeCli, NewAddonVersionCacheClient(), ctrl.Log.WithName("test"))
 	testAddon := &addonmgrv1alpha1.Addon{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testAddonName,
@@ -109,17 +72,30 @@ func TestUpdateAddonStatusLifecycle(t *testing.T) {
 			Resources: []addonmgrv1alpha1.ObjectStatus{},
 		},
 	}
-	err = updater.client.Create(ctx, testAddon, &client.CreateOptions{})
-	Expect(err).To(BeNil())
+	err := updater.client.Create(ctx, testAddon, &client.CreateOptions{})
+	g.Expect(err).ToNot(gomega.HaveOccurred())
 
-	existingAddon, err := updater.getExistingAddon(ctx, fmt.Sprintf("%s/%s", testNamespace, testAddonName))
-	Expect(err).To(BeNil())
-	Expect(existingAddon).NotTo(BeNil())
+	existingAddon, err := updater.getExistingAddon(ctx, testNamespace, testAddonName)
+	g.Expect(err).ToNot(gomega.HaveOccurred())
+	g.Expect(existingAddon).ToNot(gomega.BeNil())
 
-	err = updater.UpdateAddonStatusLifecycle(ctx, testNamespace, testAddonName, "install", "Succeeded")
-	if err != nil {
-		fmt.Printf(" update addon status err %#v", err)
+	var wfSucceeded = &wfv1.Workflow{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Workflow",
+			APIVersion: "argoproj.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-addon--prereqs-123456-wf",
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				workflows.WfInstanceIdLabelKey: workflows.WfInstanceId,
+			},
+		},
+		Status: wfv1.WorkflowStatus{
+			Phase: wfv1.WorkflowSucceeded,
+		},
 	}
-	Expect(err).To(BeNil())
-	cleanup(testEnv)
+
+	err = updater.UpdateAddonStatusLifecycleFromWorkflow(ctx, testNamespace, testAddonName, wfSucceeded)
+	g.Expect(err).ToNot(gomega.HaveOccurred())
 }
