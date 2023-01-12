@@ -124,7 +124,13 @@ var _ = Describe("AddonController", func() {
 
 			By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
 			Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
-			Expect(k8sClient.Get(context.TODO(), wfv1Key, wfv1)).ToNot(Succeed())
+			Consistently(func() error {
+				if apierrors.IsNotFound(k8sClient.Get(context.TODO(), wfv1Key, wfv1)) {
+					return nil
+				}
+
+				return fmt.Errorf("workflow was regenerated")
+			}, timeout).Should(Succeed())
 		})
 
 		It("instance should be deleted w/ deleting state", func() {
@@ -148,6 +154,18 @@ var _ = Describe("AddonController", func() {
 				return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
 			}, timeout).Should(Succeed())
 			Expect(wfv1.GetName()).Should(Equal(wfName))
+
+			By("Verify addon remains in deleting state while delete workflow is running")
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+
+				if instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
+					return nil
+				}
+				return fmt.Errorf("addon is not being deleted")
+			}, timeout).Should(Succeed())
 		})
 
 		It("instance with dependencies should succeed", func() {
