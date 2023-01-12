@@ -175,88 +175,104 @@ var _ = Describe("AddonController", func() {
 					return fmt.Errorf("addon is not deleted")
 				}, timeout).Should(Succeed())
 			})
+
+			//Context("Addon CR remains in DeleteFailed state when Delete workflow fails", func() {
+			//	By("Verify addon remains in DeleteFailed state after delete workflow fails")
+			//	wfv1.UnstructuredContent()["status"] = map[string]interface{}{
+			//		"phase": "Failed",
+			//	}
+			//	err := k8sClient.Update(context.TODO(), wfv1)
+			//	Expect(err).NotTo(HaveOccurred())
+			//	Eventually(func() error {
+			//		if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+			//			return err
+			//		}
+			//
+			//		if instance.Status.Lifecycle.Installed == v1alpha1.DeleteFailed {
+			//			return nil
+			//		}
+			//		return fmt.Errorf("addon is not in a delete failed state. Status: %v", instance.Status.Lifecycle.Installed)
+			//	}, timeout).Should(Succeed())
+			//})
 		})
 
-		It("instance with dependencies should succeed", func() {
-			instance = &v1alpha1.Addon{
-				ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: addonNamespace},
-				Spec: v1alpha1.AddonSpec{
-					PackageSpec: v1alpha1.PackageSpec{
-						PkgType:    v1alpha1.CompositePkg,
-						PkgName:    "test/addon-1",
-						PkgVersion: "1.0.1",
-					},
-					Params: v1alpha1.AddonParams{
-						Namespace: "addon-test-ns",
-					},
-				},
-			}
-			var instanceKey = types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
-			var instance2 = &v1alpha1.Addon{
-				ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: addonNamespace},
-				Spec: v1alpha1.AddonSpec{
-					PackageSpec: v1alpha1.PackageSpec{
-						PkgType:    v1alpha1.CompositePkg,
-						PkgName:    "test/addon-2",
-						PkgVersion: "1.0.0",
-						PkgDeps: map[string]string{
-							"test/addon-1": "*",
+		Describe("Addon CR should reconcile dependencies", func() {
+			It("instance with dependencies should succeed", func() {
+				instance = &v1alpha1.Addon{
+					ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: addonNamespace},
+					Spec: v1alpha1.AddonSpec{
+						PackageSpec: v1alpha1.PackageSpec{
+							PkgType:    v1alpha1.CompositePkg,
+							PkgName:    "test/addon-1",
+							PkgVersion: "1.0.1",
+						},
+						Params: v1alpha1.AddonParams{
+							Namespace: "addon-test-ns",
 						},
 					},
-					Params: v1alpha1.AddonParams{
-						Namespace: "addon-test-ns",
+				}
+				var instanceKey = types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
+				var instance2 = &v1alpha1.Addon{
+					ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: addonNamespace},
+					Spec: v1alpha1.AddonSpec{
+						PackageSpec: v1alpha1.PackageSpec{
+							PkgType:    v1alpha1.CompositePkg,
+							PkgName:    "test/addon-2",
+							PkgVersion: "1.0.0",
+							PkgDeps: map[string]string{
+								"test/addon-1": "*",
+							},
+						},
+						Params: v1alpha1.AddonParams{
+							Namespace: "addon-test-ns",
+						},
 					},
-				},
-			}
-			var instanceKey2 = types.NamespacedName{Namespace: instance2.Namespace, Name: instance2.Name}
-
-			By("Verify first addon-2 that depends on addon-1 is created and has validation failed state")
-			Expect(k8sClient.Create(context.TODO(), instance2)).NotTo(HaveOccurred())
-			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
-					return err
 				}
+				var instanceKey2 = types.NamespacedName{Namespace: instance2.Namespace, Name: instance2.Name}
 
-				if instance2.Status.Lifecycle.Installed == v1alpha1.ValidationFailed {
-					return nil
-				}
+				By("Verify first addon-2 that depends on addon-1 is created and has validation failed state")
+				Expect(k8sClient.Create(context.TODO(), instance2)).NotTo(HaveOccurred())
+				Eventually(func() error {
+					if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
+						return err
+					}
 
-				return fmt.Errorf("addon-2 is not in validation failed state")
-			}, timeout).Should(Succeed())
+					if instance2.Status.Lifecycle.Installed == v1alpha1.ValidationFailed {
+						return nil
+					}
 
-			By("Verify addon-1 is submitted and completes successfully")
-			Expect(k8sClient.Create(context.TODO(), instance)).NotTo(HaveOccurred())
-			defer k8sClient.Delete(context.TODO(), instance)
-			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), instanceKey, instance); err != nil {
-					return err
-				}
+					return fmt.Errorf("addon-2 is not in validation failed state")
+				}, timeout).Should(Succeed())
 
-				if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
-					return nil
-				}
+				By("Verify addon-1 is submitted and completes successfully")
+				Expect(k8sClient.Create(context.TODO(), instance)).NotTo(HaveOccurred())
+				defer k8sClient.Delete(context.TODO(), instance)
+				Eventually(func() error {
+					if err := k8sClient.Get(context.TODO(), instanceKey, instance); err != nil {
+						return err
+					}
 
-				return fmt.Errorf("addon-1 is not installed")
-			}, timeout).Should(Succeed())
+					if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+						return nil
+					}
 
-			By("Verify addon-2 succeeds after addon-1 completed")
-			Eventually(func() error {
-				if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
-					return err
-				}
+					return fmt.Errorf("addon-1 is not installed")
+				}, timeout).Should(Succeed())
 
-				if instance2.Status.Lifecycle.Installed == v1alpha1.Succeeded {
-					return nil
-				}
+				By("Verify addon-2 succeeds after addon-1 completed")
+				Eventually(func() error {
+					if err := k8sClient.Get(context.TODO(), instanceKey2, instance2); err != nil {
+						return err
+					}
 
-				return fmt.Errorf("addon-2 is not valid")
-			}, timeout*10).Should(Succeed())
+					if instance2.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+						return nil
+					}
+
+					return fmt.Errorf("addon-2 is not valid")
+				}, timeout*10).Should(Succeed())
+			})
 		})
-
-		It("instance should remain in DeleteFailed state when workflow delete fails", func() {
-
-		})
-
 	})
 })
 
