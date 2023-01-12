@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/keikoproj/addon-manager/api/addon"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
@@ -84,23 +85,15 @@ var _ = Describe("AddonController", func() {
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
 			By("Verify addon has finalizers added which means it's valid")
-			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{"delete.addonmgr.keikoproj.io"}))
+			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{addon.FinalizerName}))
 
 			oldCheckSum := instance.Status.Checksum
 
 			//Update instance params for checksum validation
 			instance.Spec.Params.Context.ClusterRegion = "us-east-2"
 			err = k8sClient.Update(context.TODO(), instance)
-
-			// This sleep is introduced as addon status is updated after multiple requeues - Ideally it should be 2 sec.
-			time.Sleep(5 * time.Second)
-
-			if apierrors.IsInvalid(err) {
-				log.Error(err, "failed to update object, got an invalid object error")
-				return
-			}
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() error {
+			Consistently(func() error {
 				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
 					return err
 				}
@@ -164,7 +157,21 @@ var _ = Describe("AddonController", func() {
 				if instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
 					return nil
 				}
-				return fmt.Errorf("addon is not being deleted")
+				return fmt.Errorf("addon is not being deleted. Status: %v", instance.Status.Lifecycle.Installed)
+			}, timeout).Should(Succeed())
+
+			By("Verify addon is deleted after delete workflow is completed")
+			wfv1.UnstructuredContent()["status"] = map[string]interface{}{
+				"phase": "Succeeded",
+			}
+			err := k8sClient.Update(context.TODO(), wfv1)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				if apierrors.IsNotFound(k8sClient.Get(context.TODO(), addonKey, instance)) {
+					return nil
+				}
+
+				return fmt.Errorf("addon is not deleted")
 			}, timeout).Should(Succeed())
 		})
 
