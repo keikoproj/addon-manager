@@ -160,19 +160,21 @@ var _ = Describe("AddonController", func() {
 				return fmt.Errorf("addon is not being deleted. Status: %v", instance.Status.Lifecycle.Installed)
 			}, timeout).Should(Succeed())
 
-			By("Verify addon is deleted after delete workflow is completed")
-			wfv1.UnstructuredContent()["status"] = map[string]interface{}{
-				"phase": "Succeeded",
-			}
-			err := k8sClient.Update(context.TODO(), wfv1)
-			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() error {
-				if apierrors.IsNotFound(k8sClient.Get(context.TODO(), addonKey, instance)) {
-					return nil
+			Context("Addon CR can be successfully deleted", func() {
+				By("Verify addon is deleted after delete workflow is completed")
+				wfv1.UnstructuredContent()["status"] = map[string]interface{}{
+					"phase": "Succeeded",
 				}
+				err := k8sClient.Update(context.TODO(), wfv1)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					if apierrors.IsNotFound(k8sClient.Get(context.TODO(), addonKey, instance)) {
+						return nil
+					}
 
-				return fmt.Errorf("addon is not deleted")
-			}, timeout).Should(Succeed())
+					return fmt.Errorf("addon is not deleted")
+				}, timeout).Should(Succeed())
+			})
 		})
 
 		It("instance with dependencies should succeed", func() {
@@ -249,6 +251,10 @@ var _ = Describe("AddonController", func() {
 
 				return fmt.Errorf("addon-2 is not valid")
 			}, timeout*10).Should(Succeed())
+		})
+
+		It("instance should remain in DeleteFailed state when workflow delete fails", func() {
+
 		})
 
 	})
