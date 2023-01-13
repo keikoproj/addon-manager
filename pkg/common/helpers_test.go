@@ -140,6 +140,15 @@ func Test_ConvertWorkflowPhasetoAddonPhase(t *testing.T) {
 	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowError)
 	g.Expect(addonPhase).To(gomega.Equal(addonv1.DeleteFailed))
 
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowSucceeded)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.DeleteSucceeded))
+
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowRunning)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.Deleting))
+
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowPending)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.Deleting))
+
 	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowUnknown)
 	g.Expect(addonPhase).To(gomega.BeEmpty())
 }

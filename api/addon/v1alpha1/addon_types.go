@@ -152,6 +152,8 @@ const (
 	Deleting ApplicationAssemblyPhase = "Deleting"
 	// DeleteFailed Used to indicate that delete failed.
 	DeleteFailed ApplicationAssemblyPhase = "Delete Failed"
+	// DeleteSucceeded Used to indicate that delete succeeded.
+	DeleteSucceeded ApplicationAssemblyPhase = "Delete Succeeded"
 )
 
 // DeploymentPhase represents the status of observed resources
@@ -433,9 +435,9 @@ func (p ApplicationAssemblyPhase) Completed() bool {
 }
 
 func (p ApplicationAssemblyPhase) Succeeded() bool {
-	return p == Succeeded
+	return p == Succeeded || p == DeleteSucceeded
 }
 
 func (p ApplicationAssemblyPhase) Deleting() bool {
-	return p == Deleting
+	return p == Deleting || p == DeleteFailed || p == DeleteSucceeded
 }

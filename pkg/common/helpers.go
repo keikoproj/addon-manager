@@ -114,8 +114,14 @@ func ConvertWorkflowPhaseToAddonPhase(lifecycle addonv1.LifecycleStep, phase wfv
 
 	switch phase {
 	case wfv1.WorkflowPending, wfv1.WorkflowRunning:
+		if lifecycle == addonv1.Delete {
+			return addonv1.Deleting
+		}
 		return addonv1.Pending
 	case wfv1.WorkflowSucceeded:
+		if lifecycle == addonv1.Delete {
+			return addonv1.DeleteSucceeded
+		}
 		return addonv1.Succeeded
 	case wfv1.WorkflowFailed, wfv1.WorkflowError:
 		if lifecycle == addonv1.Delete {
