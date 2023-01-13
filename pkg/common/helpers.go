@@ -110,7 +110,7 @@ func FromUnstructuredObj(un *unstructured.Unstructured, v interface{}) error {
 	return nil
 }
 
-func ConvertWorkflowPhaseToAddonPhase(phase wfv1.WorkflowPhase) addonv1.ApplicationAssemblyPhase {
+func ConvertWorkflowPhaseToAddonPhase(lifecycle addonv1.LifecycleStep, phase wfv1.WorkflowPhase) addonv1.ApplicationAssemblyPhase {
 
 	switch phase {
 	case wfv1.WorkflowPending, wfv1.WorkflowRunning:
@@ -118,6 +118,9 @@ func ConvertWorkflowPhaseToAddonPhase(phase wfv1.WorkflowPhase) addonv1.Applicat
 	case wfv1.WorkflowSucceeded:
 		return addonv1.Succeeded
 	case wfv1.WorkflowFailed, wfv1.WorkflowError:
+		if lifecycle == addonv1.Delete {
+			return addonv1.DeleteFailed
+		}
 		return addonv1.Failed
 	default:
 		return ""
