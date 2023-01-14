@@ -8,13 +8,6 @@
 # review when someone opens a pull request.
 *       @keikoproj/authorized-approvers
 
-# Admins own CI.
+# Admins own root and CI.
 .github/** @keikoproj/addon-manager-maintainers
-Makefile @keikoproj/addon-manager-maintainers
-Dockerfile @keikoproj/addon-manager-maintainers
-.editorconfig @keikoproj/addon-manager-maintainers
-.gitignore @keikoproj/addon-manager-maintainers
-.goreleaser.yml @keikoproj/addon-manager-maintainers
-.envrc @keikoproj/addon-manager-maintainers
-codecov.yml @keikoproj/addon-manager-maintainers
-/PROJECT @keikoproj/addon-manager-maintainers
+/*     @keikoproj/addon-manager-maintainers
