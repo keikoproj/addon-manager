@@ -206,9 +206,7 @@ var _ = Describe("AddonController", func() {
 			Expect(instance.GetName()).To(Equal(addonName))
 
 			instance.SetNamespace(addonNamespace)
-			//})
 
-			//It("instance should be reconciled as pending", func() {
 			err = k8sClient.Create(context.TODO(), instance)
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(func() error {
@@ -230,9 +228,7 @@ var _ = Describe("AddonController", func() {
 
 			By("Verify addon has pending status")
 			Expect(instance.Status.Lifecycle.Installed).Should(Equal(v1alpha1.Pending))
-			//})
 
-			//It("instance should be deleted w/ deleting state", func() {
 			By("Verify deleting instance should set Deleting state")
 			Expect(k8sClient.Delete(context.TODO(), instance)).NotTo(HaveOccurred())
 			Eventually(func() error {
@@ -265,9 +261,7 @@ var _ = Describe("AddonController", func() {
 				}
 				return fmt.Errorf("addon is not being deleted. Status: %v", instance.Status.Lifecycle.Installed)
 			}, timeout).Should(Succeed())
-			//})
 
-			//It("instance should be in state DeleteFailed when workflow delete fails", func() {
 			By("Verify addon remains in DeleteFailed state after delete workflow fails")
 			wfv1.UnstructuredContent()["status"] = map[string]interface{}{
 				"phase": "Failed",
