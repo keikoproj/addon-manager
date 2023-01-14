@@ -142,7 +142,7 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 	// Resource is being deleted, run finalizers and exit.
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		// For a better user experience we want to update the status and requeue
-		if instance.GetInstallStatus() != addonmgrv1alpha1.Deleting {
+		if !instance.GetInstallStatus().Deleting() {
 			instance.SetInstallStatus(addonmgrv1alpha1.Deleting)
 			log.Info("Requeue to set deleting status")
 			err := r.addonUpdater.UpdateStatus(ctx, log, instance)
@@ -158,8 +158,8 @@ func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, 
 
 			return reconcile.Result{}, err
 		}
-		// Requeue to remove from caches
-		return reconcile.Result{Requeue: true}, nil
+
+		return reconcile.Result{}, nil
 	}
 
 	// Process addon instance
@@ -306,11 +306,9 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	if err := r.SetFinalizer(ctx, instance, addonapiv1.FinalizerName); err != nil {
 		reason := fmt.Sprintf("Addon %s/%s could not add finalizer. %v", instance.Namespace, instance.Name, err)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Failed to add finalizer for addon.")
+		log.Error(err, "Failed to add finalizer for addon. Requeuing...")
 
-		instance.SetInstallStatus(addonmgrv1alpha1.Failed, reason)
-
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true}, err
 	}
 
 	// Execute PreReq and Install workflow, if spec body has changed.
@@ -371,6 +369,7 @@ func (r *AddonReconciler) runWorkflow(ctx context.Context, lifecycleStep addonmg
 	}
 
 	if wt.Template == "" {
+		log.Info("Workflow template is empty, skipping workflow execution", "lifecycleStep", lifecycleStep)
 		// No workflow was provided, so mark as succeeded
 		return addonmgrv1alpha1.Succeeded, nil
 	}
@@ -379,11 +378,11 @@ func (r *AddonReconciler) runWorkflow(ctx context.Context, lifecycleStep addonmg
 	if wfIdentifierName == "" {
 		return addonmgrv1alpha1.Failed, fmt.Errorf("could not generate workflow template name")
 	}
-	phase, err := wfl.Install(ctx, wt, wfIdentifierName)
+	phase, err := wfl.Install(ctx, workflows.NewWorkflowProxy(wfIdentifierName, wt, lifecycleStep))
 	if err != nil {
 		return phase, err
 	}
-	r.recorder.Event(addon, "Normal", "Completed", fmt.Sprintf("Completed %s workflow %s/%s.", strings.Title(string(lifecycleStep)), addon.Namespace, wfIdentifierName))
+	r.recorder.Event(addon, "Normal", "Submitted", fmt.Sprintf("Submitted %s workflow %s/%s as phase %s.", strings.Title(string(lifecycleStep)), addon.Namespace, wfIdentifierName, phase))
 	return phase, nil
 }
 
@@ -536,8 +535,8 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 			return err
 		}
 
-		if phase.Completed() {
-			// Wait for workflow to succeed or fail.
+		if phase.Succeeded() {
+			// Wait for workflow to succeed.
 			removeFinalizer = true
 		}
 	}

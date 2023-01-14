@@ -94,10 +94,10 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(mgr).ToNot(BeNil())
 
-	stopMgr, wg = StartTestManager(mgr)
-
 	err = New(mgr)
 	Expect(err).ToNot(HaveOccurred())
+
+	stopMgr, wg = StartTestManager(mgr)
 
 	close(done)
 }, 60)

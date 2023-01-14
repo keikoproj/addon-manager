@@ -117,22 +117,39 @@ func TestFromUnstructuredObj(t *testing.T) {
 func Test_ConvertWorkflowPhasetoAddonPhase(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
-	addonPhase := ConvertWorkflowPhaseToAddonPhase(wfv1.WorkflowSucceeded)
+	addonLifecycle := addonv1.Prereqs
+	addonPhase := ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowSucceeded)
 	g.Expect(addonPhase).To(gomega.Equal(addonv1.Succeeded))
 
-	addonPhase = ConvertWorkflowPhaseToAddonPhase(wfv1.WorkflowFailed)
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowFailed)
 	g.Expect(addonPhase).To(gomega.Equal(addonv1.Failed))
 
-	addonPhase = ConvertWorkflowPhaseToAddonPhase(wfv1.WorkflowError)
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowError)
 	g.Expect(addonPhase).To(gomega.Equal(addonv1.Failed))
 
-	addonPhase = ConvertWorkflowPhaseToAddonPhase(wfv1.WorkflowRunning)
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowRunning)
 	g.Expect(addonPhase).To(gomega.Equal(addonv1.Pending))
 
-	addonPhase = ConvertWorkflowPhaseToAddonPhase(wfv1.WorkflowPending)
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowPending)
 	g.Expect(addonPhase).To(gomega.Equal(addonv1.Pending))
 
-	addonPhase = ConvertWorkflowPhaseToAddonPhase(wfv1.WorkflowUnknown)
+	addonLifecycle = addonv1.Delete
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowFailed)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.DeleteFailed))
+
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowError)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.DeleteFailed))
+
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowSucceeded)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.DeleteSucceeded))
+
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowRunning)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.Deleting))
+
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowPending)
+	g.Expect(addonPhase).To(gomega.Equal(addonv1.Deleting))
+
+	addonPhase = ConvertWorkflowPhaseToAddonPhase(addonLifecycle, wfv1.WorkflowUnknown)
 	g.Expect(addonPhase).To(gomega.BeEmpty())
 }
 
