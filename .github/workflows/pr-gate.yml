@@ -27,12 +27,12 @@ jobs:
 
       - name: Test
         run: |
-          make test
+          make cover
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v3
         with:
-          file: ./coverage.txt
+          file: ./cover.out
 
   buildx:
     if: github.repository_owner == 'keikoproj'

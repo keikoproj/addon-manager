@@ -32,6 +32,13 @@ all: test manager addonctl
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -race -v $(PKGS) -coverprofile cover.out
 
+.PHONY: cover
+cover: test
+	go tool cover -func=cover.out -o coverage.txt
+	go tool cover -html=cover.out -o coverage.html
+	@cat coverage.txt
+	@echo "Run 'open coverage.html' to view coverage report."
+
 # Run E2E tests
 bdd: clean fmt vet deploy
 	go test -timeout 5m -v ./test-bdd/...
