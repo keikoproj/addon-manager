@@ -11,6 +11,8 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+coverage.html
+coverage.txt
 
 # Ignore xunit files
 **/junit.xml
