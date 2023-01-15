@@ -431,13 +431,21 @@ func (a *Addon) ClearStatus() {
 }
 
 func (p ApplicationAssemblyPhase) Completed() bool {
-	return p == Succeeded || p == Failed || p == DeleteFailed
+	return p.Succeeded() || p.Failed()
 }
 
 func (p ApplicationAssemblyPhase) Succeeded() bool {
 	return p == Succeeded || p == DeleteSucceeded
 }
 
+func (p ApplicationAssemblyPhase) Failed() bool {
+	return p == Failed || p == DeleteFailed
+}
+
 func (p ApplicationAssemblyPhase) Deleting() bool {
 	return p == Deleting || p == DeleteFailed || p == DeleteSucceeded
+}
+
+func (p ApplicationAssemblyPhase) Running() bool {
+	return p == Pending || p == ValidationFailed
 }

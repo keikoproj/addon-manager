@@ -142,7 +142,7 @@ func (c *AddonUpdater) UpdateAddonStatusLifecycleFromWorkflow(ctx context.Contex
 		return nil
 	}
 
-	if phase == addonmgrv1alpha1.Failed || phase == addonmgrv1alpha1.DeleteFailed {
+	if phase.Failed() {
 		reason = wf.Status.Message
 	}
 
