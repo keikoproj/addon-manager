@@ -1,6 +1,14 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.7.1"></a>
+## [v0.7.1] - 2023-01-15
+### Fixed
+- Fix delete flows (#179)
+
+### Changed
+- Various improvements (#178) (#181) (#182) (#183) (#184) (#185)
+
 <a name="v0.7.0"></a>
 ## [v0.7.0] - 2022-12-19
 ### Fixed
@@ -144,7 +152,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.7.1...HEAD
+[v0.7.1]: https://github.com/keikoproj/addon-manager/compare/v0.7.0...v0.7.1
 [v0.7.0]: https://github.com/keikoproj/addon-manager/compare/v0.6.2...v0.7.0
 [v0.6.2]: https://github.com/keikoproj/addon-manager/compare/v0.6.1...v0.6.2
 [v0.6.1]: https://github.com/keikoproj/addon-manager/compare/v0.6.0...v0.6.1
