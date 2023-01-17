@@ -2,6 +2,9 @@
 
 Addon Manager was built using [kubebuilder](https://book.kubebuilder.io/).
 
+Prerequisites:
+* [Goreleaser](https://goreleaser.com/install/)
+
 ## Create a local cluster
 **Skip this is you already have a cluster**
 
