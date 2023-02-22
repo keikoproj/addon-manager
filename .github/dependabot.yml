@@ -9,9 +9,16 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    allow: 
+    allow:
       - dependency-type: "direct"
+    ignore:
+      - dependency-name: "k8s.io*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "docker"
     directory: "/"
-    schedule: 
+    schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "golang"
