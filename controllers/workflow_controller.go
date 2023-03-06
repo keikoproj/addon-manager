@@ -59,6 +59,11 @@ func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonUpda
 // +kubebuilder:rbac:groups=argoproj.io,resources=workflows,namespace=system,verbs=get;list;watch;create;update;patch;delete
 
 func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			r.log.Info(fmt.Sprintf("Error: Panic occurred when reconciling %s due to %v", req.String(), err))
+		}
+	}()
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
 	if apierrors.IsNotFound(err) {
