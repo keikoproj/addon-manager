@@ -85,6 +85,11 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	owner := metav1.GetControllerOf(wfobj)
+	if owner == nil {
+		err := fmt.Errorf("workflow %s/%s has no owner", wfobj.GetNamespace(), wfobj.GetName())
+		r.log.Error(err, wfobj.GetNamespace(), wfobj.GetName(), " owner is empty")
+		return ctrl.Result{}, err
+	}
 	if owner.Kind != "Addon" {
 		r.log.Info("workflow ", wfobj.GetNamespace(), wfobj.GetName(), " owner ", owner.Kind, " is not an addon")
 		return ctrl.Result{}, nil
