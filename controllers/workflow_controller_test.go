@@ -134,7 +134,7 @@ func TestWorkflowReconciler_Reconcile_OwnerrefNotAddon(t *testing.T) {
 	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(wf).Build()
 	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
 	testLog := logrtesting.TestLogger{T: t}
-	addonUpdater := pkgaddon.NewDefaultAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
+	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
 
 	r := &WorkflowReconciler{
 		client:       fakeCli,
