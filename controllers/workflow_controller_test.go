@@ -6,6 +6,7 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	logrtesting "github.com/go-logr/logr/testing"
@@ -34,20 +35,82 @@ func init() {
 func TestWorkflowReconciler_Reconcile(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithObjects().Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
 	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
-	log := logrtesting.TestLogger{T: t}
-	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), log)
+	testLog := logrtesting.TestLogger{T: t}
+	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
 
 	r := &WorkflowReconciler{
 		client:       fakeCli,
 		dynClient:    dynFakeCli,
-		log:          log,
+		log:          testLog,
 		addonUpdater: addonUpdater,
 	}
 
 	res, err := r.Reconcile(ctx, controllerruntime.Request{
 		NamespacedName: types.NamespacedName{Namespace: "default", Name: "test"}})
 	g.Expect(err).To(gomega.BeNil())
+	g.Expect(res).To(gomega.Equal(controllerruntime.Result{}))
+}
+
+func TestWorkflowReconciler_Reconcile_EmptyPhase(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	wf := &wfv1.Workflow{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test",
+			Namespace:       "default",
+			OwnerReferences: nil,
+		},
+	}
+
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(wf).Build()
+	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
+	testLog := logrtesting.TestLogger{T: t}
+	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
+
+	r := &WorkflowReconciler{
+		client:       fakeCli,
+		dynClient:    dynFakeCli,
+		log:          testLog,
+		addonUpdater: addonUpdater,
+	}
+
+	res, err := r.Reconcile(ctx, controllerruntime.Request{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "test"}})
+	g.Expect(err).To(gomega.BeNil())
+	g.Expect(res).To(gomega.Equal(controllerruntime.Result{}))
+}
+
+func TestWorkflowReconciler_Reconcile_OwnerRefEmpty(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	wf := &wfv1.Workflow{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test",
+			Namespace:       "default",
+			OwnerReferences: nil,
+		},
+		Status: wfv1.WorkflowStatus{
+			Phase: wfv1.WorkflowSucceeded,
+		},
+	}
+
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(wf).Build()
+	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
+	testLog := logrtesting.TestLogger{T: t}
+	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
+
+	r := &WorkflowReconciler{
+		client:       fakeCli,
+		dynClient:    dynFakeCli,
+		log:          testLog,
+		addonUpdater: addonUpdater,
+	}
+
+	res, err := r.Reconcile(ctx, controllerruntime.Request{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "test"}})
+	g.Expect(err).To(gomega.HaveOccurred())
+	g.Expect(err).To(gomega.MatchError("workflow default/test has no owner"))
 	g.Expect(res).To(gomega.Equal(controllerruntime.Result{}))
 }
