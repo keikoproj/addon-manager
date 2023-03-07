@@ -114,3 +114,37 @@ func TestWorkflowReconciler_Reconcile_OwnerRefEmpty(t *testing.T) {
 	g.Expect(err).To(gomega.MatchError("workflow default/test has no owner"))
 	g.Expect(res).To(gomega.Equal(controllerruntime.Result{}))
 }
+
+func TestWorkflowReconciler_Reconcile_OwnerrefNotAddon(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	wf := &wfv1.Workflow{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+			OwnerReferences: []metav1.OwnerReference{
+				{Kind: "Pod", Name: "test", UID: "test", APIVersion: "v1", Controller: &[]bool{true}[0]},
+			},
+		},
+		Status: wfv1.WorkflowStatus{
+			Phase: wfv1.WorkflowSucceeded,
+		},
+	}
+
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(wf).Build()
+	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
+	testLog := logrtesting.TestLogger{T: t}
+	addonUpdater := pkgaddon.NewDefaultAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
+
+	r := &WorkflowReconciler{
+		client:       fakeCli,
+		dynClient:    dynFakeCli,
+		log:          testLog,
+		addonUpdater: addonUpdater,
+	}
+
+	res, err := r.Reconcile(ctx, controllerruntime.Request{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "test"}})
+	g.Expect(err).ToNot(gomega.HaveOccurred())
+	g.Expect(res).To(gomega.Equal(controllerruntime.Result{}))
+}
