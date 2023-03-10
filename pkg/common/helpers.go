@@ -53,7 +53,7 @@ func RemoveString(slice []string, s string) (result []string) {
 
 // GetCurretTimestamp -- get current timestamp in millisecond
 func GetCurretTimestamp() int64 {
-	return time.Now().UnixNano() / int64(time.Millisecond)
+	return time.Now().UnixMilli()
 }
 
 // IsExpired --- check if reached ttl time

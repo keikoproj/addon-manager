@@ -16,6 +16,7 @@ package common
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/onsi/gomega"
@@ -23,6 +24,30 @@ import (
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
+
+func TestGetCurretTimestamp(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	timestamp := GetCurretTimestamp()
+	expectedTime := time.Unix(0, timestamp*int64(time.Millisecond))
+	g.Expect(expectedTime).Should(gomega.BeTemporally("~", time.Now(), time.Second))
+}
+
+func TestIsExpired(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	startTime := GetCurretTimestamp() - 1000
+	ttlTime := int64(2000)
+	g.Expect(IsExpired(startTime, ttlTime)).To(gomega.BeFalse())
+	ttlTime = 0
+	g.Expect(IsExpired(startTime, ttlTime)).To(gomega.BeTrue())
+}
+
+// func TestNewWFClient(t *testing.T){
+
+// }
+
+// func TestNewAddonClient(t *testing.T){
+
+// }
 
 func TestContainsString(t *testing.T) {
 	a := []string{"this", "is", "a", "test", "slice"}
