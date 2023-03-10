@@ -59,6 +59,11 @@ func NewWFController(mgr manager.Manager, dynClient dynamic.Interface, addonUpda
 // +kubebuilder:rbac:groups=argoproj.io,resources=workflows,namespace=system,verbs=get;list;watch;create;update;patch;delete
 
 func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			r.log.Info(fmt.Sprintf("Error: Panic occurred when reconciling %s due to %v", req.String(), err))
+		}
+	}()
 	wfobj := &wfv1.Workflow{}
 	err := r.client.Get(ctx, req.NamespacedName, wfobj)
 	if apierrors.IsNotFound(err) {
@@ -80,6 +85,11 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	owner := metav1.GetControllerOf(wfobj)
+	if owner == nil {
+		err := fmt.Errorf("workflow %s/%s has no owner", wfobj.GetNamespace(), wfobj.GetName())
+		r.log.Error(err, wfobj.GetNamespace(), wfobj.GetName(), " owner is empty")
+		return ctrl.Result{}, err
+	}
 	if owner.Kind != "Addon" {
 		r.log.Info("workflow ", wfobj.GetNamespace(), wfobj.GetName(), " owner ", owner.Kind, " is not an addon")
 		return ctrl.Result{}, nil
