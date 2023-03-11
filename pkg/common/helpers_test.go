@@ -19,11 +19,17 @@ import (
 	"time"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-	"github.com/onsi/gomega"
-
+	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
+	wffake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/rest"
 )
+
+type fakeWorkflowV1alpha1Client struct {
+	wfv1versioned.Interface
+}
 
 func TestGetCurretTimestamp(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
@@ -41,9 +47,27 @@ func TestIsExpired(t *testing.T) {
 	g.Expect(IsExpired(startTime, ttlTime)).To(gomega.BeTrue())
 }
 
-// func TestNewWFClient(t *testing.T){
+func TestNewWFClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	fakeRestConfig := &rest.Config{}
+	fakeClient := &fakeWorkflowV1alpha1Client{}
+	newWFInterface := NewWFClient(fakeRestConfig)
+	g.Expect(newWFInterface).NotTo(gomega.BeNil(), "NewWFClient should not return nil")
+	p_, ok := newWFInterface.(*wfv1versioned.Clientset)
+	g.Expect(ok).To(gomega.BeTrue())
+	println(fakeClient, p_)
+	//g.Expect(newWFInterface).To(gomega.Equal(expectedWFInterface))
+}
 
-// }
+func TestNilNewWFClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	fakeWFClientset := wffake.NewSimpleClientset()
+	invalidCfg := &rest.Config{
+		Host: "http://invalid-url",
+	}
+	g.Expect(NewWFClient(invalidCfg)).To(gomega.BeNil())
+	println(fakeWFClientset)
+}
 
 // func TestNewAddonClient(t *testing.T){
 
