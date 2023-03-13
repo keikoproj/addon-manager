@@ -20,16 +20,12 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
-	wffake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
 )
-
-type fakeWorkflowV1alpha1Client struct {
-	wfv1versioned.Interface
-}
 
 func TestGetCurretTimestamp(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
@@ -49,29 +45,41 @@ func TestIsExpired(t *testing.T) {
 
 func TestNewWFClient(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	fakeRestConfig := &rest.Config{}
-	fakeClient := &fakeWorkflowV1alpha1Client{}
-	newWFInterface := NewWFClient(fakeRestConfig)
-	g.Expect(newWFInterface).NotTo(gomega.BeNil(), "NewWFClient should not return nil")
-	p_, ok := newWFInterface.(*wfv1versioned.Clientset)
-	g.Expect(ok).To(gomega.BeTrue())
-	println(fakeClient, p_)
-	//g.Expect(newWFInterface).To(gomega.Equal(expectedWFInterface))
+	cfg := &rest.Config{}
+	cli := NewWFClient(cfg)
+	g.Expect(cli).NotTo(gomega.BeNil())
+	g.Expect(cli).To(gomega.BeAssignableToTypeOf(&wfv1versioned.Clientset{}))
 }
 
 func TestNilNewWFClient(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	fakeWFClientset := wffake.NewSimpleClientset()
 	invalidCfg := &rest.Config{
-		Host: "http://invalid-url",
+		Host:  "",
+		Burst: 0,
+		QPS:   2,
 	}
-	g.Expect(NewWFClient(invalidCfg)).To(gomega.BeNil())
-	println(fakeWFClientset)
+	cli := NewWFClient(invalidCfg)
+	g.Expect(cli).To(gomega.BeNil())
 }
 
-// func TestNewAddonClient(t *testing.T){
+func TestNewAddonClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	cfg := &rest.Config{}
+	cli := NewAddonClient(cfg)
+	g.Expect(cli).NotTo(gomega.BeNil())
+	g.Expect(cli).To(gomega.BeAssignableToTypeOf(&addonv1versioned.Clientset{}))
+}
 
-// }
+func TestNilNewAddonClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	invalidCfg := &rest.Config{
+		Host:  "",
+		Burst: 0,
+		QPS:   2,
+	}
+	cli := NewAddonClient(invalidCfg)
+	g.Expect(cli).To(gomega.BeNil())
+}
 
 func TestContainsString(t *testing.T) {
 	a := []string{"this", "is", "a", "test", "slice"}
