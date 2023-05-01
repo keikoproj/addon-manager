@@ -16,13 +16,70 @@ package common
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-	"github.com/onsi/gomega"
-
+	wfv1versioned "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	addonv1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	addonv1versioned "github.com/keikoproj/addon-manager/pkg/client/clientset/versioned"
+	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/rest"
 )
+
+func TestGetCurretTimestamp(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	timestamp := GetCurretTimestamp()
+	expectedTime := time.Unix(0, timestamp*int64(time.Millisecond))
+	g.Expect(expectedTime).Should(gomega.BeTemporally("~", time.Now(), time.Second))
+}
+
+func TestIsExpired(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	startTime := GetCurretTimestamp() - 1000
+	ttlTime := int64(2000)
+	g.Expect(IsExpired(startTime, ttlTime)).To(gomega.BeFalse())
+	ttlTime = 0
+	g.Expect(IsExpired(startTime, ttlTime)).To(gomega.BeTrue())
+}
+
+func TestNewWFClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	cfg := &rest.Config{}
+	cli := NewWFClient(cfg)
+	g.Expect(cli).NotTo(gomega.BeNil())
+	g.Expect(cli).To(gomega.BeAssignableToTypeOf(&wfv1versioned.Clientset{}))
+}
+
+func TestNilNewWFClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	invalidCfg := &rest.Config{
+		Host:  "",
+		Burst: 0,
+		QPS:   2,
+	}
+	cli := NewWFClient(invalidCfg)
+	g.Expect(cli).To(gomega.BeNil())
+}
+
+func TestNewAddonClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	cfg := &rest.Config{}
+	cli := NewAddonClient(cfg)
+	g.Expect(cli).NotTo(gomega.BeNil())
+	g.Expect(cli).To(gomega.BeAssignableToTypeOf(&addonv1versioned.Clientset{}))
+}
+
+func TestNilNewAddonClient(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	invalidCfg := &rest.Config{
+		Host:  "",
+		Burst: 0,
+		QPS:   2,
+	}
+	cli := NewAddonClient(invalidCfg)
+	g.Expect(cli).To(gomega.BeNil())
+}
 
 func TestContainsString(t *testing.T) {
 	a := []string{"this", "is", "a", "test", "slice"}

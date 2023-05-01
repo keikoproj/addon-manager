@@ -1,6 +1,23 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.7.2"></a>
+## [v0.7.2] - 2023-03-10
+### Fixed
+- Recover from panics in addon workflow controller (#222)
+
+### Changed
+- Various improvements (#190) (#191) (#193) (#206) (#208) 
+- Updated Dependencies (#195) (#197) (#198) (#203) (#214)
+
+### Added
+- Add goreleaser as prereqs developer doc (#188)
+- Add codeql.yml workflow (#201)
+
+### Removed
+- Delete old CHANGELOG (#192)
+- Remove KOPS test cluster scripts (#215)
+
 <a name="v0.7.1"></a>
 ## [v0.7.1] - 2023-01-15
 ### Fixed
@@ -152,7 +169,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.7.2...HEAD
+[v0.7.2]: https://github.com/keikoproj/addon-manager/compare/v0.7.1...v0.7.2
 [v0.7.1]: https://github.com/keikoproj/addon-manager/compare/v0.7.0...v0.7.1
 [v0.7.0]: https://github.com/keikoproj/addon-manager/compare/v0.6.2...v0.7.0
 [v0.6.2]: https://github.com/keikoproj/addon-manager/compare/v0.6.1...v0.6.2
