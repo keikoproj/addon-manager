@@ -56,6 +56,6 @@ jobs:
         uses: goreleaser/goreleaser-action@v4
         with:
           version: latest
-          args: release --rm-dist ${{ env.flags }} -f .goreleaser.yml
+          args: release --clean ${{ env.flags }} -f .goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

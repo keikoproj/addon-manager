@@ -122,10 +122,10 @@ docker-push:
 	docker push ${IMG}
 
 release:
-	goreleaser release --rm-dist
+	goreleaser release --clean
 
 snapshot:
-	goreleaser release --rm-dist --snapshot
+	goreleaser release --clean --snapshot
 
 code-generator:
 ifeq (, $(shell which code-generator))
