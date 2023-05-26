@@ -17,19 +17,16 @@ package controllers
 import (
 	"context"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -44,8 +41,6 @@ import (
 var (
 	k8sClient client.Client
 	testEnv   *envtest.Environment
-	stopMgr   chan struct{}
-	wg        *sync.WaitGroup
 	log       logr.Logger
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -59,7 +54,7 @@ func TestAPIs(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	log = zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
 	logf.SetLogger(log)
 
@@ -97,30 +92,15 @@ var _ = BeforeSuite(func(done Done) {
 	err = New(mgr)
 	Expect(err).ToNot(HaveOccurred())
 
-	stopMgr, wg = StartTestManager(mgr)
-
-	close(done)
+	go func() {
+		defer GinkgoRecover()
+		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
+	}()
 }, 60)
 
 var _ = AfterSuite(func() {
 	cancel()
-	By("stopping manager")
-	close(stopMgr)
-	wg.Wait()
-
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
-
-func StartTestManager(mgr manager.Manager) (chan struct{}, *sync.WaitGroup) {
-	stop := make(chan struct{})
-	wg := &sync.WaitGroup{}
-	go func() {
-		defer GinkgoRecover()
-		wg.Add(1)
-		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
-		wg.Done()
-	}()
-	return stop, wg
-}
