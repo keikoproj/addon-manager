@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	logrtesting "github.com/go-logr/logr/testing"
+	logrtesting "github.com/go-logr/logr/testr"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	pkgaddon "github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/onsi/gomega"
@@ -37,7 +37,7 @@ func TestWorkflowReconciler_Reconcile(t *testing.T) {
 
 	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
 	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
-	testLog := logrtesting.TestLogger{T: t}
+	testLog := logrtesting.New(t)
 	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
 
 	r := &WorkflowReconciler{
@@ -66,7 +66,7 @@ func TestWorkflowReconciler_Reconcile_EmptyPhase(t *testing.T) {
 
 	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(wf).Build()
 	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
-	testLog := logrtesting.TestLogger{T: t}
+	testLog := logrtesting.New(t)
 	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
 
 	r := &WorkflowReconciler{
@@ -98,7 +98,7 @@ func TestWorkflowReconciler_Reconcile_OwnerRefEmpty(t *testing.T) {
 
 	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(wf).Build()
 	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
-	testLog := logrtesting.TestLogger{T: t}
+	testLog := logrtesting.New(t)
 	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
 
 	r := &WorkflowReconciler{
@@ -133,7 +133,7 @@ func TestWorkflowReconciler_Reconcile_OwnerrefNotAddon(t *testing.T) {
 
 	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(wf).Build()
 	dynFakeCli := dynfake.NewSimpleDynamicClient(testScheme)
-	testLog := logrtesting.TestLogger{T: t}
+	testLog := logrtesting.New(t)
 	addonUpdater := pkgaddon.NewAddonUpdater(rcdr, fakeCli, pkgaddon.NewAddonVersionCacheClient(), testLog)
 
 	r := &WorkflowReconciler{
