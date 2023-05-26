@@ -1,7 +1,7 @@
 project_name: addon-manager
 before:
   hooks:
-    - go mod tidy -compat=1.17
+    - go mod tidy
     - go mod download
     - go generate ./...
     - go fmt ./...

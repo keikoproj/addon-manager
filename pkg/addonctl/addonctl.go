@@ -330,7 +330,7 @@ func parseDependencies(deps string) error {
 	return nil
 }
 
-//taking in arguments but parsing into global arguments is fine? the best approach?
+// taking in arguments but parsing into global arguments is fine? the best approach?
 func extractResources(prereqsPath, installPath string) error {
 	lifecycleSteps := map[string]string{"prereqs": prereqsPath, "install": installPath}
 	for stepName, path := range lifecycleSteps {
