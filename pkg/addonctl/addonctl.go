@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -342,14 +341,14 @@ func extractResources(prereqsPath, installPath string) error {
 			case err != nil:
 				return err
 			case fi.IsDir():
-				files, err := ioutil.ReadDir(path)
+				files, err := os.ReadDir(path)
 				if err != nil {
 					return errors.Wrapf(err, "failed to read dir path %s", path)
 				}
 				for _, f := range files {
 					switch {
 					case strings.HasSuffix(f.Name(), ".py"):
-						data, err := ioutil.ReadFile(f.Name())
+						data, err := os.ReadFile(f.Name())
 						if err != nil {
 							return fmt.Errorf("unable to read file %s", f.Name())
 						}
@@ -373,7 +372,7 @@ func extractResources(prereqsPath, installPath string) error {
 				// it's a file
 				switch {
 				case strings.HasSuffix(fi.Name(), ".py"):
-					data, err := ioutil.ReadFile(path)
+					data, err := os.ReadFile(path)
 					if err != nil {
 						return fmt.Errorf("unable to read file %s", fi.Name())
 					}
@@ -415,7 +414,7 @@ func parseSecrets(raw string) error {
 // best way to write parsing functions? take no params and work on global variables, or take and modify the global params (need to pass in pointers in that case)
 
 func parseResources(filename, stepName string) error {
-	rawBytes, err := ioutil.ReadFile(filename)
+	rawBytes, err := os.ReadFile(filename)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read file %s", filename)
 	}

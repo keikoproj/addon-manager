@@ -16,7 +16,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/keikoproj/addon-manager/api/addon"
@@ -55,7 +55,7 @@ var _ = Describe("AddonController", func() {
 
 		Context("Addon CR is created", func() {
 			It("Creating a new Addon instance", func() {
-				addonYaml, err := ioutil.ReadFile("../docs/examples/clusterautoscaler.yaml")
+				addonYaml, err := os.ReadFile("../docs/examples/clusterautoscaler.yaml")
 				Expect(err).ToNot(HaveOccurred())
 
 				instance, err = parseAddonYaml(addonYaml)
@@ -197,7 +197,7 @@ var _ = Describe("AddonController", func() {
 		})
 
 		It("Creating a new Addon instance", func() {
-			addonYaml, err := ioutil.ReadFile("../docs/examples/eventrouter.yaml")
+			addonYaml, err := os.ReadFile("../docs/examples/eventrouter.yaml")
 			Expect(err).ToNot(HaveOccurred())
 
 			instance, err = parseAddonYaml(addonYaml)
