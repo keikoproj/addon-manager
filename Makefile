@@ -8,6 +8,7 @@ KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.24.7
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKGS := $(shell go list ./...|grep -v test-)
+MODULE := $(shell go list -m)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -96,7 +97,7 @@ vet:
 # Generate code
 .PHONY: generate
 generate: controller-gen types ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="$(MODULE)"
 
 # generates many other files (listers, informers, client etc).
 api/addon/v1alpha1/zz_generated.deepcopy.go: $(TYPES)
