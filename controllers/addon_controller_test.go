@@ -110,7 +110,7 @@ var _ = Describe("AddonController", func() {
 				By("Verify changing addon spec generates new checksum")
 				Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
 
-				By("Verify addon has workflows generated with new checksum name")
+				By("Verify addon has prereqs workflow generated with new checksum name")
 				wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
 				var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 				Eventually(func() error {
@@ -118,7 +118,52 @@ var _ = Describe("AddonController", func() {
 				}, timeout).Should(Succeed())
 				Expect(wfv1.GetName()).Should(Equal(wfName))
 
-				By("Verify deleting workflows triggers reconcile and doesn't regenerate workflows again")
+				By("Verify addon still has pending status")
+				err = k8sClient.Get(context.TODO(), addonKey, instance)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(instance.Status.Lifecycle.Installed).Should(Equal(v1alpha1.Pending))
+
+				By("Verify addon prereqs status completed after prereqs workflow is completed")
+				wfv1.UnstructuredContent()["status"] = map[string]interface{}{
+					"phase": "Succeeded",
+				}
+				err = k8sClient.Update(context.TODO(), wfv1)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+						return err
+					}
+					if instance.Status.Lifecycle.Prereqs == v1alpha1.Succeeded && instance.Status.Lifecycle.Installed == v1alpha1.Pending {
+						return nil
+					}
+					return fmt.Errorf("addon prereqs|install status(%s|%s) is not succeeded|pending", instance.Status.Lifecycle.Prereqs, instance.Status.Lifecycle.Installed)
+				}, timeout).Should(Succeed())
+
+				By("Verify addon has install workflow generated with new checksum name")
+				wfName = instance.GetFormattedWorkflowName(v1alpha1.Install)
+				wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
+				Eventually(func() error {
+					return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+				}, timeout).Should(Succeed())
+				Expect(wfv1.GetName()).Should(Equal(wfName))
+
+				By("Verify addon install status completed after install workflow is completed")
+				wfv1.UnstructuredContent()["status"] = map[string]interface{}{
+					"phase": "Succeeded",
+				}
+				err = k8sClient.Update(context.TODO(), wfv1)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+						return err
+					}
+					if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+						return nil
+					}
+					return fmt.Errorf("addon install status(%s) is not succeeded", instance.Status.Lifecycle.Installed)
+				}, timeout).Should(Succeed())
+
+				By("Verify deleting workflows triggers reconcile but doesn't regenerate workflows again after completed")
 				Expect(k8sClient.Delete(context.TODO(), wfv1)).To(Succeed())
 				Consistently(func() error {
 					if apierrors.IsNotFound(k8sClient.Get(context.TODO(), wfv1Key, wfv1)) {
