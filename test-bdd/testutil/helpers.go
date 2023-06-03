@@ -17,7 +17,6 @@ package testutil
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,7 +94,7 @@ func ConcatonateList(list []string, delimiter string) string {
 
 // ReadFile reads the raw content from a file path
 func ReadFile(path string) ([]byte, error) {
-	f, err := ioutil.ReadFile(path)
+	f, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Printf("failed to read file %v", path)
 		return nil, err

@@ -17,7 +17,7 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
@@ -70,7 +70,7 @@ var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
 	// Setup CRD
 	It("should create CRD", func() {
 		crdsRoot := "../config/crd/bases"
-		files, err := ioutil.ReadDir(crdsRoot)
+		files, err := os.ReadDir(crdsRoot)
 		if err != nil {
 			Fail(fmt.Sprintf("failed to read crd path. %v", err))
 		}
