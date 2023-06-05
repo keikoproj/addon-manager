@@ -127,10 +127,10 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return reconcile.Result{}, ignoreNotFound(err)
 	}
 
-	return r.execAddon(ctx, req, log, instance)
+	return r.execAddon(ctx, log, instance)
 }
 
-func (r *AddonReconciler) execAddon(ctx context.Context, req reconcile.Request, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
+func (r *AddonReconciler) execAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon) (reconcile.Result, error) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Info(fmt.Sprintf("Error: Panic occurred during execAdd %s/%s due to %v", instance.Namespace, instance.Name, err))
@@ -245,7 +245,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 
 	if changedStatus {
 		// Set ttl starttime if checksum has changed
-		instance.Status.StartTime = common.GetCurretTimestamp()
+		instance.Status.StartTime = common.GetCurrentTimestamp()
 
 		// Clear out status and reason
 		instance.ClearStatus()
@@ -314,7 +314,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	// Execute PreReq and Install workflow, if spec body has changed.
 	// In the case when validation failed and continued here we should execute.
 	// Also, if workflow is in Pending state, execute it to update status to terminal state.
-	if instance.Status.Lifecycle.Installed.Completed() == false {
+	if !instance.Status.Lifecycle.Installed.Completed() {
 		// Check if addon installation expired.
 		if common.IsExpired(instance.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
 			reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, addonapiv1.TTL.String())

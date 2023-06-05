@@ -123,7 +123,7 @@ func (w *workflowLifecycle) Install(ctx context.Context, wp *WorkflowProxy) (add
 
 	w.injectInstanceId(wf)
 
-	return w.submit(ctx, wf, wp.lifecycle)
+	return w.submit(ctx, wf)
 }
 
 // Appends addon.spec.params to workflow.spec.arguments.parameters
@@ -230,23 +230,12 @@ func (w *workflowLifecycle) findWorkflowByName(ctx context.Context, name types.N
 	return wf, nil
 }
 
-func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstructured, lifecycle addonmgrv1alpha1.LifecycleStep) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
-
-	// Check if the Workflow already exists
+func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstructured) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
 	wfName := types.NamespacedName{Name: wp.GetName(), Namespace: wp.GetNamespace()}
-	wfv1, err := w.findWorkflowByName(ctx, wfName)
-	if err != nil {
-		return addonmgrv1alpha1.Failed, err
-	}
-
-	// Check if the same Addon spec was submitted and completed previously
-	if wfv1 != nil {
-		return common.ConvertWorkflowPhaseToAddonPhase(lifecycle, wfv1.Status.Phase), nil
-	}
 
 	// Create the Workflow
 	// Convert proxy to workflow object
-	wfv1, err = common.WorkFlowFromUnstructured(wp)
+	wfv1, err := common.WorkFlowFromUnstructured(wp)
 	if err != nil {
 		return addonmgrv1alpha1.Failed, err
 	}

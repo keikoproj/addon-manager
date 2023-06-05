@@ -29,14 +29,14 @@ import (
 
 func TestGetCurretTimestamp(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	timestamp := GetCurretTimestamp()
+	timestamp := GetCurrentTimestamp()
 	expectedTime := time.Unix(0, timestamp*int64(time.Millisecond))
 	g.Expect(expectedTime).Should(gomega.BeTemporally("~", time.Now(), time.Second))
 }
 
 func TestIsExpired(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	startTime := GetCurretTimestamp() - 1000
+	startTime := GetCurrentTimestamp() - 1000
 	ttlTime := int64(2000)
 	g.Expect(IsExpired(startTime, ttlTime)).To(gomega.BeFalse())
 	ttlTime = 0
