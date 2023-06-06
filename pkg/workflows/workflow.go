@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -53,7 +52,7 @@ const (
 
 // AddonLifecycle represents the following workflows
 type AddonLifecycle interface {
-	Install(context.Context, *WorkflowProxy) (addonmgrv1alpha1.ApplicationAssemblyPhase, error)
+	Install(context.Context, *WorkflowProxy) error
 	Delete(context.Context, string) error
 }
 
@@ -97,28 +96,28 @@ func NewWorkflowLifecycle(wfclientset wfclientset.Interface, wfinformer cache.Sh
 	}
 }
 
-func (w *workflowLifecycle) Install(ctx context.Context, wp *WorkflowProxy) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
+func (w *workflowLifecycle) Install(ctx context.Context, wp *WorkflowProxy) error {
 	wf := &unstructured.Unstructured{}
 	err := w.parse(wp.template, wf, wp.name)
 	if err != nil {
-		return addonmgrv1alpha1.Failed, fmt.Errorf("invalid workflow. %v", err)
+		return fmt.Errorf("invalid workflow. %v", err)
 	}
 
 	if !w.configureGlobalWFParameters(w.addon, wf) {
-		return addonmgrv1alpha1.Failed, errors.New("invalid workflow parameter")
+		return errors.New("invalid workflow parameter")
 	}
 
 	err = w.configureWorkflowArtifacts(wf, wp.template)
 	if err != nil {
-		return addonmgrv1alpha1.Failed, err
+		return err
 	}
 
 	if err := w.injectTTLs(wf); err != nil {
-		return addonmgrv1alpha1.Failed, err
+		return err
 	}
 
 	if err := w.injectActiveDeadlineSeconds(wf); err != nil {
-		return addonmgrv1alpha1.Failed, err
+		return err
 	}
 
 	w.injectInstanceId(wf)
@@ -218,46 +217,34 @@ func (w *workflowLifecycle) Delete(ctx context.Context, name string) error {
 	return nil
 }
 
-func (w *workflowLifecycle) findWorkflowByName(ctx context.Context, name types.NamespacedName) (*v1alpha1.Workflow, error) {
-	wf, err := w.wfclientset.ArgoprojV1alpha1().Workflows(name.Namespace).Get(ctx, name.Name, metav1.GetOptions{})
-
-	if err != nil && apierrors.IsNotFound(err) {
-		return nil, nil
-	} else if err != nil {
-		return nil, fmt.Errorf("error finding wf by name %s err %v", name, err)
-	}
-
-	return wf, nil
-}
-
-func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstructured) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
+func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstructured) error {
 	wfName := types.NamespacedName{Name: wp.GetName(), Namespace: wp.GetNamespace()}
 
 	// Create the Workflow
 	// Convert proxy to workflow object
 	wfv1, err := common.WorkFlowFromUnstructured(wp)
 	if err != nil {
-		return addonmgrv1alpha1.Failed, err
+		return err
 	}
 
 	// Set the owner references for workflow
 	if err := controllerutil.SetControllerReference(w.addon, wfv1, w.scheme); err != nil {
-		return addonmgrv1alpha1.Failed, err
+		return err
 	}
 
 	wfv1, err = w.wfclientset.ArgoprojV1alpha1().Workflows(wp.GetNamespace()).Create(ctx, wfv1, metav1.CreateOptions{})
 	if err != nil && apierrors.IsAlreadyExists(err) {
 		w.log.Info("Workflow already exists.", "workflow", wfName)
-		return addonmgrv1alpha1.Pending, nil
+		return nil
 	} else if err != nil {
 		msg := fmt.Sprintf("failed creating wf %s err %v", wp.GetName(), err)
 		w.log.Error(err, msg)
-		return addonmgrv1alpha1.Failed, fmt.Errorf(msg)
+		return fmt.Errorf(msg)
 	}
 	// Record an event for created workflow
 	w.recorder.Event(w.addon, "Normal", "Created", fmt.Sprintf("Created Workflow %s", wfName))
 
-	return addonmgrv1alpha1.Pending, nil
+	return nil
 }
 
 func (w *workflowLifecycle) parse(wt *addonmgrv1alpha1.WorkflowType, wf *unstructured.Unstructured, name string) error {

@@ -70,6 +70,8 @@ func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon 
 		return err
 	}
 
+	log.Info("successfully updated addon statuses", "prereqs_status", addon.GetPrereqStatus(), "installed_status", addon.GetInstallStatus())
+
 	// Always update the version cache
 	c.addAddonToCache(log, addon)
 

@@ -251,6 +251,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		instance.ClearStatus()
 
 		log.Info("Checksum changed, addon will be installed...")
+		instance.SetPrereqStatus(addonmgrv1alpha1.Pending)
 		instance.SetInstallStatus(addonmgrv1alpha1.Pending)
 		log.Info("Requeue to set pending status")
 		return reconcile.Result{Requeue: true}, nil
@@ -359,13 +360,14 @@ func ignoreNotFound(err error) error {
 	return err
 }
 
+// runWorkflow returns addonmgrv1alpha1.Succeeded only if template is empty
 func (r *AddonReconciler) runWorkflow(ctx context.Context, lifecycleStep addonmgrv1alpha1.LifecycleStep, addon *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
 	log := r.Log.WithValues("addon", fmt.Sprintf("%s/%s", addon.Namespace, addon.Name))
 
 	wt, err := addon.GetWorkflowType(lifecycleStep)
 	if err != nil {
 		log.Error(err, "lifecycleStep is not a field in LifecycleWorkflowSpec", "lifecycleStep", lifecycleStep)
-		return addonmgrv1alpha1.Failed, err
+		return "", err
 	}
 
 	if wt.Template == "" {
@@ -376,14 +378,14 @@ func (r *AddonReconciler) runWorkflow(ctx context.Context, lifecycleStep addonmg
 
 	wfIdentifierName := addon.GetFormattedWorkflowName(lifecycleStep)
 	if wfIdentifierName == "" {
-		return addonmgrv1alpha1.Failed, fmt.Errorf("could not generate workflow template name")
+		return "", fmt.Errorf("could not generate workflow template name")
 	}
-	phase, err := wfl.Install(ctx, workflows.NewWorkflowProxy(wfIdentifierName, wt, lifecycleStep))
+	err = wfl.Install(ctx, workflows.NewWorkflowProxy(wfIdentifierName, wt, lifecycleStep))
 	if err != nil {
-		return phase, err
+		return "", err
 	}
-	r.recorder.Event(addon, "Normal", "Submitted", fmt.Sprintf("Submitted %s workflow %s/%s as phase %s.", strings.Title(string(lifecycleStep)), addon.Namespace, wfIdentifierName, phase))
-	return phase, nil
+	r.recorder.Event(addon, "Normal", "Submitted", fmt.Sprintf("Submitted %s workflow %s/%s.", strings.Title(string(lifecycleStep)), addon.Namespace, wfIdentifierName))
+	return "", nil
 }
 
 func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1alpha1.Addon) error {
@@ -406,19 +408,25 @@ func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1
 	return nil
 }
 
+// executePrereqAndInstall kicks off Prereq/Install workflows and sets ONLY Failed/Succeeded as statuses
 func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
 	// Execute PreReq workflow
-	prereqsPhase, err := r.runWorkflow(ctx, addonmgrv1alpha1.Prereqs, instance, wfl)
-	if err != nil {
-		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
-		r.recorder.Event(instance, "Warning", "Failed", reason)
-		log.Error(err, "Addon prereqs workflow failed.")
-		_ = instance.SetPrereqStatus(addonmgrv1alpha1.Failed, reason)
+	if !instance.Status.Lifecycle.Prereqs.Completed() {
+		prereqsPhase, err := r.runWorkflow(ctx, addonmgrv1alpha1.Prereqs, instance, wfl)
+		if err != nil {
+			reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
+			r.recorder.Event(instance, "Warning", "Failed", reason)
+			log.Error(err, "Addon prereqs workflow failed.")
+			instance.SetPrereqStatus(addonmgrv1alpha1.Failed, reason)
 
-		return err
+			return err
+		}
+		if prereqsPhase.Succeeded() {
+			instance.SetPrereqStatus(addonmgrv1alpha1.Succeeded)
+		}
 	}
-	_ = instance.SetPrereqStatus(prereqsPhase)
 
+	// Validate and Install workflow
 	if instance.Status.Lifecycle.Prereqs.Succeeded() {
 		if err := r.validateSecrets(ctx, instance); err != nil {
 			reason := fmt.Sprintf("Addon %s/%s could not validate secrets. %v", instance.Namespace, instance.Name, err)
@@ -438,7 +446,9 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 
 			return err
 		}
-		instance.SetInstallStatus(phase)
+		if phase.Succeeded() {
+			instance.SetInstallStatus(addonmgrv1alpha1.Succeeded)
+		}
 	}
 
 	return nil
