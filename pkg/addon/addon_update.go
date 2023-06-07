@@ -148,13 +148,8 @@ func (c *AddonUpdater) UpdateAddonStatusLifecycleFromWorkflow(ctx context.Contex
 		reason = wf.Status.Message
 	}
 
-	if lifecycle == addonmgrv1alpha1.Prereqs {
-		err := existingAddon.SetPrereqStatus(phase, reason)
-		if err != nil {
-			return fmt.Errorf("failed to update prereqs status. %w", err)
-		}
-	} else {
-		existingAddon.SetInstallStatus(phase, reason)
+	if err := existingAddon.SetStatusByLifecyleStep(lifecycle, phase, reason); err != nil {
+		return fmt.Errorf("failed to update prereqs status. %w", err)
 	}
 
 	return c.UpdateStatus(ctx, c.log, existingAddon)

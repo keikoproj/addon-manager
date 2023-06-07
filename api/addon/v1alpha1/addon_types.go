@@ -380,6 +380,27 @@ func (a *Addon) CalculateChecksum() string {
 	return fmt.Sprintf("%x", adler32.Checksum([]byte(fmt.Sprintf("%+v", a.Spec))))
 }
 
+func (a *Addon) SetStatusByLifecyleStep(step LifecycleStep, phase ApplicationAssemblyPhase, reasons ...string) error {
+	var err error
+
+	switch step {
+	case Prereqs:
+		err = a.SetPrereqStatus(phase, reasons...)
+	case Install:
+		a.SetInstallStatus(phase, reasons...)
+	case Delete:
+		if phase == Succeeded {
+			a.SetInstallStatus(DeleteSucceeded, reasons...)
+		} else if phase == Failed {
+			a.SetInstallStatus(DeleteFailed, reasons...)
+		} else {
+			a.SetInstallStatus(phase, reasons...)
+		}
+	}
+
+	return err
+}
+
 // GetInstallStatus returns the install phase for addon
 func (a *Addon) GetInstallStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Installed
@@ -409,13 +430,11 @@ func (a *Addon) SetPrereqStatus(phase ApplicationAssemblyPhase, reasons ...strin
 	switch phase {
 	case Pending:
 		a.Status.Lifecycle.Prereqs = Pending
-		a.SetInstallStatus(Pending)
 	case Failed:
 		a.Status.Lifecycle.Prereqs = Failed
-		a.SetInstallStatus(Failed, reasons...)
+		a.Status.Reason = strings.Join(reasons, ", ")
 	case Succeeded:
 		a.Status.Lifecycle.Prereqs = Succeeded
-		a.SetInstallStatus(Pending)
 	default:
 		a.Status.Lifecycle.Prereqs = ""
 		return fmt.Errorf("unknown phase %v, is not supported for prereqs status", phase)
