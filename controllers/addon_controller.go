@@ -360,9 +360,20 @@ func ignoreNotFound(err error) error {
 	return err
 }
 
-// runWorkflow returns addonmgrv1alpha1.Succeeded only if template is empty
+// runWorkflow returns addonmgrv1alpha1.Succeeded only if template is empty or returns corresponding lifecycle status if already completed
 func (r *AddonReconciler) runWorkflow(ctx context.Context, lifecycleStep addonmgrv1alpha1.LifecycleStep, addon *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (addonmgrv1alpha1.ApplicationAssemblyPhase, error) {
 	log := r.Log.WithValues("addon", fmt.Sprintf("%s/%s", addon.Namespace, addon.Name))
+
+	if lifecycleStep == addonmgrv1alpha1.Prereqs && addon.GetPrereqStatus().Completed() {
+		log.Info("Lifecycle completed, skipping workflow execution", "lifecycleStep", lifecycleStep)
+		return addon.GetPrereqStatus(), nil
+	} else if lifecycleStep == addonmgrv1alpha1.Install && addon.GetInstallStatus().Completed() {
+		log.Info("Lifecycle completed, skipping workflow execution", "lifecycleStep", lifecycleStep)
+		return addon.GetInstallStatus(), nil
+	} else if lifecycleStep == addonmgrv1alpha1.Delete && (addon.Status.Lifecycle.Installed == addonmgrv1alpha1.DeleteFailed || addon.Status.Lifecycle.Installed == addonmgrv1alpha1.DeleteSucceeded) {
+		log.Info("Lifecycle completed, skipping workflow execution", "lifecycleStep", lifecycleStep)
+		return addon.GetInstallStatus(), nil
+	}
 
 	wt, err := addon.GetWorkflowType(lifecycleStep)
 	if err != nil {
@@ -411,19 +422,17 @@ func (r *AddonReconciler) validateSecrets(ctx context.Context, addon *addonmgrv1
 // executePrereqAndInstall kicks off Prereq/Install workflows and sets ONLY Failed/Succeeded as statuses
 func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) error {
 	// Execute PreReq workflow
-	if !instance.Status.Lifecycle.Prereqs.Completed() {
-		prereqsPhase, err := r.runWorkflow(ctx, addonmgrv1alpha1.Prereqs, instance, wfl)
-		if err != nil {
-			reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
-			r.recorder.Event(instance, "Warning", "Failed", reason)
-			log.Error(err, "Addon prereqs workflow failed.")
-			instance.SetPrereqStatus(addonmgrv1alpha1.Failed, reason)
+	prereqsPhase, err := r.runWorkflow(ctx, addonmgrv1alpha1.Prereqs, instance, wfl)
+	if err != nil {
+		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
+		r.recorder.Event(instance, "Warning", "Failed", reason)
+		log.Error(err, "Addon prereqs workflow failed.")
+		instance.SetPrereqStatus(addonmgrv1alpha1.Failed, reason)
 
-			return err
-		}
-		if prereqsPhase.Succeeded() {
-			instance.SetPrereqStatus(addonmgrv1alpha1.Succeeded)
-		}
+		return err
+	}
+	if prereqsPhase.Succeeded() {
+		instance.SetPrereqStatus(addonmgrv1alpha1.Succeeded)
 	}
 
 	// Validate and Install workflow
