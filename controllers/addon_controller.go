@@ -154,7 +154,6 @@ func (r *AddonReconciler) execAddon(ctx context.Context, log logr.Logger, instan
 			reason := fmt.Sprintf("Addon %s/%s could not be finalized. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Failed to finalize addon.")
-			instance.Status.Reason = reason
 
 			return reconcile.Result{}, err
 		}
@@ -251,8 +250,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		instance.ClearStatus()
 
 		log.Info("Checksum changed, addon will be installed...")
-		instance.SetPrereqStatus(addonmgrv1alpha1.Pending)
-		instance.SetInstallStatus(addonmgrv1alpha1.Pending)
+		instance.SetPrereqAndInstallStatuses(addonmgrv1alpha1.Pending)
 		log.Info("Requeue to set pending status")
 		return reconcile.Result{Requeue: true}, nil
 	}
@@ -431,7 +429,6 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 		reason := fmt.Sprintf("Addon %s/%s prereqs failed. %v", instance.Namespace, instance.Name, err)
 		r.recorder.Event(instance, "Warning", "Failed", reason)
 		log.Error(err, "Addon prereqs workflow failed.")
-		instance.Status.Reason = reason
 
 		return err
 	}
@@ -452,12 +449,11 @@ func (r *AddonReconciler) executePrereqAndInstall(ctx context.Context, log logr.
 			reason := fmt.Sprintf("Addon %s/%s could not be installed due to error. %v", instance.Namespace, instance.Name, err)
 			r.recorder.Event(instance, "Warning", "Failed", reason)
 			log.Error(err, "Addon install workflow failed.")
-			instance.Status.Reason = reason
 
 			return err
 		}
 	} else if instance.Status.Lifecycle.Prereqs.Failed() {
-		instance.SetInstallStatus(addonmgrv1alpha1.Failed) // reason already set in SetPrereqStatus(Failed)
+		instance.SetInstallStatus(addonmgrv1alpha1.Failed) // reason already set in SetPrereqAndInstallStatuses(Failed)
 	}
 
 	return nil

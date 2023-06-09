@@ -385,7 +385,7 @@ func (a *Addon) SetStatusByLifecyleStep(step LifecycleStep, phase ApplicationAss
 
 	switch step {
 	case Prereqs:
-		err = a.SetPrereqStatus(phase, reasons...)
+		err = a.SetPrereqAndInstallStatuses(phase, reasons...)
 	case Install:
 		a.SetInstallStatus(phase, reasons...)
 	case Delete:
@@ -424,17 +424,19 @@ func (a *Addon) GetPrereqStatus() ApplicationAssemblyPhase {
 	return a.Status.Lifecycle.Prereqs
 }
 
-// SetPrereqStatus sets the prereq phase for addon
-func (a *Addon) SetPrereqStatus(phase ApplicationAssemblyPhase, reasons ...string) error {
+// SetPrereqAndInstallStatuses sets the prereq and install phases for addon
+func (a *Addon) SetPrereqAndInstallStatuses(phase ApplicationAssemblyPhase, reasons ...string) error {
 
 	switch phase {
 	case Pending:
 		a.Status.Lifecycle.Prereqs = Pending
+		a.SetInstallStatus(Pending)
 	case Failed:
 		a.Status.Lifecycle.Prereqs = Failed
-		a.Status.Reason = strings.Join(reasons, ", ")
+		a.SetInstallStatus(Failed, reasons...)
 	case Succeeded:
 		a.Status.Lifecycle.Prereqs = Succeeded
+		a.SetInstallStatus(Pending)
 	default:
 		a.Status.Lifecycle.Prereqs = ""
 		return fmt.Errorf("unknown phase %v, is not supported for prereqs status", phase)
