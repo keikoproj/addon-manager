@@ -563,6 +563,8 @@ func (r *AddonReconciler) Finalize(ctx context.Context, addon *addonmgrv1alpha1.
 	if removeFinalizer {
 		controllerutil.RemoveFinalizer(addon, finalizerName)
 		if err := r.Update(ctx, addon); err != nil {
+			reason := fmt.Sprintf("Addon %s/%s could not be deleted, %v", addon.Namespace, addon.Name, err)
+			addon.SetInstallStatus(addonmgrv1alpha1.DeleteFailed, reason)
 			return err
 		}
 	}
