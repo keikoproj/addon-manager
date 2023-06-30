@@ -393,10 +393,9 @@ func TestWorkflowLifecycle_Install_Resources(t *testing.T) {
 		wfName := addon.GetFormattedWorkflowName(lifecycle)
 		wt, _ := addon.GetWorkflowType(lifecycle)
 		wp := NewWorkflowProxy(wfName, wt, lifecycle)
-		phase, err := wfl.Install(context.Background(), wp)
 
+		err := wfl.Install(context.Background(), wp)
 		g.Expect(err).To(Not(HaveOccurred()))
-		g.Expect(phase).To(Equal(v1alpha1.Pending))
 
 		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
@@ -532,10 +531,8 @@ func TestWorkflowLifecycle_Install_Artifacts(t *testing.T) {
 		wt, _ := addon.GetWorkflowType(lifecycle)
 		wp := NewWorkflowProxy(wfName, wt, lifecycle)
 
-		phase, err := wfl.Install(context.Background(), wp)
-
+		err := wfl.Install(context.Background(), wp)
 		g.Expect(err).To(Not(HaveOccurred()))
-		g.Expect(phase).To(Equal(v1alpha1.Pending))
 
 		wf, err := wfcli.ArgoprojV1alpha1().Workflows("default").Get(context.TODO(), wfName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
@@ -633,10 +630,9 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowType(t *testing.T) {
 	// Empty workflow type should fail
 	wt := &v1alpha1.WorkflowType{}
 	wp := NewWorkflowProxy("addon-wf-test", wt, v1alpha1.Install)
-	phase, err := wfl.Install(context.Background(), wp)
 
+	err := wfl.Install(context.Background(), wp)
 	g.Expect(err).To(HaveOccurred())
-	g.Expect(phase).To(Equal(v1alpha1.Failed))
 }
 
 // Test that a workflow template missing spec will fail
@@ -673,10 +669,8 @@ func TestWorkflowLifecycle_Install_InvalidWorkflowTemplate(t *testing.T) {
 	}
 	wp := NewWorkflowProxy("addon-wf-test", wt, v1alpha1.Install)
 
-	phase, err := wfl.Install(context.Background(), wp)
-
+	err := wfl.Install(context.Background(), wp)
 	g.Expect(err).To(HaveOccurred())
-	g.Expect(phase).To(Equal(v1alpha1.Failed))
 }
 
 func TestWorkflowLifecycle_Delete_NotExists(t *testing.T) {

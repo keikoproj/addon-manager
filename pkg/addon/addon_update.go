@@ -70,6 +70,8 @@ func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon 
 		return err
 	}
 
+	log.Info("successfully updated addon statuses", "prereqs_status", addon.GetPrereqStatus(), "installed_status", addon.GetInstallStatus())
+
 	// Always update the version cache
 	c.addAddonToCache(log, addon)
 
@@ -146,13 +148,8 @@ func (c *AddonUpdater) UpdateAddonStatusLifecycleFromWorkflow(ctx context.Contex
 		reason = wf.Status.Message
 	}
 
-	if lifecycle == addonmgrv1alpha1.Prereqs {
-		err := existingAddon.SetPrereqStatus(phase, reason)
-		if err != nil {
-			return fmt.Errorf("failed to update prereqs status. %w", err)
-		}
-	} else {
-		existingAddon.SetInstallStatus(phase, reason)
+	if err := existingAddon.SetStatusByLifecyleStep(lifecycle, phase, reason); err != nil {
+		return fmt.Errorf("failed to update prereqs status. %w", err)
 	}
 
 	return c.UpdateStatus(ctx, c.log, existingAddon)
