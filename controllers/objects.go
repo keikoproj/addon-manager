@@ -10,12 +10,11 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
 func ObserveService(cli client.Client, namespace string, selector labels.Selector) ([]addonmgrv1alpha1.ObjectStatus, error) {
-	services := &v1.ServiceList{}
+	services := &corev1.ServiceList{}
 	err := cli.List(context.TODO(), services, &client.ListOptions{
 		LabelSelector: selector,
 		Namespace:     namespace,
