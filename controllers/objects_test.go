@@ -122,11 +122,27 @@ func TestObserveCronJob(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		jobs    []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{
+			name: "Found CronJob",
+			jobs: []runtime.Object{
+				&batchv1.CronJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "test",
+						Namespace:       "default",
+						OwnerReferences: nil,
+					},
+				},
+			},
+			args:    args{cli: fakeCli, namespace: "default", selector: labels.Everything()},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "test", Kind: "CronJob", Group: "batch/v1", Status: ""}},
+			wantErr: false,
+		},
+		{"No Job", []runtime.Object{}, args{fakeCli, "NOT-FOUND", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
