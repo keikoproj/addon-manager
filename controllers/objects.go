@@ -9,7 +9,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -66,7 +65,7 @@ func ObserveJob(cli client.Client, namespace string, selector labels.Selector) (
 }
 
 func ObserveCronJob(cli client.Client, namespace string, selector labels.Selector) ([]addonmgrv1alpha1.ObjectStatus, error) {
-	cronJobs := &batchv1beta1.CronJobList{}
+	cronJobs := &batchv1.CronJobList{}
 	err := cli.List(context.TODO(), cronJobs, &client.ListOptions{
 		LabelSelector: selector,
 		Namespace:     namespace,
@@ -75,13 +74,13 @@ func ObserveCronJob(cli client.Client, namespace string, selector labels.Selecto
 		return nil, fmt.Errorf("failed to list cronjobs %v", err)
 	}
 	if cronJobs == nil {
-		return nil, fmt.Errorf("batchv1beta1.CronJobList is empty")
+		return nil, fmt.Errorf("batchv1.CronJobList is empty")
 	}
 	res := []addonmgrv1alpha1.ObjectStatus{}
 	for _, cronJob := range cronJobs.Items {
 		res = append(res, addonmgrv1alpha1.ObjectStatus{
 			Kind:  "CronJob",
-			Group: "batch/v1beta1",
+			Group: "batch/v1",
 			Name:  cronJob.GetName(),
 			Link:  cronJob.GetSelfLink(),
 		})

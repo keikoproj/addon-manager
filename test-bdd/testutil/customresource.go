@@ -19,7 +19,7 @@ import (
 	"io"
 	"os"
 
-	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextcs "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,7 +35,7 @@ func CreateCRD(kubeClient apiextcs.Interface, relativePath string) error {
 		return err
 	}
 
-	_, err = kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(ctx, CRD.Name, metav1.GetOptions{})
+	_, err = kubeClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, CRD.Name, metav1.GetOptions{})
 
 	if err == nil {
 		err = KubectlApply(relativePath)
@@ -44,7 +44,7 @@ func CreateCRD(kubeClient apiextcs.Interface, relativePath string) error {
 		}
 
 	} else {
-		_, err = kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(ctx, CRD, metav1.CreateOptions{})
+		_, err = kubeClient.ApiextensionsV1().CustomResourceDefinitions().Create(ctx, CRD, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -61,7 +61,7 @@ func DeleteCRD(kubeClient apiextcs.Interface, relativePath string) error {
 		return err
 	}
 
-	if err := kubeClient.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(ctx, CRD.Name, metav1.DeleteOptions{}); err != nil {
+	if err := kubeClient.ApiextensionsV1().CustomResourceDefinitions().Delete(ctx, CRD.Name, metav1.DeleteOptions{}); err != nil {
 		return err
 	}
 
