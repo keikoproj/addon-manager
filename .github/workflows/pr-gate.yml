@@ -30,7 +30,7 @@ jobs:
           make cover
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@3
         with:
           file: ./cover.out
 
