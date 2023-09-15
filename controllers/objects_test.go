@@ -32,11 +32,12 @@ func TestObserveService(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,9 +71,9 @@ func TestObserveJob(t *testing.T) {
 		selector  labels.Selector
 	}
 	tests := []struct {
-		name string
-		jobs []runtime.Object
-		args struct {
+		name    string
+		objects []runtime.Object
+		args    struct {
 			cli       client.Client
 			namespace string
 			selector  labels.Selector
@@ -82,7 +83,7 @@ func TestObserveJob(t *testing.T) {
 	}{
 		{
 			name: "Found Job",
-			jobs: []runtime.Object{
+			objects: []runtime.Object{
 				&batchv1.Job{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "test",
@@ -122,14 +123,14 @@ func TestObserveCronJob(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		jobs    []runtime.Object
+		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
 		{
 			name: "Found CronJob",
-			jobs: []runtime.Object{
+			objects: []runtime.Object{
 				&batchv1.CronJob{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "test",
@@ -169,11 +170,12 @@ func TestObserveDeployment(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -200,11 +202,12 @@ func TestObserveDaemonSet(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -231,11 +234,12 @@ func TestObserveReplicaSet(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -262,11 +266,12 @@ func TestObserveStatefulSet(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -293,11 +298,12 @@ func TestObserveNamespace(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
