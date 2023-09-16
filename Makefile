@@ -4,7 +4,7 @@ IMG ?= keikoproj/addon-manager:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.25
 
-KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.25.12
+KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.25.11
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKGS := $(shell go list ./...|grep -v test-)
