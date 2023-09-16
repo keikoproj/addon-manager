@@ -6,11 +6,14 @@ import (
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	runtime "k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -19,11 +22,74 @@ func init() {
 	_ = addonmgrv1alpha1.AddToScheme(clientgoscheme.Scheme)
 	_ = wfv1.AddToScheme(clientgoscheme.Scheme)
 	_ = clientgoscheme.AddToScheme(clientgoscheme.Scheme)
+
 }
+
+// Declare test objects to be used in tests
+var (
+	objects = []runtime.Object{
+		&corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestService",
+				Namespace:       "default",
+				OwnerReferences: nil,
+			},
+		},
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestJob",
+				Namespace:       "default",
+				OwnerReferences: nil,
+			},
+		},
+		&batchv1.CronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestCronJob",
+				Namespace:       "default",
+				OwnerReferences: nil,
+			},
+		},
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestDeployment",
+				Namespace:       "default",
+				OwnerReferences: nil,
+			},
+		},
+		&appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestDaemonSet",
+				Namespace:       "default",
+				OwnerReferences: nil,
+			},
+		},
+		&appsv1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestReplicaSet",
+				Namespace:       "default",
+				OwnerReferences: nil,
+			},
+		},
+		&appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestStatefulSet",
+				Namespace:       "default",
+				OwnerReferences: nil,
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestNamespace",
+				Namespace:       "TestNamespace",
+				OwnerReferences: nil,
+			},
+		},
+	}
+)
 
 func TestObserveService(t *testing.T) {
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli       client.Client
@@ -32,12 +98,17 @@ func TestObserveService(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{
+			name:    "Found-Service",
+			args:    args{cli: fakeCli, namespace: "default", selector: labels.Everything()},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestService", Kind: "Service", Group: "", Status: ""}},
+			wantErr: false,
+		},
+		{"No-Service", args{fakeCli, "invalid-namespace", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -55,15 +126,7 @@ func TestObserveService(t *testing.T) {
 
 func TestObserveJob(t *testing.T) {
 
-	j := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            "test",
-			Namespace:       "default",
-			OwnerReferences: nil,
-		},
-	}
-
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(j).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli       client.Client
@@ -71,9 +134,8 @@ func TestObserveJob(t *testing.T) {
 		selector  labels.Selector
 	}
 	tests := []struct {
-		name    string
-		objects []runtime.Object
-		args    struct {
+		name string
+		args struct {
 			cli       client.Client
 			namespace string
 			selector  labels.Selector
@@ -82,21 +144,12 @@ func TestObserveJob(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Found Job",
-			objects: []runtime.Object{
-				&batchv1.Job{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "test",
-						Namespace:       "default",
-						OwnerReferences: nil,
-					},
-				},
-			},
+			name:    "Found-Job",
 			args:    args{cli: fakeCli, namespace: "default", selector: labels.Everything()},
-			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "test", Kind: "Job", Group: "batch/v1", Status: ""}},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestJob", Kind: "Job", Group: "batch/v1", Status: ""}},
 			wantErr: false,
 		},
-		{"No Job", []runtime.Object{}, args{fakeCli, "NOT-FOUND", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"No-Job", args{fakeCli, "invalid-namespace", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -114,7 +167,7 @@ func TestObserveJob(t *testing.T) {
 
 func TestObserveCronJob(t *testing.T) {
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli       client.Client
@@ -123,27 +176,17 @@ func TestObserveCronJob(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
 		{
-			name: "Found CronJob",
-			objects: []runtime.Object{
-				&batchv1.CronJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "test",
-						Namespace:       "default",
-						OwnerReferences: nil,
-					},
-				},
-			},
+			name:    "Found-CronJob",
 			args:    args{cli: fakeCli, namespace: "default", selector: labels.Everything()},
-			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "test", Kind: "CronJob", Group: "batch/v1", Status: ""}},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestCronJob", Kind: "CronJob", Group: "batch/v1", Status: ""}},
 			wantErr: false,
 		},
-		{"No Job", []runtime.Object{}, args{fakeCli, "NOT-FOUND", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{"No-CronJob", args{fakeCli, "invalid-namespace", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -161,7 +204,7 @@ func TestObserveCronJob(t *testing.T) {
 
 func TestObserveDeployment(t *testing.T) {
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli       client.Client
@@ -170,12 +213,17 @@ func TestObserveDeployment(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{
+			name:    "Found-Deployment",
+			args:    args{cli: fakeCli, namespace: "default", selector: labels.Everything()},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestDeployment", Kind: "Deployment", Group: "apps/v1", Status: ""}},
+			wantErr: false,
+		},
+		// {"No-Deployment", args{fakeCli, "invalid-namespace", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -193,7 +241,7 @@ func TestObserveDeployment(t *testing.T) {
 
 func TestObserveDaemonSet(t *testing.T) {
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli       client.Client
@@ -202,12 +250,16 @@ func TestObserveDaemonSet(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{
+			name:    "Found-DaemonSet",
+			args:    args{cli: fakeCli, namespace: "default", selector: labels.Everything()},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestDaemonSet", Kind: "DaemonSet", Group: "apps/v1", Status: ""}},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -225,7 +277,7 @@ func TestObserveDaemonSet(t *testing.T) {
 
 func TestObserveReplicaSet(t *testing.T) {
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli       client.Client
@@ -234,12 +286,16 @@ func TestObserveReplicaSet(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{
+			name:    "Found-ReplicaSet",
+			args:    args{cli: fakeCli, namespace: "default", selector: labels.Everything()},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestReplicaSet", Kind: "ReplicaSe", Group: "apps/v1", Status: ""}},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -257,7 +313,7 @@ func TestObserveReplicaSet(t *testing.T) {
 
 func TestObserveStatefulSet(t *testing.T) {
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli      client.Client
@@ -266,12 +322,16 @@ func TestObserveStatefulSet(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{
+			name:    "Found-StatefulSet",
+			args:    args{cli: fakeCli, name: "TestStatefulSet", selector: labels.Everything()},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestStatefulSet", Kind: "StatefulSet", Group: "apps/v1", Status: ""}},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -289,7 +349,7 @@ func TestObserveStatefulSet(t *testing.T) {
 
 func TestObserveNamespace(t *testing.T) {
 
-	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	fakeCli := fake.NewClientBuilder().WithScheme(testScheme).WithRuntimeObjects(objects...).Build()
 
 	type args struct {
 		cli      client.Client
@@ -298,12 +358,16 @@ func TestObserveNamespace(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		objects []runtime.Object
 		args    args
 		want    []addonmgrv1alpha1.ObjectStatus
 		wantErr bool
 	}{
-		{"test1", []runtime.Object{}, args{fakeCli, "default", labels.Everything()}, []addonmgrv1alpha1.ObjectStatus{}, false},
+		{
+			name:    "Found-Namepspace",
+			args:    args{cli: fakeCli, name: "TestNamespace", selector: labels.Everything()},
+			want:    []addonmgrv1alpha1.ObjectStatus{{Link: "", Name: "TestNamespace", Kind: "Namespace", Group: "", Status: ""}},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
