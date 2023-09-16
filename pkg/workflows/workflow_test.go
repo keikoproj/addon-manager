@@ -140,7 +140,7 @@ spec:
           name: event-router-cm
           namespace: "{{workflow.parameters.namespace}}"
         ---
-        apiVersion: rbac.authorization.k8s.io/v1beta1
+        apiVersion: rbac.authorization.k8s.io/v1
         kind: ClusterRole
         metadata:
           name: event-router-cr
@@ -149,7 +149,7 @@ spec:
           resources: ["events"]
           verbs: ["get", "watch", "list"]
         ---
-        apiVersion: rbac.authorization.k8s.io/v1beta1
+        apiVersion: rbac.authorization.k8s.io/v1
         kind: ClusterRoleBinding
         metadata:
           name: event-router-crb
@@ -197,7 +197,7 @@ spec:
                   name: cluster-autoscaler
                   namespace: "{{workflow.parameters.namespace}}"
                 ---
-                apiVersion: rbac.authorization.k8s.io/v1beta1
+                apiVersion: rbac.authorization.k8s.io/v1
                 kind: ClusterRole
                 metadata:
                   name: cluster-autoscaler

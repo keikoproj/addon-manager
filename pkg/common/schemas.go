@@ -32,7 +32,7 @@ func AddonGVR() schema.GroupVersionResource {
 func CRDGVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
 		Group:    "apiextensions.k8s.io",
-		Version:  "v1beta1",
+		Version:  "v1",
 		Resource: "customresourcedefinitions",
 	}
 }

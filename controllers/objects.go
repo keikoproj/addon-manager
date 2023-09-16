@@ -9,14 +9,12 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
 func ObserveService(cli client.Client, namespace string, selector labels.Selector) ([]addonmgrv1alpha1.ObjectStatus, error) {
-	services := &v1.ServiceList{}
+	services := &corev1.ServiceList{}
 	err := cli.List(context.TODO(), services, &client.ListOptions{
 		LabelSelector: selector,
 		Namespace:     namespace,
@@ -24,9 +22,7 @@ func ObserveService(cli client.Client, namespace string, selector labels.Selecto
 	if err != nil {
 		return nil, fmt.Errorf("failed to list services %v", err)
 	}
-	if services == nil {
-		return nil, fmt.Errorf("services is empty")
-	}
+
 	res := []addonmgrv1alpha1.ObjectStatus{}
 	for _, service := range services.Items {
 		if service.ObjectMeta.Namespace == namespace {
@@ -50,9 +46,7 @@ func ObserveJob(cli client.Client, namespace string, selector labels.Selector) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cronjobs %v", err)
 	}
-	if jobs == nil {
-		return nil, fmt.Errorf("batchv1.JobList is empty")
-	}
+
 	res := []addonmgrv1alpha1.ObjectStatus{}
 	for _, job := range jobs.Items {
 		res = append(res, addonmgrv1alpha1.ObjectStatus{
@@ -66,7 +60,7 @@ func ObserveJob(cli client.Client, namespace string, selector labels.Selector) (
 }
 
 func ObserveCronJob(cli client.Client, namespace string, selector labels.Selector) ([]addonmgrv1alpha1.ObjectStatus, error) {
-	cronJobs := &batchv1beta1.CronJobList{}
+	cronJobs := &batchv1.CronJobList{}
 	err := cli.List(context.TODO(), cronJobs, &client.ListOptions{
 		LabelSelector: selector,
 		Namespace:     namespace,
@@ -74,14 +68,12 @@ func ObserveCronJob(cli client.Client, namespace string, selector labels.Selecto
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cronjobs %v", err)
 	}
-	if cronJobs == nil {
-		return nil, fmt.Errorf("batchv1beta1.CronJobList is empty")
-	}
+
 	res := []addonmgrv1alpha1.ObjectStatus{}
 	for _, cronJob := range cronJobs.Items {
 		res = append(res, addonmgrv1alpha1.ObjectStatus{
 			Kind:  "CronJob",
-			Group: "batch/v1beta1",
+			Group: "batch/v1",
 			Name:  cronJob.GetName(),
 			Link:  cronJob.GetSelfLink(),
 		})
@@ -95,9 +87,6 @@ func ObserveDeployment(cli client.Client, namespace string, selector labels.Sele
 		LabelSelector: selector})
 	if err != nil {
 		return nil, err
-	}
-	if deployments == nil {
-		return nil, fmt.Errorf("failed to list deployments")
 	}
 
 	res := []addonmgrv1alpha1.ObjectStatus{}
@@ -119,9 +108,6 @@ func ObserveDaemonSet(cli client.Client, namespace string, selector labels.Selec
 	if err != nil {
 		return nil, err
 	}
-	if daemonSets == nil {
-		return nil, fmt.Errorf("failed to list daemonSets")
-	}
 
 	res := []addonmgrv1alpha1.ObjectStatus{}
 	for _, deployment := range daemonSets.Items {
@@ -141,9 +127,6 @@ func ObserveReplicaSet(cli client.Client, namespace string, selector labels.Sele
 		LabelSelector: selector})
 	if err != nil {
 		return nil, err
-	}
-	if replicaSets == nil {
-		return nil, fmt.Errorf("failed to list replicaSets")
 	}
 
 	res := []addonmgrv1alpha1.ObjectStatus{}
@@ -165,9 +148,6 @@ func ObserveStatefulSet(cli client.Client, name string, selector labels.Selector
 	if err != nil {
 		return nil, err
 	}
-	if statefulSets == nil {
-		return nil, fmt.Errorf("failed to list replicaSets")
-	}
 
 	res := []addonmgrv1alpha1.ObjectStatus{}
 	for _, statefulSet := range statefulSets.Items {
@@ -187,9 +167,6 @@ func ObserveNamespace(cli client.Client, name string, selector labels.Selector) 
 		LabelSelector: selector})
 	if err != nil {
 		return nil, err
-	}
-	if namespaces == nil {
-		return nil, fmt.Errorf("failed to list namespace")
 	}
 
 	res := []addonmgrv1alpha1.ObjectStatus{}
