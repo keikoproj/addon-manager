@@ -4,7 +4,8 @@ coverage:
   precision: 2
 
 ignore:
-  - "**/zz_generated.*"
+  - "**/zz_generated.*" # generated code
   - "bin"
   - "config"
   - "hack"
+  - "pkg/addon/client" # generated code

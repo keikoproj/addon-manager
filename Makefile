@@ -2,9 +2,9 @@
 # Image URL to use all building/pushing image targets
 IMG ?= keikoproj/addon-manager:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.24
+ENVTEST_K8S_VERSION = 1.25
 
-KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.24.7
+KUBERNETES_LOCAL_CLUSTER_VERSION ?= --image=kindest/node:v1.25.11
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKGS := $(shell go list ./...|grep -v test-)
@@ -134,12 +134,12 @@ ifeq (, $(shell which code-generator))
 	set -e ;\
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	curl -L -o code-generator.zip https://github.com/kubernetes/code-generator/archive/refs/tags/v0.21.5.zip ;\
+	curl -L -o code-generator.zip https://github.com/kubernetes/code-generator/archive/refs/tags/v0.25.12.zip ;\
 	unzip code-generator.zip ;\
-	mv code-generator-0.21.5 $(GOPATH)/bin/ ;\
+	mv code-generator-0.25.12 $(GOPATH)/bin/ ;\
 	rm -rf code-generator.zip ;\
 	}
-CODE_GENERATOR_GEN=$(GOBIN)/code-generator-0.21.5
+CODE_GENERATOR_GEN=$(GOBIN)/code-generator-0.25.12
 else
 CODE_GENERATOR_GEN=$(shell which code-generator)
 endif
@@ -157,8 +157,8 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.0.3
-CONTROLLER_TOOLS_VERSION ?= v0.12.0
+KUSTOMIZE_VERSION ?= v5.1.1
+CONTROLLER_TOOLS_VERSION ?= v0.12.1
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
