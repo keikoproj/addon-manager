@@ -132,3 +132,7 @@ docker_manifests:
     image_templates:
       - "keikoproj/addon-manager:v{{ .Version }}-amd64"
       - "keikoproj/addon-manager:v{{ .Version }}-arm64"
+  - name_template: "keikoproj/addon-manager:latest"
+    image_templates:
+      - "keikoproj/addon-manager:v{{ .Version }}-amd64"
+      - "keikoproj/addon-manager:v{{ .Version }}-arm64"
