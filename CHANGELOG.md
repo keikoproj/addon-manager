@@ -1,6 +1,50 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.8.0"></a>
+## [v0.8.0] - 2023-09-19
+
+## What's Changed
+* Unit tests for helpers.go by @estela-ramirez in https://github.com/keikoproj/addon-manager/pull/225
+* Bump actions/setup-go from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/227
+* Bump golang.org/x/text from 0.3.6 to 0.3.8 by @dependabot in https://github.com/keikoproj/addon-manager/pull/216
+* go mod tidy -compat=1.17 by @kevdowney in https://github.com/keikoproj/addon-manager/pull/237
+* Bump github.com/Masterminds/semver/v3 from 3.2.0 to 3.2.1 by @dependabot in https://github.com/keikoproj/addon-manager/pull/236
+* update GH actions/checkout to use v3 by @kevdowney in https://github.com/keikoproj/addon-manager/pull/238
+* Cleanup go.mod by @kevdowney in https://github.com/keikoproj/addon-manager/pull/239
+* Bump github.com/spf13/cobra from 1.6.1 to 1.7.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/241
+* Bump golang.org/x/net from 0.0.0-20211209124913-491a49abca63 to 0.10.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/240
+* updating argo workflows controller to v3.4.8 and Go to 1.19 by @ccpeng in https://github.com/keikoproj/addon-manager/pull/244
+* Local build fixes by @kevdowney in https://github.com/keikoproj/addon-manager/pull/250
+* chore: refactoring so that addon controller flow won't inquire from workflow obj by @ccpeng in https://github.com/keikoproj/addon-manager/pull/251
+* fix: update cronjob to non-deprecated version by @backjo in https://github.com/keikoproj/addon-manager/pull/256
+* Bump k8s.io/apiextensions-apiserver from 0.23.5 to 0.23.17 by @dependabot in https://github.com/keikoproj/addon-manager/pull/245
+* Bump github.com/go-logr/logr from 1.2.3 to 1.2.4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/247
+* Bump k8s.io/api from 0.24.3 to 0.24.17 by @dependabot in https://github.com/keikoproj/addon-manager/pull/260
+* Bump k8s.io/client-go from 0.24.3 to 0.24.17 by @dependabot in https://github.com/keikoproj/addon-manager/pull/261
+* Bump docker/login-action from 2 to 3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/268
+* Bump goreleaser/goreleaser-action from 4 to 5 by @dependabot in https://github.com/keikoproj/addon-manager/pull/266
+* Bump docker/setup-buildx-action from 2 to 3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/267
+* Bump codecov/codecov-action from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/265
+* chore: ignore sigs.k8s.io minor version by @kevdowney in https://github.com/keikoproj/addon-manager/pull/269
+* Bump docker/setup-qemu-action from 2 to 3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/264
+* Bump actions/checkout from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/270
+* Downgrade to codecov-action@v3 by @tekenstam in https://github.com/keikoproj/addon-manager/pull/274
+* Bump github.com/argoproj/argo-workflows/v3 from 3.4.8 to 3.4.11 by @dependabot in https://github.com/keikoproj/addon-manager/pull/271
+* Bump github.com/onsi/gomega from 1.19.0 to 1.27.10 by @dependabot in https://github.com/keikoproj/addon-manager/pull/273
+* Bump golang.org/x/net from 0.10.0 to 0.15.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/272
+* Update client-go to v0.25.12 by @tekenstam in https://github.com/keikoproj/addon-manager/pull/275
+* Update Kubernetes runtime and build tools by @tekenstam in https://github.com/keikoproj/addon-manager/pull/277
+* Bump k8s.io/apimachinery from 0.25.12 to 0.25.14 by @dependabot in https://github.com/keikoproj/addon-manager/pull/278
+* Bump k8s.io/api from 0.25.12 to 0.25.14 by @dependabot in https://github.com/keikoproj/addon-manager/pull/281
+
+## New Contributors
+* @estela-ramirez made their first contribution in https://github.com/keikoproj/addon-manager/pull/225
+* @backjo made their first contribution in https://github.com/keikoproj/addon-manager/pull/256
+* @tekenstam made their first contribution in https://github.com/keikoproj/addon-manager/pull/274
+
+**Full Changelog**: https://github.com/keikoproj/addon-manager/compare/v0.7.2...v0.8.0-rc.3
+
 <a name="v0.7.2"></a>
 ## [v0.7.2] - 2023-03-10
 ### Fixed
@@ -169,7 +213,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.8.0...HEAD
+[v0.8.0]: https://github.com/keikoproj/addon-manager/compare/v0.7.2...v0.8.0
 [v0.7.2]: https://github.com/keikoproj/addon-manager/compare/v0.7.1...v0.7.2
 [v0.7.1]: https://github.com/keikoproj/addon-manager/compare/v0.7.0...v0.7.1
 [v0.7.0]: https://github.com/keikoproj/addon-manager/compare/v0.6.2...v0.7.0
