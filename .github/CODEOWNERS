@@ -9,5 +9,5 @@
 *       @keikoproj/authorized-approvers
 
 # Admins own root and CI.
-.github/** @keikoproj/addon-manager-maintainers
-/*     @keikoproj/addon-manager-maintainers
+.github/** @keikoproj/keiko-admins @keikoproj/keiko-maintainers @keikoproj/addon-manager-maintainers
+/*     @keikoproj/keiko-admins @keikoproj/keiko-maintainers @keikoproj/addon-manager-maintainers
