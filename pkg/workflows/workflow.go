@@ -121,6 +121,7 @@ func (w *workflowLifecycle) Install(ctx context.Context, wp *WorkflowProxy) erro
 	}
 
 	w.injectInstanceId(wf)
+	w.addDefaultLabelsToResource(wf)
 
 	return w.submit(ctx, wf)
 }
