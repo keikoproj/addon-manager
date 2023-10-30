@@ -20,10 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
+	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
-	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -37,18 +35,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
-
-	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 )
 
 const (
@@ -242,6 +239,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 	instance.Status.Resources = make([]addonmgrv1alpha1.ObjectStatus, 0)
 
 	if changedStatus {
+		// Delete old workflows
+		if err := r.deleteOldWorkflows(ctx, log, instance); err != nil {
+			log.Error(err, "Failed to delete old workflows.")
+			return reconcile.Result{}, err
+		}
 		// Set ttl starttime if checksum has changed
 		instance.Status.StartTime = common.GetCurrentTimestamp()
 
@@ -345,6 +347,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 
 	if len(observed) > 0 {
 		instance.Status.Resources = observed
+	}
+
+	// In case workflow controller doesn't update addon status
+	if instance.GetInstallStatus().Running() {
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -532,6 +539,45 @@ func (r *AddonReconciler) validateChecksum(instance *addonmgrv1alpha1.Addon) (bo
 	}
 
 	return true, newCheckSum
+}
+
+func (r *AddonReconciler) deleteOldWorkflows(ctx context.Context, log logr.Logger, addon *addonmgrv1alpha1.Addon) error {
+	// Define the selector to get the workflows related to the addon
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			addonapiv1.ResourceDefaultOwnLabel: addon.Name,
+		},
+	}
+
+	selectorString, err := metav1.LabelSelectorAsSelector(&labelSelector)
+	if err != nil {
+		log.Info(fmt.Sprintf("unable to generate selector string for %+v", labelSelector))
+		return err
+	}
+	log.Info(fmt.Sprintf("deleting old workflows with selector %+v", selectorString))
+
+	// List the workflows
+	workflows, err := r.wfcli.ArgoprojV1alpha1().Workflows(addon.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selectorString.String(),
+	})
+	if err != nil {
+		log.Info(fmt.Sprintf("unable to list old workflows with selectorString %+v", selectorString.String()))
+		return err
+	}
+	log.Info(fmt.Sprintf("%d workflows found", len(workflows.Items)))
+	for _, workflow := range workflows.Items {
+		log.Info("found old workflow", "name", workflow.Name, "status", workflow.Status.Phase)
+	}
+
+	// Delete each workflow
+	for _, workflow := range workflows.Items {
+		if err := r.wfcli.ArgoprojV1alpha1().Workflows(addon.Namespace).Delete(ctx, workflow.Name, metav1.DeleteOptions{}); err != nil {
+			log.Info(fmt.Sprintf("unable to delete old workflow: %+v", workflow.Name))
+		}
+		log.Info(fmt.Sprintf("deleted old workflow: %+v", workflow.Name))
+	}
+
+	return nil
 }
 
 // Finalize runs finalizer for addon
