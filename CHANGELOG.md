@@ -1,6 +1,15 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.8.1"></a>
+## [v0.8.1] - 2023-10-30
+### Fixed
+- Remove old workflows on addon checksum change (#297)
+
+### Changed
+- Bump golang.org/x/net from 0.15.0 to 0.17.0 (#289)
+- Bump github.com/onsi/gomega from 1.27.10 to 1.28.0 (#286)
+
 <a name="v0.8.0"></a>
 ## [v0.8.0] - 2023-09-19
 
@@ -213,7 +222,8 @@
 ### Added
 - Initial Release of Addon Manager
 
-[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/keikoproj/addon-manager/compare/v0.8.1...HEAD
+[v0.8.1]: https://github.com/keikoproj/addon-manager/compare/v0.8.0...v0.8.1
 [v0.8.0]: https://github.com/keikoproj/addon-manager/compare/v0.7.2...v0.8.0
 [v0.7.2]: https://github.com/keikoproj/addon-manager/compare/v0.7.1...v0.7.2
 [v0.7.1]: https://github.com/keikoproj/addon-manager/compare/v0.7.0...v0.7.1
