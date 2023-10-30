@@ -20,10 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
+	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
-	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -37,18 +35,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
 	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
 	"github.com/keikoproj/addon-manager/pkg/addon"
 	"github.com/keikoproj/addon-manager/pkg/common"
 	"github.com/keikoproj/addon-manager/pkg/workflows"
-
-	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 )
 
 const (
@@ -350,6 +347,11 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 
 	if len(observed) > 0 {
 		instance.Status.Resources = observed
+	}
+
+	// In case workflow controller doesn't update addon status
+	if instance.GetInstallStatus().Running() {
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	return ctrl.Result{}, nil
