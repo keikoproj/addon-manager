@@ -90,6 +90,14 @@ var _ = Describe("AddonController", func() {
 				By("Verify addon has pending status")
 				Expect(instance.Status.Lifecycle.Installed).Should(Equal(v1alpha1.Pending))
 
+				By("Verify addon has prereqs workflow generated with checksum name")
+				wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+				var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
+				Eventually(func() error {
+					return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
+				}, timeout).Should(Succeed())
+				Expect(wfv1.GetName()).Should(Equal(wfName))
+
 				oldCheckSum := instance.Status.Checksum
 
 				//Update instance params for checksum validation
@@ -110,9 +118,18 @@ var _ = Describe("AddonController", func() {
 				By("Verify changing addon spec generates new checksum")
 				Expect(instance.Status.Checksum).ShouldNot(BeIdenticalTo(oldCheckSum))
 
+				By("Verify old prereqs workflow generated with old checksum name has been deleted")
+				Consistently(func() error {
+					if apierrors.IsNotFound(k8sClient.Get(context.TODO(), wfv1Key, wfv1)) {
+						return nil
+					}
+
+					return fmt.Errorf("old workflow was not deleted")
+				}, timeout).Should(Succeed())
+
 				By("Verify addon has prereqs workflow generated with new checksum name")
-				wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
-				var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
+				wfName = instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+				wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 				Eventually(func() error {
 					return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
 				}, timeout).Should(Succeed())
