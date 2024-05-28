@@ -1,10 +1,10 @@
-FROM --platform=$BUILDPLATFORM golang:1.19 as builder
+FROM --platform=$BUILDPLATFORM golang:1.21 as builder
 
 ARG TAG
 ARG COMMIT
 ARG REPO_INFO
 ARG DATE
-ARG TARGETOS TARGETARCH
+ARG TARGETOS=TARGETARCH
 WORKDIR /workspace
 
 ADD go.mod .

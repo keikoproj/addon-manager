@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/keikoproj/addon-manager/api/addon"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

@@ -62,7 +62,7 @@ func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon 
 			return err
 		}
 		addon.Status.DeepCopyInto(&currentAddon.Status)
-		return c.client.Status().Update(ctx, currentAddon, &client.UpdateOptions{})
+		return c.client.Status().Update(ctx, currentAddon)
 	})
 	if err != nil {
 		log.Error(err, "Addon status could not be updated.")

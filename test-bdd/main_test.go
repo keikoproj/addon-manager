@@ -20,11 +20,7 @@ import (
 	"os"
 	"testing"
 
-	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
-	"github.com/keikoproj/addon-manager/pkg/common"
-	"github.com/keikoproj/addon-manager/test-bdd/testutil"
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiextcs "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,14 +29,17 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/common"
+	"github.com/keikoproj/addon-manager/test-bdd/testutil"
 )
 
 var ctx = context.TODO()
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Addon Type Suite", []Reporter{junitReporter})
+	RunSpecs(t, "Addon Type Suite")
 }
 
 var _ = Describe("Addon Mgr should install CRD and Addon correctly", func() {
