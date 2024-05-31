@@ -20,13 +20,12 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -49,9 +48,7 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Controller Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -96,11 +93,11 @@ var _ = BeforeSuite(func() {
 		defer GinkgoRecover()
 		Expect(mgr.Start(ctx)).ToNot(HaveOccurred(), "failed to run manager")
 	}()
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	cancel()
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
-}, 60)
+})

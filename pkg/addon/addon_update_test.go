@@ -53,9 +53,6 @@ func TestUpdateAddonStatusLifecycleFromWorkflow(t *testing.T) {
 	testNamespace := "default"
 	testAddonName := "test-addon"
 
-	fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
-
-	updater := NewAddonUpdater(fakeRcdr, fakeCli, NewAddonVersionCacheClient(), ctrl.Log.WithName("test"))
 	testAddon := &addonmgrv1alpha1.Addon{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testAddonName,
@@ -74,6 +71,10 @@ func TestUpdateAddonStatusLifecycleFromWorkflow(t *testing.T) {
 			Resources: []addonmgrv1alpha1.ObjectStatus{},
 		},
 	}
+
+	fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(testAddon).Build()
+	updater := NewAddonUpdater(fakeRcdr, fakeCli, NewAddonVersionCacheClient(), ctrl.Log.WithName("test"))
+
 	err := updater.client.Create(ctx, testAddon, &client.CreateOptions{})
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 
@@ -167,9 +168,6 @@ func TestUpdateAddonStatusLifecycleFromWorkflow_DeleteFailed(t *testing.T) {
 	testNamespace := "default"
 	testAddonName := "test-addon"
 
-	fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
-
-	updater := NewAddonUpdater(fakeRcdr, fakeCli, NewAddonVersionCacheClient(), ctrl.Log.WithName("test"))
 	testAddon := &addonmgrv1alpha1.Addon{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testAddonName,
@@ -188,6 +186,10 @@ func TestUpdateAddonStatusLifecycleFromWorkflow_DeleteFailed(t *testing.T) {
 			Resources: []addonmgrv1alpha1.ObjectStatus{},
 		},
 	}
+
+	fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(testAddon).Build()
+	updater := NewAddonUpdater(fakeRcdr, fakeCli, NewAddonVersionCacheClient(), ctrl.Log.WithName("test"))
+
 	err := updater.client.Create(ctx, testAddon, &client.CreateOptions{})
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 
