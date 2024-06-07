@@ -1,3 +1,4 @@
+version: 2
 project_name: addon-manager
 before:
   hooks:
@@ -65,7 +66,6 @@ archives:
       {{- if .Mips }}_{{ .Mips }}{{ end }}
 
 changelog:
-  skip: true
   sort: asc
   filters:
     exclude:
