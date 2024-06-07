@@ -10,4 +10,4 @@
 
 # Admins own root and CI.
 .github/** @keikoproj/keiko-admins @keikoproj/keiko-maintainers @keikoproj/addon-manager-maintainers
-/*     @keikoproj/keiko-admins @keikoproj/keiko-maintainers @keikoproj/addon-manager-maintainers
+/*     @keikoproj/addon-manager-maintainers
