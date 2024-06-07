@@ -52,18 +52,6 @@ const (
 	controllerName = "addon-manager-controller"
 )
 
-// Watched resources
-var (
-	resources = [...]runtime.Object{
-		&v1.Service{TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"}},
-		&batchv1.Job{TypeMeta: metav1.TypeMeta{Kind: "Job", APIVersion: "batch/v1"}}, &batchv1.CronJob{TypeMeta: metav1.TypeMeta{Kind: "CronJob", APIVersion: "batch/v1"}},
-		&appsv1.Deployment{TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}},
-		&appsv1.DaemonSet{TypeMeta: metav1.TypeMeta{Kind: "DaemonSet", APIVersion: "apps/v1"}},
-		&appsv1.ReplicaSet{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSet", APIVersion: "apps/v1"}},
-		&appsv1.StatefulSet{TypeMeta: metav1.TypeMeta{Kind: "StatefulSet", APIVersion: "apps/v1"}},
-	}
-)
-
 // AddonReconciler reconciles a Addon object
 type AddonReconciler struct {
 	client.Client
@@ -182,38 +170,38 @@ func NewAddonController(mgr manager.Manager, dynClient dynamic.Interface, wfInf 
 	}
 
 	// Watch for changes to kubernetes Resources matching addon labels.
-	if err := c.Watch(&source.Kind{Type: &addonmgrv1alpha1.Addon{}}, &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &addonmgrv1alpha1.Addon{}), &handler.EnqueueRequestForObject{}); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.Deployment{}), r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &v1.Service{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.Service{}), r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.DaemonSet{}), r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.ReplicaSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}), r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.StatefulSet{}), r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &batchv1.Job{}}, r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &batchv1.Job{}), r.enqueueRequestWithAddonLabel()); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
 func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(a client.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(_ context.Context, a client.Object) []reconcile.Request {
 		var reqs = make([]reconcile.Request, 0)
 		var labels = a.GetLabels()
 		if name, ok := labels[addonapiv1.ResourceDefaultOwnLabel]; ok && strings.TrimSpace(name) != "" {

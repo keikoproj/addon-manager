@@ -17,12 +17,10 @@ package apitests
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -31,16 +29,12 @@ import (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"v1alpha1 Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "v1alpha1 Suite")
 }
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-
-	close(done)
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
