@@ -11,6 +11,6 @@ Addon Manager was built using [kubebuilder](https://book.kubebuilder.io/).
 ### Prerequisites:
 * [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
 
-Spin up a local cluster: `make cluster`
+Spin up a local cluster: `make kind-cluster`
 
 See [Kind cluster reference](https://book.kubebuilder.io/reference/kind.html) for more details
