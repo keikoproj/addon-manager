@@ -29,10 +29,11 @@ jobs:
         run: |
           make cover
 
-      - name: Upload to Codecov
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
           file: ./cover.out
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   buildx:
     if: github.repository_owner == 'keikoproj'
@@ -66,7 +67,7 @@ jobs:
         run: echo ${{ steps.buildx.outputs.platforms }}
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
           args: check -f .goreleaser.yml

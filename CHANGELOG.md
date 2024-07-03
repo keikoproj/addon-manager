@@ -1,6 +1,22 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+<a name="v0.8.2"></a>
+## [v0.8.2] - 2024-06-11
+## What's Changed
+* Bump google.golang.org/grpc from 1.56.2 to 1.56.3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/296
+* Bump actions/setup-go from 4 to 5 by @dependabot in https://github.com/keikoproj/addon-manager/pull/305
+* Bump github/codeql-action from 2 to 3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/306
+* Bump codecov/codecov-action from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/308
+* Bump k8s.io/apiextensions-apiserver from 0.25.14 to 0.25.16 by @dependabot in https://github.com/keikoproj/addon-manager/pull/300
+* Bump github.com/spf13/cobra from 1.7.0 to 1.8.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/310
+* Bump github.com/go-logr/logr from 1.2.4 to 1.4.1 by @dependabot in https://github.com/keikoproj/addon-manager/pull/311
+* chore: upgraded to controller-runtime 0.17.2 and ginkgo v2 by @ccpeng in https://github.com/keikoproj/addon-manager/pull/319
+* Bump goreleaser/goreleaser-action from 5 to 6 by @dependabot in https://github.com/keikoproj/addon-manager/pull/324
+* chore: update dev tools by @kevdowney in https://github.com/keikoproj/addon-manager/pull/326
+
+**Full Changelog**: https://github.com/keikoproj/addon-manager/compare/v0.8.1...v0.8.2
+
 <a name="v0.8.1"></a>
 ## [v0.8.1] - 2023-10-30
 ### Fixed
