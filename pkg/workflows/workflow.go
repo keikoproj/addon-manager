@@ -240,7 +240,7 @@ func (w *workflowLifecycle) submit(ctx context.Context, wp *unstructured.Unstruc
 	} else if err != nil {
 		msg := fmt.Sprintf("failed creating wf %s err %v", wp.GetName(), err)
 		w.log.Error(err, msg)
-		return fmt.Errorf(msg)
+		return fmt.Errorf("%s", msg)
 	}
 	// Record an event for created workflow
 	w.recorder.Event(w.addon, "Normal", "Created", fmt.Sprintf("Created Workflow %s", wfName))

@@ -307,7 +307,7 @@ func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, ins
 		if common.IsExpired(instance.Status.StartTime, addonapiv1.TTL.Milliseconds()) {
 			reason := fmt.Sprintf("Addon %s/%s ttl expired, starttime exceeded %s", instance.Namespace, instance.Name, addonapiv1.TTL.String())
 			r.recorder.Event(instance, "Warning", "Failed", reason)
-			err := fmt.Errorf(reason)
+			err := fmt.Errorf("ttl expired for addon %s/%s: %s", instance.Namespace, instance.Name, reason)
 			log.Error(err, reason)
 			instance.SetInstallStatus(addonmgrv1alpha1.Failed, reason)
 
