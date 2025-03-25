@@ -111,6 +111,10 @@ func (r *AddonReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return reconcile.Result{}, ignoreNotFound(err)
 	}
 
+	// Log the addon spec and the checksum
+	changedStatus, newChecksum := r.validateChecksum(instance)
+	log.Info("Addon spec", "spec", instance.Spec, "checksum", newChecksum, "changedStatus", changedStatus)
+
 	return r.execAddon(ctx, log, instance)
 }
 
