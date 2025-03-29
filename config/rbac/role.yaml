@@ -22,6 +22,12 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - list
+- apiGroups:
   - addonmgr.keikoproj.io
   resources:
   - addons
@@ -67,12 +73,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - list
 - apiGroups:
   - extensions
   resources:
