@@ -2,10 +2,38 @@ coverage:
   range: "70...90"
   round: down
   precision: 2
+  status:
+    project:
+      default:
+        target: 50%
+        threshold: 1%
+        informational: true
+        paths:
+          - "!pkg/client/"
+          - "!api/addon/v1alpha1/zz_generated.*"
+    patch:
+      default:
+        target: 50%
+        informational: true
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+  require_base: no
+  require_head: no
 
 ignore:
-  - "**/zz_generated.*" # generated code
+  - "**/zz_generated.*"  # generated code
+  - "**/*_generated.go"  # all generated code files
   - "bin"
   - "config"
   - "hack"
-  - "pkg/addon/client" # generated code
+  - "pkg/addon/client"   # generated code
+  - "pkg/client/**"      # generated client code
+  - "**/apis/addon/v1alpha1/register.go"  # boilerplate registration code
+  - "**/apis/**/doc.go"  # documentation files
+  - "cmd/main.go"        # main entry points with little testable logic
+  - "cmd/addonctl/main.go"
+  - "test-*/"            # test directories themselves
+  - "api/addon/v1alpha1/addon_types.go" # API types don't need extensive testing
