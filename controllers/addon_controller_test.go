@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
@@ -425,19 +426,160 @@ var _ = Describe("AddonController", func() {
 	})
 })
 
-// Unit tests for the mapper functions used by the Watch mechanism
-var _ = Describe("AddonController Map Functions", func() {
-	var r *AddonReconciler
-	var versionCache *mockVersionCache
-	var ctx context.Context
+// Integration test for controller watches
+var _ = Describe("Addon Label Resource Watch", func() {
+	var (
+		reconciler   *AddonReconciler
+		ctx          context.Context
+		versionCache *mockVersionCache
+	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
+
+		// Create a mock version cache
 		versionCache = &mockVersionCache{
 			addonVersions: make(map[string]*addon.Version),
 		}
-		r = &AddonReconciler{
+
+		// Create a test reconciler
+		reconciler = &AddonReconciler{
+			Client:       k8sClient,
+			Scheme:       scheme.Scheme,
 			versionCache: versionCache,
+			Log:          ctrl.Log.WithName("controllers").WithName("Addon"),
+		}
+	})
+
+	Context("when a resource with addon label exists", func() {
+		It("should be able to map deployments to the correct addon reconcile requests", func() {
+			// Set up mock version cache
+			addonName := "test-watch-addon"
+			addonNamespace := "default"
+
+			testVersion := &addon.Version{
+				Name:      addonName,
+				Namespace: addonNamespace,
+			}
+			versionCache.addonVersions["test-addon-watch"] = testVersion
+
+			// Create a deployment with the addon label
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-watch-deployment",
+					Namespace: addonNamespace,
+					Labels: map[string]string{
+						addonapiv1.ResourceDefaultOwnLabel: "test-addon-watch",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test-app",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test-app",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Create the deployment
+			err := k8sClient.Create(ctx, deployment)
+			Expect(err).NotTo(HaveOccurred())
+			defer k8sClient.Delete(ctx, deployment)
+
+			// Directly test the watch mapping logic
+			reqs := reconciler.mapDeploymentToAddonRequests(ctx, deployment)
+
+			// Verify the reconciliation request is for the correct addon
+			Expect(reqs).To(HaveLen(1))
+			Expect(reqs[0].Name).To(Equal(addonName))
+			Expect(reqs[0].Namespace).To(Equal(addonNamespace))
+		})
+
+		It("should be able to map services to the correct addon reconcile requests", func() {
+			// Set up mock version cache
+			addonName := "test-watch-addon"
+			addonNamespace := "default"
+
+			testVersion := &addon.Version{
+				Name:      addonName,
+				Namespace: addonNamespace,
+			}
+			versionCache.addonVersions["test-addon-watch"] = testVersion
+
+			// Create a service with the addon label
+			service := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-watch-service",
+					Namespace: addonNamespace,
+					Labels: map[string]string{
+						addonapiv1.ResourceDefaultOwnLabel: "test-addon-watch",
+					},
+				},
+				Spec: corev1.ServiceSpec{
+					Selector: map[string]string{
+						"app": "test-app",
+					},
+					Ports: []corev1.ServicePort{
+						{
+							Port: 80,
+						},
+					},
+				},
+			}
+
+			// Create the service
+			err := k8sClient.Create(ctx, service)
+			Expect(err).NotTo(HaveOccurred())
+			defer k8sClient.Delete(ctx, service)
+
+			// Directly test the watch mapping logic
+			reqs := reconciler.mapServiceToAddonRequests(ctx, service)
+
+			// Verify the reconciliation request is for the correct addon
+			Expect(reqs).To(HaveLen(1))
+			Expect(reqs[0].Name).To(Equal(addonName))
+			Expect(reqs[0].Namespace).To(Equal(addonNamespace))
+		})
+	})
+})
+
+// Unit tests for the mapper functions used by the Watch mechanism
+var _ = Describe("AddonController Map Functions", func() {
+	var (
+		reconciler   *AddonReconciler
+		ctx          context.Context
+		versionCache *mockVersionCache
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Create a mock version cache
+		versionCache = &mockVersionCache{
+			addonVersions: make(map[string]*addon.Version),
+		}
+
+		// Create a test reconciler
+		reconciler = &AddonReconciler{
+			Client:       k8sClient,
+			Scheme:       scheme.Scheme,
+			versionCache: versionCache,
+			Log:          ctrl.Log.WithName("controllers").WithName("Addon"),
 		}
 	})
 
@@ -456,7 +598,7 @@ var _ = Describe("AddonController Map Functions", func() {
 					addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
 				}
 
-				requests := r.getAddonRequestsFromLabels(labels)
+				requests := reconciler.getAddonRequestsFromLabels(labels)
 
 				// Verify results
 				Expect(requests).To(HaveLen(1))
@@ -472,7 +614,7 @@ var _ = Describe("AddonController Map Functions", func() {
 					"app": "some-app",
 				}
 
-				requests := r.getAddonRequestsFromLabels(labels)
+				requests := reconciler.getAddonRequestsFromLabels(labels)
 
 				// Verify results
 				Expect(requests).To(HaveLen(0))
@@ -486,7 +628,7 @@ var _ = Describe("AddonController Map Functions", func() {
 					addonapiv1.ResourceDefaultOwnLabel: "missing-addon",
 				}
 
-				requests := r.getAddonRequestsFromLabels(labels)
+				requests := reconciler.getAddonRequestsFromLabels(labels)
 
 				// Verify results
 				Expect(requests).To(HaveLen(0))
@@ -516,7 +658,7 @@ var _ = Describe("AddonController Map Functions", func() {
 				}
 
 				// Test the function
-				requests := r.mapDeploymentToAddonRequests(ctx, deployment)
+				requests := reconciler.mapDeploymentToAddonRequests(ctx, deployment)
 
 				// Verify results
 				Expect(requests).To(HaveLen(1))
@@ -546,7 +688,7 @@ var _ = Describe("AddonController Map Functions", func() {
 				}
 
 				// Test the function
-				requests := r.mapServiceToAddonRequests(ctx, service)
+				requests := reconciler.mapServiceToAddonRequests(ctx, service)
 
 				// Verify results
 				Expect(requests).To(HaveLen(1))
@@ -576,7 +718,7 @@ var _ = Describe("AddonController Map Functions", func() {
 				}
 
 				// Test the function
-				requests := r.mapDaemonSetToAddonRequests(ctx, daemonset)
+				requests := reconciler.mapDaemonSetToAddonRequests(ctx, daemonset)
 
 				// Verify results
 				Expect(requests).To(HaveLen(1))
@@ -606,7 +748,7 @@ var _ = Describe("AddonController Map Functions", func() {
 				}
 
 				// Test the function
-				requests := r.mapStatefulSetToAddonRequests(ctx, statefulset)
+				requests := reconciler.mapStatefulSetToAddonRequests(ctx, statefulset)
 
 				// Verify results
 				Expect(requests).To(HaveLen(1))
@@ -636,7 +778,7 @@ var _ = Describe("AddonController Map Functions", func() {
 				}
 
 				// Test the function
-				requests := r.mapJobToAddonRequests(ctx, job)
+				requests := reconciler.mapJobToAddonRequests(ctx, job)
 
 				// Verify results
 				Expect(requests).To(HaveLen(1))
