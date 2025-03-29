@@ -169,52 +169,86 @@ func NewAddonController(mgr manager.Manager, dynClient dynamic.Interface, wfInf 
 		return nil, err
 	}
 
-	// Watch for changes to kubernetes Resources matching addon labels.
-	if err := c.Watch(source.Kind(mgr.GetCache(), &addonmgrv1alpha1.Addon{}), &handler.EnqueueRequestForObject{}); err != nil {
+	// Watch for changes to primary resource Addon
+	if err := c.Watch(source.Kind(mgr.GetCache(), &addonmgrv1alpha1.Addon{}, &handler.TypedEnqueueRequestForObject[*addonmgrv1alpha1.Addon]{})); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.Deployment{}), r.enqueueRequestWithAddonLabel()); err != nil {
+	// Watch for changes to kubernetes Resources matching addon labels
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.Deployment{}, handler.TypedEnqueueRequestsFromMapFunc[*appsv1.Deployment](r.mapDeploymentToAddonRequests))); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.Service{}), r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.Service{}, handler.TypedEnqueueRequestsFromMapFunc[*v1.Service](r.mapServiceToAddonRequests))); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.DaemonSet{}), r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.DaemonSet{}, handler.TypedEnqueueRequestsFromMapFunc[*appsv1.DaemonSet](r.mapDaemonSetToAddonRequests))); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}), r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.ReplicaSet{}, handler.TypedEnqueueRequestsFromMapFunc[*appsv1.ReplicaSet](r.mapReplicaSetToAddonRequests))); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.StatefulSet{}), r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &appsv1.StatefulSet{}, handler.TypedEnqueueRequestsFromMapFunc[*appsv1.StatefulSet](r.mapStatefulSetToAddonRequests))); err != nil {
 		return nil, err
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &batchv1.Job{}), r.enqueueRequestWithAddonLabel()); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &batchv1.Job{}, handler.TypedEnqueueRequestsFromMapFunc[*batchv1.Job](r.mapJobToAddonRequests))); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (r *AddonReconciler) enqueueRequestWithAddonLabel() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(_ context.Context, a client.Object) []reconcile.Request {
-		var reqs = make([]reconcile.Request, 0)
-		var labels = a.GetLabels()
-		if name, ok := labels[addonapiv1.ResourceDefaultOwnLabel]; ok && strings.TrimSpace(name) != "" {
-			// Lookup addon related to this object.
-			if ok, v := r.versionCache.HasVersionName(name); ok {
-				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
-					Name:      v.Name,
-					Namespace: v.Namespace,
-				}})
-			}
+// Helper function to map Kubernetes objects to Addon reconcile requests based on labels
+// It searches for the addonapiv1.ResourceDefaultOwnLabel to identify addons that own the resources
+func (r *AddonReconciler) getAddonRequestsFromLabels(labels map[string]string) []reconcile.Request {
+	var reqs = make([]reconcile.Request, 0)
+	if name, ok := labels[addonapiv1.ResourceDefaultOwnLabel]; ok && strings.TrimSpace(name) != "" {
+		// Lookup addon related to this object.
+		if ok, v := r.versionCache.HasVersionName(name); ok {
+			reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      v.Name,
+				Namespace: v.Namespace,
+			}})
 		}
-		return reqs
-	})
+	}
+	return reqs
+}
+
+// Type-specific mapper functions for different resource types
+// These mappers are used by controller-runtime to connect watch events to reconciliation requests
+// Each function implements the TypedMapFunc signature required by controller-runtime v0.20+
+
+// mapDeploymentToAddonRequests maps Deployment objects to addon reconcile requests based on labels
+func (r *AddonReconciler) mapDeploymentToAddonRequests(ctx context.Context, obj *appsv1.Deployment) []reconcile.Request {
+	return r.getAddonRequestsFromLabels(obj.GetLabels())
+}
+
+// mapServiceToAddonRequests maps Service objects to addon reconcile requests based on labels
+func (r *AddonReconciler) mapServiceToAddonRequests(ctx context.Context, obj *v1.Service) []reconcile.Request {
+	return r.getAddonRequestsFromLabels(obj.GetLabels())
+}
+
+// mapDaemonSetToAddonRequests maps DaemonSet objects to addon reconcile requests based on labels
+func (r *AddonReconciler) mapDaemonSetToAddonRequests(ctx context.Context, obj *appsv1.DaemonSet) []reconcile.Request {
+	return r.getAddonRequestsFromLabels(obj.GetLabels())
+}
+
+// mapReplicaSetToAddonRequests maps ReplicaSet objects to addon reconcile requests based on labels
+func (r *AddonReconciler) mapReplicaSetToAddonRequests(ctx context.Context, obj *appsv1.ReplicaSet) []reconcile.Request {
+	return r.getAddonRequestsFromLabels(obj.GetLabels())
+}
+
+// mapStatefulSetToAddonRequests maps StatefulSet objects to addon reconcile requests based on labels
+func (r *AddonReconciler) mapStatefulSetToAddonRequests(ctx context.Context, obj *appsv1.StatefulSet) []reconcile.Request {
+	return r.getAddonRequestsFromLabels(obj.GetLabels())
+}
+
+// mapJobToAddonRequests maps Job objects to addon reconcile requests based on labels
+func (r *AddonReconciler) mapJobToAddonRequests(ctx context.Context, obj *batchv1.Job) []reconcile.Request {
+	return r.getAddonRequestsFromLabels(obj.GetLabels())
 }
 
 func (r *AddonReconciler) processAddon(ctx context.Context, log logr.Logger, instance *addonmgrv1alpha1.Addon, wfl workflows.AddonLifecycle) (reconcile.Result, error) {
