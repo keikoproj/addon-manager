@@ -19,18 +19,22 @@ import (
 	"os"
 	"time"
 
-	"github.com/keikoproj/addon-manager/api/addon"
+	addonapiv1 "github.com/keikoproj/addon-manager/api/addon"
+	addonmgrv1alpha1 "github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	"github.com/keikoproj/addon-manager/pkg/addon"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-
-	"github.com/keikoproj/addon-manager/api/addon/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
@@ -42,7 +46,7 @@ const timeout = time.Second * 5
 var _ = Describe("AddonController", func() {
 
 	Describe("Addon CR can be reconciled", func() {
-		var instance *v1alpha1.Addon
+		var instance *addonmgrv1alpha1.Addon
 		var wfv1 = &unstructured.Unstructured{}
 		var addonName = "cluster-autoscaler"
 		var addonKey = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
@@ -60,7 +64,7 @@ var _ = Describe("AddonController", func() {
 
 				instance, err = parseAddonYaml(addonYaml)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(instance).To(BeAssignableToTypeOf(&v1alpha1.Addon{}))
+				Expect(instance).To(BeAssignableToTypeOf(&addonmgrv1alpha1.Addon{}))
 				Expect(instance.GetName()).To(Equal(addonName))
 
 				instance.SetNamespace(addonNamespace)
@@ -85,13 +89,13 @@ var _ = Describe("AddonController", func() {
 				Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
 				By("Verify addon has finalizers added which means it's valid")
-				Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{addon.FinalizerName}))
+				Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{addonapiv1.FinalizerName}))
 
 				By("Verify addon has pending status")
-				Expect(instance.Status.Lifecycle.Installed).Should(Equal(v1alpha1.Pending))
+				Expect(instance.Status.Lifecycle.Installed).Should(Equal(addonmgrv1alpha1.Pending))
 
 				By("Verify addon has prereqs workflow generated with checksum name")
-				wfName := instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+				wfName := instance.GetFormattedWorkflowName(addonmgrv1alpha1.Prereqs)
 				var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 				Eventually(func() error {
 					return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
@@ -128,7 +132,7 @@ var _ = Describe("AddonController", func() {
 				}, timeout).Should(Succeed())
 
 				By("Verify addon has prereqs workflow generated with new checksum name")
-				wfName = instance.GetFormattedWorkflowName(v1alpha1.Prereqs)
+				wfName = instance.GetFormattedWorkflowName(addonmgrv1alpha1.Prereqs)
 				wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 				Eventually(func() error {
 					return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
@@ -138,7 +142,7 @@ var _ = Describe("AddonController", func() {
 				By("Verify addon still has pending status")
 				err = k8sClient.Get(context.TODO(), addonKey, instance)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(instance.Status.Lifecycle.Installed).Should(Equal(v1alpha1.Pending))
+				Expect(instance.Status.Lifecycle.Installed).Should(Equal(addonmgrv1alpha1.Pending))
 
 				By("Verify addon prereqs status completed after prereqs workflow is completed")
 				wfv1.UnstructuredContent()["status"] = map[string]interface{}{
@@ -150,14 +154,14 @@ var _ = Describe("AddonController", func() {
 					if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
 						return err
 					}
-					if instance.Status.Lifecycle.Prereqs == v1alpha1.Succeeded && instance.Status.Lifecycle.Installed == v1alpha1.Pending {
+					if instance.Status.Lifecycle.Prereqs == addonmgrv1alpha1.Succeeded && instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
 						return nil
 					}
 					return fmt.Errorf("addon prereqs|install status(%s|%s) is not succeeded|pending", instance.Status.Lifecycle.Prereqs, instance.Status.Lifecycle.Installed)
 				}, timeout).Should(Succeed())
 
 				By("Verify addon has install workflow generated with new checksum name")
-				wfName = instance.GetFormattedWorkflowName(v1alpha1.Install)
+				wfName = instance.GetFormattedWorkflowName(addonmgrv1alpha1.Install)
 				wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 				Eventually(func() error {
 					return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
@@ -174,7 +178,7 @@ var _ = Describe("AddonController", func() {
 					if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
 						return err
 					}
-					if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+					if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Succeeded {
 						return nil
 					}
 					return fmt.Errorf("addon install status(%s) is not succeeded", instance.Status.Lifecycle.Installed)
@@ -201,14 +205,14 @@ var _ = Describe("AddonController", func() {
 						return err
 					}
 
-					if instance.ObjectMeta.DeletionTimestamp != nil && instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
+					if instance.ObjectMeta.DeletionTimestamp != nil && instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
 						return nil
 					}
 					return fmt.Errorf("addon is not being deleted")
 				}, timeout).Should(Succeed())
 
 				By("Verify delete workflow was generated")
-				wfName := instance.GetFormattedWorkflowName(v1alpha1.Delete)
+				wfName := instance.GetFormattedWorkflowName(addonmgrv1alpha1.Delete)
 				var wfv1Key = types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 				Eventually(func() error {
 					return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
@@ -221,7 +225,7 @@ var _ = Describe("AddonController", func() {
 						return err
 					}
 
-					if instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
+					if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
 						return nil
 					}
 					return fmt.Errorf("addon is not being deleted. Status: %v", instance.Status.Lifecycle.Installed)
@@ -248,7 +252,7 @@ var _ = Describe("AddonController", func() {
 	})
 
 	Describe("Addon CR should reconcile delete failures", func() {
-		var instance *v1alpha1.Addon
+		var instance *addonmgrv1alpha1.Addon
 		var wfv1 = &unstructured.Unstructured{}
 		var addonName = "event-router"
 		var addonKey = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
@@ -264,7 +268,7 @@ var _ = Describe("AddonController", func() {
 
 			instance, err = parseAddonYaml(addonYaml)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(instance).To(BeAssignableToTypeOf(&v1alpha1.Addon{}))
+			Expect(instance).To(BeAssignableToTypeOf(&addonmgrv1alpha1.Addon{}))
 			Expect(instance.GetName()).To(Equal(addonName))
 
 			instance.SetNamespace(addonNamespace)
@@ -286,10 +290,10 @@ var _ = Describe("AddonController", func() {
 			Expect(instance.Status.Checksum).ShouldNot(BeEmpty())
 
 			By("Verify addon has finalizers added which means it's valid")
-			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{addon.FinalizerName}))
+			Expect(instance.ObjectMeta.Finalizers).Should(Equal([]string{addonapiv1.FinalizerName}))
 
 			By("Verify addon has pending status")
-			Expect(instance.Status.Lifecycle.Installed).Should(Equal(v1alpha1.Pending))
+			Expect(instance.Status.Lifecycle.Installed).Should(Equal(addonmgrv1alpha1.Pending))
 
 			By("Verify deleting instance should set Deleting state")
 			Expect(k8sClient.Delete(context.TODO(), instance)).NotTo(HaveOccurred())
@@ -298,14 +302,14 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance.ObjectMeta.DeletionTimestamp != nil && instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
+				if instance.ObjectMeta.DeletionTimestamp != nil && instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
 					return nil
 				}
 				return fmt.Errorf("addon is not being deleted")
 			}, timeout).Should(Succeed())
 
 			By("Verify delete workflow was generated")
-			wfName := instance.GetFormattedWorkflowName(v1alpha1.Delete)
+			wfName := instance.GetFormattedWorkflowName(addonmgrv1alpha1.Delete)
 			wfv1Key := types.NamespacedName{Name: wfName, Namespace: addonNamespace}
 			Eventually(func() error {
 				return k8sClient.Get(context.TODO(), wfv1Key, wfv1)
@@ -318,7 +322,7 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance.Status.Lifecycle.Installed == v1alpha1.Deleting {
+				if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Deleting {
 					return nil
 				}
 				return fmt.Errorf("addon is not being deleted. Status: %v", instance.Status.Lifecycle.Installed)
@@ -335,7 +339,7 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance.Status.Lifecycle.Installed == v1alpha1.DeleteFailed {
+				if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.DeleteFailed {
 					return nil
 				}
 				return fmt.Errorf("addon is not in a delete failed state. Status: %v", instance.Status.Lifecycle.Installed)
@@ -345,32 +349,32 @@ var _ = Describe("AddonController", func() {
 
 	Describe("Addon CR should reconcile dependencies", func() {
 		It("instance with dependencies should succeed", func() {
-			instance := &v1alpha1.Addon{
+			instance := &addonmgrv1alpha1.Addon{
 				ObjectMeta: metav1.ObjectMeta{Name: "addon-1", Namespace: addonNamespace},
-				Spec: v1alpha1.AddonSpec{
-					PackageSpec: v1alpha1.PackageSpec{
-						PkgType:    v1alpha1.CompositePkg,
+				Spec: addonmgrv1alpha1.AddonSpec{
+					PackageSpec: addonmgrv1alpha1.PackageSpec{
+						PkgType:    addonmgrv1alpha1.CompositePkg,
 						PkgName:    "test/addon-1",
 						PkgVersion: "1.0.1",
 					},
-					Params: v1alpha1.AddonParams{
+					Params: addonmgrv1alpha1.AddonParams{
 						Namespace: "addon-test-ns",
 					},
 				},
 			}
 			var instanceKey = types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name}
-			var instance2 = &v1alpha1.Addon{
+			var instance2 = &addonmgrv1alpha1.Addon{
 				ObjectMeta: metav1.ObjectMeta{Name: "addon-2", Namespace: addonNamespace},
-				Spec: v1alpha1.AddonSpec{
-					PackageSpec: v1alpha1.PackageSpec{
-						PkgType:    v1alpha1.CompositePkg,
+				Spec: addonmgrv1alpha1.AddonSpec{
+					PackageSpec: addonmgrv1alpha1.PackageSpec{
+						PkgType:    addonmgrv1alpha1.CompositePkg,
 						PkgName:    "test/addon-2",
 						PkgVersion: "1.0.0",
 						PkgDeps: map[string]string{
 							"test/addon-1": "*",
 						},
 					},
-					Params: v1alpha1.AddonParams{
+					Params: addonmgrv1alpha1.AddonParams{
 						Namespace: "addon-test-ns",
 					},
 				},
@@ -384,7 +388,7 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance2.Status.Lifecycle.Installed == v1alpha1.ValidationFailed {
+				if instance2.Status.Lifecycle.Installed == addonmgrv1alpha1.ValidationFailed {
 					return nil
 				}
 
@@ -399,7 +403,7 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+				if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Succeeded {
 					return nil
 				}
 
@@ -412,7 +416,7 @@ var _ = Describe("AddonController", func() {
 					return err
 				}
 
-				if instance2.Status.Lifecycle.Installed == v1alpha1.Succeeded {
+				if instance2.Status.Lifecycle.Installed == addonmgrv1alpha1.Succeeded {
 					return nil
 				}
 
@@ -422,14 +426,415 @@ var _ = Describe("AddonController", func() {
 	})
 })
 
-func parseAddonYaml(data []byte) (*v1alpha1.Addon, error) {
+// Integration test for controller watches
+var _ = Describe("Addon Label Resource Watch", func() {
+	var (
+		reconciler   *AddonReconciler
+		ctx          context.Context
+		versionCache *mockVersionCache
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Create a mock version cache
+		versionCache = &mockVersionCache{
+			addonVersions: make(map[string]*addon.Version),
+		}
+
+		// Create a test reconciler
+		reconciler = &AddonReconciler{
+			Client:       k8sClient,
+			Scheme:       scheme.Scheme,
+			versionCache: versionCache,
+			Log:          ctrl.Log.WithName("controllers").WithName("Addon"),
+		}
+	})
+
+	Context("when a resource with addon label exists", func() {
+		It("should be able to map deployments to the correct addon reconcile requests", func() {
+			// Set up mock version cache
+			addonName := "test-watch-addon"
+			addonNamespace := "default"
+
+			testVersion := &addon.Version{
+				Name:      addonName,
+				Namespace: addonNamespace,
+			}
+			versionCache.addonVersions["test-addon-watch"] = testVersion
+
+			// Create a deployment with the addon label
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-watch-deployment",
+					Namespace: addonNamespace,
+					Labels: map[string]string{
+						addonapiv1.ResourceDefaultOwnLabel: "test-addon-watch",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test-app",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test-app",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Create the deployment
+			err := k8sClient.Create(ctx, deployment)
+			Expect(err).NotTo(HaveOccurred())
+			defer k8sClient.Delete(ctx, deployment)
+
+			// Directly test the watch mapping logic
+			reqs := reconciler.mapDeploymentToAddonRequests(ctx, deployment)
+
+			// Verify the reconciliation request is for the correct addon
+			Expect(reqs).To(HaveLen(1))
+			Expect(reqs[0].Name).To(Equal(addonName))
+			Expect(reqs[0].Namespace).To(Equal(addonNamespace))
+		})
+
+		It("should be able to map services to the correct addon reconcile requests", func() {
+			// Set up mock version cache
+			addonName := "test-watch-addon"
+			addonNamespace := "default"
+
+			testVersion := &addon.Version{
+				Name:      addonName,
+				Namespace: addonNamespace,
+			}
+			versionCache.addonVersions["test-addon-watch"] = testVersion
+
+			// Create a service with the addon label
+			service := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-watch-service",
+					Namespace: addonNamespace,
+					Labels: map[string]string{
+						addonapiv1.ResourceDefaultOwnLabel: "test-addon-watch",
+					},
+				},
+				Spec: corev1.ServiceSpec{
+					Selector: map[string]string{
+						"app": "test-app",
+					},
+					Ports: []corev1.ServicePort{
+						{
+							Port: 80,
+						},
+					},
+				},
+			}
+
+			// Create the service
+			err := k8sClient.Create(ctx, service)
+			Expect(err).NotTo(HaveOccurred())
+			defer k8sClient.Delete(ctx, service)
+
+			// Directly test the watch mapping logic
+			reqs := reconciler.mapServiceToAddonRequests(ctx, service)
+
+			// Verify the reconciliation request is for the correct addon
+			Expect(reqs).To(HaveLen(1))
+			Expect(reqs[0].Name).To(Equal(addonName))
+			Expect(reqs[0].Namespace).To(Equal(addonNamespace))
+		})
+	})
+})
+
+// Unit tests for the mapper functions used by the Watch mechanism
+var _ = Describe("AddonController Map Functions", func() {
+	var (
+		reconciler   *AddonReconciler
+		ctx          context.Context
+		versionCache *mockVersionCache
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Create a mock version cache
+		versionCache = &mockVersionCache{
+			addonVersions: make(map[string]*addon.Version),
+		}
+
+		// Create a test reconciler
+		reconciler = &AddonReconciler{
+			Client:       k8sClient,
+			Scheme:       scheme.Scheme,
+			versionCache: versionCache,
+			Log:          ctrl.Log.WithName("controllers").WithName("Addon"),
+		}
+	})
+
+	Describe("getAddonRequestsFromLabels", func() {
+		Context("with addon label", func() {
+			It("should return a reconcile request for the matching addon", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Test the function
+				labels := map[string]string{
+					addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+				}
+
+				requests := reconciler.getAddonRequestsFromLabels(labels)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("without addon label", func() {
+			It("should return empty requests", func() {
+				// No addon label
+				labels := map[string]string{
+					"app": "some-app",
+				}
+
+				requests := reconciler.getAddonRequestsFromLabels(labels)
+
+				// Verify results
+				Expect(requests).To(HaveLen(0))
+			})
+		})
+
+		Context("with addon label but addon not found in cache", func() {
+			It("should return empty requests", func() {
+				// With addon label but no matching version in cache
+				labels := map[string]string{
+					addonapiv1.ResourceDefaultOwnLabel: "missing-addon",
+				}
+
+				requests := reconciler.getAddonRequestsFromLabels(labels)
+
+				// Verify results
+				Expect(requests).To(HaveLen(0))
+			})
+		})
+	})
+
+	Describe("Resource mapper functions", func() {
+		Context("with deployment resource", func() {
+			It("should map deployment to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a deployment with addon label
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-deployment",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := reconciler.mapDeploymentToAddonRequests(ctx, deployment)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with service resource", func() {
+			It("should map service to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a service with addon label
+				service := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-service",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := reconciler.mapServiceToAddonRequests(ctx, service)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with daemonset resource", func() {
+			It("should map daemonset to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a daemonset with addon label
+				daemonset := &appsv1.DaemonSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-daemonset",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := reconciler.mapDaemonSetToAddonRequests(ctx, daemonset)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with statefulset resource", func() {
+			It("should map statefulset to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a statefulset with addon label
+				statefulset := &appsv1.StatefulSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-statefulset",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := reconciler.mapStatefulSetToAddonRequests(ctx, statefulset)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with job resource", func() {
+			It("should map job to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a job with addon label
+				job := &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-job",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := reconciler.mapJobToAddonRequests(ctx, job)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+	})
+})
+
+// Mock implementation of VersionCacheClient for testing
+type mockVersionCache struct {
+	addonVersions map[string]*addon.Version
+}
+
+func (m *mockVersionCache) HasVersionName(name string) (bool, *addon.Version) {
+	version, ok := m.addonVersions[name]
+	return ok, version
+}
+
+// Additional required methods to satisfy the VersionCacheClient interface
+func (m *mockVersionCache) AddVersion(version addon.Version) {
+	// Not needed for this test
+}
+
+func (m *mockVersionCache) GetVersions(pkgName string) map[string]addon.Version {
+	// Not needed for this test
+	return make(map[string]addon.Version)
+}
+
+func (m *mockVersionCache) GetVersion(pkgName, pkgVersion string) *addon.Version {
+	// Not needed for this test
+	return nil
+}
+
+func (m *mockVersionCache) RemoveVersion(pkgName, pkgVersion string) {
+	// Not needed for this test
+}
+
+func (m *mockVersionCache) RemoveVersions(pkgName string) {
+	// Not needed for this test
+}
+
+func (m *mockVersionCache) GetAllVersions() map[string]map[string]addon.Version {
+	// Not needed for this test
+	return make(map[string]map[string]addon.Version)
+}
+
+func parseAddonYaml(data []byte) (*addonmgrv1alpha1.Addon, error) {
 	var err error
 	o := &unstructured.Unstructured{}
 	err = yaml.Unmarshal(data, &o.Object)
 	if err != nil {
 		return nil, err
 	}
-	a := &v1alpha1.Addon{}
+	a := &addonmgrv1alpha1.Addon{}
 	err = scheme.Scheme.Convert(o, a, 0)
 	if err != nil {
 		return nil, err
