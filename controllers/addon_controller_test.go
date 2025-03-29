@@ -26,6 +26,8 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -515,6 +517,126 @@ var _ = Describe("AddonController Map Functions", func() {
 
 				// Test the function
 				requests := r.mapDeploymentToAddonRequests(ctx, deployment)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with service resource", func() {
+			It("should map service to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a service with addon label
+				service := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-service",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := r.mapServiceToAddonRequests(ctx, service)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with daemonset resource", func() {
+			It("should map daemonset to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a daemonset with addon label
+				daemonset := &appsv1.DaemonSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-daemonset",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := r.mapDaemonSetToAddonRequests(ctx, daemonset)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with statefulset resource", func() {
+			It("should map statefulset to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a statefulset with addon label
+				statefulset := &appsv1.StatefulSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-statefulset",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := r.mapStatefulSetToAddonRequests(ctx, statefulset)
+
+				// Verify results
+				Expect(requests).To(HaveLen(1))
+				Expect(requests[0].Name).To(Equal("test-addon"))
+				Expect(requests[0].Namespace).To(Equal("default"))
+			})
+		})
+
+		Context("with job resource", func() {
+			It("should map job to addon reconcile requests", func() {
+				// Setup mock
+				testVersion := &addon.Version{
+					Name:      "test-addon",
+					Namespace: "default",
+				}
+				versionCache.addonVersions["test-addon-version"] = testVersion
+
+				// Create a job with addon label
+				job := &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-job",
+						Namespace: "default",
+						Labels: map[string]string{
+							addonapiv1.ResourceDefaultOwnLabel: "test-addon-version",
+						},
+					},
+				}
+
+				// Test the function
+				requests := r.mapJobToAddonRequests(ctx, job)
 
 				// Verify results
 				Expect(requests).To(HaveLen(1))
