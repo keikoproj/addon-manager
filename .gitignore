@@ -31,3 +31,6 @@ dist/
 
 *.log
 .windsurfrules
+
+# Explicitly include test files
+!**/*_test.go
