@@ -158,11 +158,11 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: workflow-controller
+      app: addon-manager-workflow-controller
   template:
     metadata:
       labels:
-        app: workflow-controller
+        app: addon-manager-workflow-controller
     spec:
       containers:
       - args:
