@@ -34,3 +34,4 @@ dist/
 
 # Explicitly include test files
 !**/*_test.go
+.qodo
