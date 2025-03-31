@@ -397,9 +397,6 @@ func (w *workflowLifecycle) processArtifact(obj string, resource *unstructured.U
 	// Add the default labels to the resource
 	w.addDefaultLabelsToResource(resource)
 
-	// Add the provided role annotation to the resource
-	w.addRoleAnnotationToResource(resource, wt)
-
 	appendData, err := yaml.Marshal(resource.UnstructuredContent())
 	if err != nil {
 		return "", fmt.Errorf("unable to marshall resource: %+v", resource)
@@ -422,20 +419,6 @@ func (w *workflowLifecycle) addDefaultLabelsToResource(resource *unstructured.Un
 	labels[addon.ResourceDefaultManageByLabel] = addon.Group
 
 	resource.SetLabels(labels)
-}
-
-func (w *workflowLifecycle) addRoleAnnotationToResource(resource *unstructured.Unstructured, wt *addonmgrv1alpha1.WorkflowType) {
-	annotations := resource.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
-	}
-
-	if wt.Role != "" {
-		// TODO change this role name to a config value
-		annotations["iam.amazonaws.com/role"] = wt.Role
-	}
-
-	resource.SetAnnotations(annotations)
 }
 
 func (w *workflowLifecycle) injectTTLs(wf *unstructured.Unstructured) error {
