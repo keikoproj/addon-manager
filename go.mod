@@ -3,7 +3,7 @@ module github.com/keikoproj/addon-manager
 go 1.24
 
 require (
-	github.com/Masterminds/semver/v3 v3.2.1
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/argoproj/argo-workflows/v3 v3.6.5
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.23.3
