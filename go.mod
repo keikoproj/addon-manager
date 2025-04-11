@@ -7,7 +7,7 @@ require (
 	github.com/argoproj/argo-workflows/v3 v3.6.5
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.23.4
-	github.com/onsi/gomega v1.36.3
+	github.com/onsi/gomega v1.37.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/net v0.38.0
