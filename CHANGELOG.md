@@ -2,8 +2,8 @@
 ## [Unreleased]
 
 
-<a name="v0.8.3"></a>
-## [v0.8.3] - 2024-07-15
+<a name="v0.9.0"></a>
+## [v0.9.0] - 2024-07-15
 
 ## What's Changed
 * Update codecov GHA config by @tekenstam in https://github.com/keikoproj/addon-manager/pull/333
@@ -34,7 +34,7 @@
 * chore(deps): bump k8s.io/client-go from 0.32.3 to 0.32.4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/380
 * chore(deps): bump github.com/argoproj/argo-workflows/v3 from 3.6.5 to 3.6.10 by @dependabot in https://github.com/keikoproj/addon-manager/pull/388
 
-**Full Changelog**: https://github.com/keikoproj/addon-manager/compare/v0.8.2...v0.8.3
+**Full Changelog**: https://github.com/keikoproj/addon-manager/compare/v0.8.2...v0.9.0
 
 <a name="v0.8.2"></a>
 ## [v0.8.2] - 2024-06-11
