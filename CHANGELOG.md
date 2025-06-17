@@ -1,6 +1,41 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+
+<a name="v0.9.0"></a>
+## [v0.9.0] - 2024-07-15
+
+## What's Changed
+* Update codecov GHA config by @tekenstam in https://github.com/keikoproj/addon-manager/pull/333
+* Bump golang.org/x/net from 0.24.0 to 0.26.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/327
+* Bump k8s.io/api from 0.29.0 to 0.29.6 by @dependabot in https://github.com/keikoproj/addon-manager/pull/330
+* chore: update dev docs to mention proper make kind-cluster by @kevdowney in https://github.com/keikoproj/addon-manager/pull/320
+* Bump github.com/argoproj/argo-workflows/v3 from 3.4.11 to 3.5.10 by @dependabot in https://github.com/keikoproj/addon-manager/pull/341
+* chore: standardize GitHub templates by @tekenstam in https://github.com/keikoproj/addon-manager/pull/362
+* Upgrade to Go 1.24 by @tekenstam in https://github.com/keikoproj/addon-manager/pull/354
+* Bump golang.org/x/net from 0.26.0 to 0.36.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/352
+* Bump github.com/argoproj/argo-workflows/v3 from 3.5.10 to 3.5.13 by @dependabot in https://github.com/keikoproj/addon-manager/pull/355
+* Bump codecov/codecov-action from 4 to 5 by @dependabot in https://github.com/keikoproj/addon-manager/pull/353
+* Bump github.com/onsi/gomega from 1.33.0 to 1.36.3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/359
+* Bump k8s.io/apimachinery from 0.29.6 to 0.29.15 by @dependabot in https://github.com/keikoproj/addon-manager/pull/361
+* Update Addon Manager for Kubernetes 1.32 Compatibility by @tekenstam in https://github.com/keikoproj/addon-manager/pull/364
+* fix: change app label for workflow-controller by @kevdowney in https://github.com/keikoproj/addon-manager/pull/342
+* Improve Code Coverage Configuration and Testing by @tekenstam in https://github.com/keikoproj/addon-manager/pull/365
+* Bump github.com/argoproj/argo-workflows/v3 from 3.5.10 to 3.6.5 by @dependabot in https://github.com/keikoproj/addon-manager/pull/356
+* fix: Remove kiam annotations by @kevdowney in https://github.com/keikoproj/addon-manager/pull/366
+* Bump github.com/spf13/cobra from 1.8.1 to 1.9.1 by @dependabot in https://github.com/keikoproj/addon-manager/pull/369
+* Bump golang.org/x/net from 0.37.0 to 0.38.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/371
+* Bump k8s.io/client-go from 0.32.1 to 0.32.3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/367
+* Bump k8s.io/apiextensions-apiserver from 0.32.1 to 0.32.3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/370
+* chore(deps): bump github.com/Masterminds/semver/v3 from 3.2.1 to 3.3.1 by @dependabot in https://github.com/keikoproj/addon-manager/pull/372
+* chore(deps): bump github.com/onsi/ginkgo/v2 from 2.23.3 to 2.23.4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/373
+* chore(deps): bump github.com/onsi/gomega from 1.36.3 to 1.37.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/374
+* chore(deps): bump golang.org/x/net from 0.38.0 to 0.39.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/375
+* chore(deps): bump k8s.io/client-go from 0.32.3 to 0.32.4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/380
+* chore(deps): bump github.com/argoproj/argo-workflows/v3 from 3.6.5 to 3.6.10 by @dependabot in https://github.com/keikoproj/addon-manager/pull/388
+
+**Full Changelog**: https://github.com/keikoproj/addon-manager/compare/v0.8.2...v0.9.0
+
 <a name="v0.8.2"></a>
 ## [v0.8.2] - 2024-06-11
 ## What's Changed
