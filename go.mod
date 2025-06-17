@@ -12,10 +12,10 @@ require (
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/net v0.39.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.32.4
-	k8s.io/apiextensions-apiserver v0.32.3
-	k8s.io/apimachinery v0.32.4
-	k8s.io/client-go v0.32.4
+	k8s.io/api v0.32.5
+	k8s.io/apiextensions-apiserver v0.32.5
+	k8s.io/apimachinery v0.32.5
+	k8s.io/client-go v0.32.5
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
@@ -53,6 +53,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
