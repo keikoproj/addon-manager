@@ -12,10 +12,10 @@ require (
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/net v0.39.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.32.4
+	k8s.io/api v0.32.5
 	k8s.io/apiextensions-apiserver v0.32.3
-	k8s.io/apimachinery v0.32.4
-	k8s.io/client-go v0.32.4
+	k8s.io/apimachinery v0.32.5
+	k8s.io/client-go v0.32.5
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
