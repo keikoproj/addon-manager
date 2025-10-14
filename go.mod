@@ -1,10 +1,10 @@
 module github.com/keikoproj/addon-manager
 
-go 1.24.3
+go 1.24.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
-	github.com/argoproj/argo-workflows/v3 v3.6.10
+	github.com/argoproj/argo-workflows/v3 v3.6.12
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0

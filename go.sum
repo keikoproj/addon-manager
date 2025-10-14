@@ -4,8 +4,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/Masterminds/semver/v3 v3.3.1 h1:QtNSWtVZ3nBfk8mAOu/B6v7FMJ+NHTIgUPi7rj+4nv4=
 github.com/Masterminds/semver/v3 v3.3.1/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
-github.com/argoproj/argo-workflows/v3 v3.6.10 h1:MFFGzeTXwNKSdDZ5jwQQb26AMGng4bSML38hjxB3Wt0=
-github.com/argoproj/argo-workflows/v3 v3.6.10/go.mod h1:b2VwUsoHP3weB1fHe6XNIj+f8EN+uDow76bTJ3aPQJ0=
+github.com/argoproj/argo-workflows/v3 v3.6.12 h1:SbCYHBkBku5vVeqw6TcneKq7IxHIRRbkXjVtTAlo8XE=
+github.com/argoproj/argo-workflows/v3 v3.6.12/go.mod h1:uITZiLxhyB6G2lnXgZGDwl/ui+j8vsR+1DURM+XKb1Q=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
