@@ -1,6 +1,6 @@
 module github.com/keikoproj/addon-manager
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
