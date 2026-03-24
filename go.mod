@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	github.com/pkg/errors v0.9.1
-	github.com/spf13/cobra v1.9.1
+	github.com/spf13/cobra v1.10.2
 	golang.org/x/net v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.10
@@ -53,7 +53,7 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
