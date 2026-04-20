@@ -295,20 +295,43 @@ func (w *workflowLifecycle) configureWorkflowArtifacts(wf *unstructured.Unstruct
 		return err
 	}
 
-	templates, _, err := unstructured.NestedFieldNoCopy(wf.UnstructuredContent(), "spec", "templates")
+	templates, found, err := unstructured.NestedFieldNoCopy(wf.UnstructuredContent(), "spec", "templates")
 	if err != nil {
 		return err
 	}
-	for _, template := range templates.([]interface{}) {
+	if !found || templates == nil {
+		// A workflow without any templates can legitimately reach here
+		// (e.g. a minimal / invalid user-supplied spec). Before this
+		// guard, the type assertion below panicked with
+		// "interface conversion: interface {} is nil, not []interface {}"
+		// and crashed the reconciler goroutine (#77).
+		return nil
+	}
+	templateList, ok := templates.([]interface{})
+	if !ok {
+		return fmt.Errorf("spec.templates is not a list: got %T", templates)
+	}
+	for _, template := range templateList {
+		templateMap, ok := template.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("spec.templates entry is not an object: got %T", template)
+		}
 		// Process templates with resource
 		err := w.processWorkflowResources(template, wt)
 		if err != nil {
 			return err
 		}
 
-		if allSteps, found, err := unstructured.NestedFieldNoCopy(template.(map[string]interface{}), "steps"); found {
-			for _, steps := range allSteps.([]interface{}) {
-				steps := steps.([]interface{})
+		if allSteps, found, err := unstructured.NestedFieldNoCopy(templateMap, "steps"); found {
+			stepsList, ok := allSteps.([]interface{})
+			if !ok {
+				return fmt.Errorf("template.steps is not a list: got %T", allSteps)
+			}
+			for _, steps := range stepsList {
+				steps, ok := steps.([]interface{})
+				if !ok {
+					return fmt.Errorf("template.steps entry is not a list: got %T", steps)
+				}
 				for _, step := range steps {
 					err := w.processWorkflowResources(step, wt)
 					if err != nil {
