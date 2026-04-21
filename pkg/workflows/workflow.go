@@ -295,21 +295,44 @@ func (w *workflowLifecycle) configureWorkflowArtifacts(wf *unstructured.Unstruct
 		return err
 	}
 
-	templates, _, err := unstructured.NestedFieldNoCopy(wf.UnstructuredContent(), "spec", "templates")
+	templates, found, err := unstructured.NestedFieldNoCopy(wf.UnstructuredContent(), "spec", "templates")
 	if err != nil {
 		return err
 	}
-	for _, template := range templates.([]interface{}) {
+	// A workflow spec without a `templates` field (or with a non-slice value)
+	// is invalid user input; previously the unchecked type assertion on
+	// templates.([]interface{}) panicked and zapr logged "interface
+	// conversion: interface {} is nil, not []interface {}" via its
+	// recover path. Return a descriptive error instead (issue #77).
+	if !found || templates == nil {
+		return fmt.Errorf("workflow spec is missing required field 'templates'")
+	}
+	templateList, ok := templates.([]interface{})
+	if !ok {
+		return fmt.Errorf("workflow spec.templates must be a list, got %T", templates)
+	}
+	for _, template := range templateList {
+		templateMap, ok := template.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("workflow spec.templates entry must be an object, got %T", template)
+		}
 		// Process templates with resource
-		err := w.processWorkflowResources(template, wt)
+		err := w.processWorkflowResources(templateMap, wt)
 		if err != nil {
 			return err
 		}
 
-		if allSteps, found, err := unstructured.NestedFieldNoCopy(template.(map[string]interface{}), "steps"); found {
-			for _, steps := range allSteps.([]interface{}) {
-				steps := steps.([]interface{})
-				for _, step := range steps {
+		if allSteps, found, err := unstructured.NestedFieldNoCopy(templateMap, "steps"); found {
+			stepsList, ok := allSteps.([]interface{})
+			if !ok {
+				return fmt.Errorf("workflow template.steps must be a list, got %T", allSteps)
+			}
+			for _, steps := range stepsList {
+				stepGroup, ok := steps.([]interface{})
+				if !ok {
+					return fmt.Errorf("workflow template.steps entry must be a list, got %T", steps)
+				}
+				for _, step := range stepGroup {
 					err := w.processWorkflowResources(step, wt)
 					if err != nil {
 						return err
