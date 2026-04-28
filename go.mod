@@ -14,7 +14,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.10
 	k8s.io/apiextensions-apiserver v0.32.13
-	k8s.io/apimachinery v0.33.10
+	k8s.io/apimachinery v0.33.11
 	k8s.io/client-go v0.33.10
 	sigs.k8s.io/controller-runtime v0.20.4
 )
@@ -51,7 +51,6 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.64.0 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
