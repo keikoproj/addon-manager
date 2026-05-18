@@ -424,6 +424,116 @@ var _ = Describe("AddonController", func() {
 			}, timeout*10).Should(Succeed())
 		})
 	})
+
+	// Regression test for https://github.com/keikoproj/addon-manager/issues/439
+	// AddonReconciler and WorkflowReconciler both write Addon.status.lifecycle.installed
+	// without optimistic concurrency. After the install workflow succeeds, the
+	// addon-controller must not overwrite Succeeded with Pending on subsequent reconciles.
+	Describe("Addon install status is not overwritten by addon-controller after workflow succeeds", func() {
+		var instance *addonmgrv1alpha1.Addon
+		var prereqWf = &unstructured.Unstructured{}
+		var installWf = &unstructured.Unstructured{}
+		var addonName = "race-condition-addon"
+		var addonKey = types.NamespacedName{Name: addonName, Namespace: addonNamespace}
+
+		prereqWf.SetGroupVersionKind(schema.GroupVersionKind{
+			Kind:    "Workflow",
+			Group:   "argoproj.io",
+			Version: "v1alpha1",
+		})
+		installWf.SetGroupVersionKind(schema.GroupVersionKind{
+			Kind:    "Workflow",
+			Group:   "argoproj.io",
+			Version: "v1alpha1",
+		})
+
+		It("should not overwrite Succeeded status with Pending on re-reconcile", func() {
+			addonYaml, err := os.ReadFile("../docs/examples/clusterautoscaler.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			instance, err = parseAddonYaml(addonYaml)
+			Expect(err).ToNot(HaveOccurred())
+			instance.SetName(addonName)
+			instance.SetNamespace(addonNamespace)
+
+			By("Create addon and wait for it to reach Pending")
+			err = k8sClient.Create(context.TODO(), instance)
+			Expect(err).NotTo(HaveOccurred())
+			defer k8sClient.Delete(context.TODO(), instance)
+
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+				if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Pending {
+					return nil
+				}
+				return fmt.Errorf("addon install status is %s, want Pending", instance.Status.Lifecycle.Installed)
+			}, timeout).Should(Succeed())
+
+			By("Wait for prereqs workflow to be created")
+			prereqWfName := instance.GetFormattedWorkflowName(addonmgrv1alpha1.Prereqs)
+			prereqWfKey := types.NamespacedName{Name: prereqWfName, Namespace: addonNamespace}
+			Eventually(func() error {
+				return k8sClient.Get(context.TODO(), prereqWfKey, prereqWf)
+			}, timeout).Should(Succeed())
+
+			By("Mark prereqs workflow as Succeeded (simulating argo running it)")
+			prereqWf.UnstructuredContent()["status"] = map[string]interface{}{
+				"phase": "Succeeded",
+			}
+			Expect(k8sClient.Update(context.TODO(), prereqWf)).To(Succeed())
+
+			By("Wait for install workflow to be created after prereqs succeed")
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+				if instance.Status.Lifecycle.Prereqs != addonmgrv1alpha1.Succeeded {
+					return fmt.Errorf("prereqs status is %s, want Succeeded", instance.Status.Lifecycle.Prereqs)
+				}
+				return nil
+			}, timeout).Should(Succeed())
+
+			installWfName := instance.GetFormattedWorkflowName(addonmgrv1alpha1.Install)
+			installWfKey := types.NamespacedName{Name: installWfName, Namespace: addonNamespace}
+			Eventually(func() error {
+				return k8sClient.Get(context.TODO(), installWfKey, installWf)
+			}, timeout).Should(Succeed())
+
+			By("Mark install workflow as Succeeded (simulating workflow-controller writing the terminal phase)")
+			installWf.UnstructuredContent()["status"] = map[string]interface{}{
+				"phase": "Succeeded",
+			}
+			Expect(k8sClient.Update(context.TODO(), installWf)).To(Succeed())
+
+			By("Wait for addon to reach Succeeded — wf-controller wrote it")
+			Eventually(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+				if instance.Status.Lifecycle.Installed == addonmgrv1alpha1.Succeeded {
+					return nil
+				}
+				return fmt.Errorf("addon install status is %s, want Succeeded", instance.Status.Lifecycle.Installed)
+			}, timeout).Should(Succeed())
+
+			By("Verify Succeeded status is not overwritten by addon-controller re-reconciling")
+			// The race: addon-controller reads stale Pending state and calls executePrereqAndInstall
+			// again, which either ignores the already-existing install workflow (returning nil without
+			// updating status) and then leaves the addon stuck as Pending, or on the next reconcile
+			// fires TTL. Consistently checks the status remains Succeeded across multiple reconcile cycles.
+			Consistently(func() error {
+				if err := k8sClient.Get(context.TODO(), addonKey, instance); err != nil {
+					return err
+				}
+				if instance.Status.Lifecycle.Installed != addonmgrv1alpha1.Succeeded {
+					return fmt.Errorf("addon install status regressed to %s after being Succeeded — race condition detected", instance.Status.Lifecycle.Installed)
+				}
+				return nil
+			}, timeout*2, time.Millisecond*200).Should(Succeed())
+		})
+	})
 })
 
 // Integration test for controller watches
