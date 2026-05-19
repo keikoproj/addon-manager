@@ -7,14 +7,14 @@ require (
 	github.com/argoproj/argo-workflows/v3 v3.7.14
 	github.com/go-logr/logr v1.4.3
 	github.com/onsi/ginkgo/v2 v2.28.3
-	github.com/onsi/gomega v1.40.0
+	github.com/onsi/gomega v1.41.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/net v0.54.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.11
 	k8s.io/apiextensions-apiserver v0.32.13
-	k8s.io/apimachinery v0.33.11
+	k8s.io/apimachinery v0.33.12
 	k8s.io/client-go v0.33.11
 	sigs.k8s.io/controller-runtime v0.20.4
 )
