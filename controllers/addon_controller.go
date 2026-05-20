@@ -426,6 +426,19 @@ func (r *AddonReconciler) runWorkflow(ctx context.Context, lifecycleStep addonmg
 		return err
 	}
 	r.recorder.Event(addon, "Normal", "Submitted", fmt.Sprintf("Submitted %s workflow %s/%s.", strings.Title(string(lifecycleStep)), addon.Namespace, wfIdentifierName))
+
+	// Sync the actual workflow phase onto the addon status. Without this, the addon-controller
+	// writes stale Pending over a Succeeded that the wf-controller already recorded — the
+	// write-write race described in https://github.com/keikoproj/addon-manager/issues/439.
+	wf, err := r.wfcli.ArgoprojV1alpha1().Workflows(addon.Namespace).Get(ctx, wfIdentifierName, metav1.GetOptions{})
+	if err != nil {
+		// Non-fatal: the wf-controller will reconcile the phase when the workflow completes.
+		log.Error(err, "could not fetch workflow to sync phase", "workflow", wfIdentifierName)
+		return nil
+	}
+	if phase := common.ConvertWorkflowPhaseToAddonPhase(lifecycleStep, wf.Status.Phase); phase != "" {
+		addon.SetStatusByLifecyleStep(lifecycleStep, phase)
+	}
 	return nil
 }
 
