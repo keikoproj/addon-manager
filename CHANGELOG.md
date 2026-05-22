@@ -1,6 +1,47 @@
-<a name="unreleased"></a>
-## [Unreleased]
+<a name="v0.10.0"></a>
+## [v0.10.0] - 2026-05-22
 
+### Fixed
+* fix: defense-in-depth guard in UpdateStatus against stale non-terminal writes by @Suyash1700 in https://github.com/keikoproj/addon-manager/pull/446
+* fix: preventing race condition between addon and wf controllers on writing status by @ccpeng in https://github.com/keikoproj/addon-manager/pull/440
+* pkg/workflows: don't panic when spec.templates or nested lists are missing by @SAY-5 in https://github.com/keikoproj/addon-manager/pull/429
+
+### Changed
+* chore(deps): bump github.com/onsi/ginkgo/v2 from 2.28.3 to 2.29.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/444
+* chore(deps): bump k8s.io/api from 0.33.11 to 0.33.12 by @dependabot in https://github.com/keikoproj/addon-manager/pull/445
+* chore(deps): bump github.com/onsi/gomega from 1.40.0 to 1.41.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/442
+* chore(deps): bump k8s.io/apimachinery from 0.33.11 to 0.33.12 by @dependabot in https://github.com/keikoproj/addon-manager/pull/441
+* chore(deps): bump golang.org/x/net from 0.53.0 to 0.54.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/438
+* chore(deps): bump github.com/onsi/ginkgo/v2 from 2.28.1 to 2.28.3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/437
+* chore(deps): bump github.com/Masterminds/semver/v3 from 3.4.0 to 3.5.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/436
+* chore(deps): bump k8s.io/client-go from 0.33.10 to 0.33.11 by @dependabot in https://github.com/keikoproj/addon-manager/pull/431
+* chore(deps): bump golang.org/x/net from 0.52.0 to 0.53.0 by @dependabot in https://github.com/keikoproj/addon-manager/pull/428
+* chore(deps): bump github.com/argoproj/argo-workflows/v3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/434
+* chore(deps): bump k8s.io/apimachinery from 0.33.10 to 0.33.11 by @dependabot in https://github.com/keikoproj/addon-manager/pull/432
+* chore(deps): bump github.com/onsi/gomega from 1.39.0 to 1.39.1 by @dependabot in https://github.com/keikoproj/addon-manager/pull/426
+* chore(deps): bump codecov/codecov-action from 5 to 6 by @dependabot in https://github.com/keikoproj/addon-manager/pull/425
+* chore(deps): bump github.com/onsi/ginkgo/v2 from 2.23.4 to 2.28.1 by @dependabot in https://github.com/keikoproj/addon-manager/pull/421
+* chore(deps): bump github.com/spf13/cobra from 1.9.1 to 1.10.2 by @dependabot in https://github.com/keikoproj/addon-manager/pull/422
+* chore(deps): bump github.com/argoproj/argo-workflows/v3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/423
+* chore(deps): bump golang.org/x/net from 0.49.0 to 0.52.0 and update Go to 1.26 by @dependabot in https://github.com/keikoproj/addon-manager/pull/424
+* chore(deps): bump k8s.io/apiextensions-apiserver from 0.32.3 to 0.32.9 by @dependabot in https://github.com/keikoproj/addon-manager/pull/405
+* chore(deps): bump k8s.io/client-go from 0.32.4 to 0.32.9 by @dependabot in https://github.com/keikoproj/addon-manager/pull/406
+* chore(deps): bump k8s.io/api from 0.32.4 to 0.32.9 by @dependabot in https://github.com/keikoproj/addon-manager/pull/407
+* chore(deps): bump github/codeql-action from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/409
+* chore(deps): bump actions/checkout from 4 to 6 by @dependabot in https://github.com/keikoproj/addon-manager/pull/413
+* chore(deps): bump google.golang.org/grpc from 1.72.2 to 1.79.3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/420
+* chore(deps): bump docker/setup-buildx-action from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/415
+* chore(deps): bump docker/setup-qemu-action from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/419
+* chore(deps): bump github.com/argoproj/argo-workflows/v3 by @dependabot in https://github.com/keikoproj/addon-manager/pull/418
+* chore(deps): bump docker/login-action from 3 to 4 by @dependabot in https://github.com/keikoproj/addon-manager/pull/416
+* chore(deps): bump goreleaser/goreleaser-action from 6 to 7 by @dependabot in https://github.com/keikoproj/addon-manager/pull/417
+* chore(deps): bump actions/setup-go from 5 to 6 by @dependabot in https://github.com/keikoproj/addon-manager/pull/404
+
+## New Contributors
+* @SAY-5 made their first contribution in https://github.com/keikoproj/addon-manager/pull/429
+* @Suyash1700 made their first contribution in https://github.com/keikoproj/addon-manager/pull/446
+
+**Full Changelog**: https://github.com/keikoproj/addon-manager/compare/v0.9.0...v0.10.0
 
 <a name="v0.9.0"></a>
 ## [v0.9.0] - 2024-07-15
