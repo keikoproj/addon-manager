@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/argoproj/argo-workflows/v3 v3.7.14
+	github.com/argoproj/argo-workflows/v3 v3.7.15
 	github.com/go-logr/logr v1.4.3
 	github.com/onsi/ginkgo/v2 v2.31.0
 	github.com/onsi/gomega v1.41.0
