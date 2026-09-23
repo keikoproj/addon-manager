@@ -36,6 +36,7 @@ type AddonUpdater struct {
 	versionCache VersionCacheClient
 	recorder     record.EventRecorder
 	statusMap    map[string]*sync.Mutex
+	statusMapMu  sync.Mutex
 }
 
 func NewAddonUpdater(recorder record.EventRecorder, cli client.Client, versionCache VersionCacheClient, logger logr.Logger) *AddonUpdater {
@@ -118,6 +119,8 @@ func (c *AddonUpdater) UpdateStatus(ctx context.Context, log logr.Logger, addon 
 }
 
 func (c *AddonUpdater) getStatusMutex(addonName string) *sync.Mutex {
+	c.statusMapMu.Lock()
+	defer c.statusMapMu.Unlock()
 	m, ok := c.statusMap[addonName]
 	if !ok {
 		m = &sync.Mutex{}
@@ -127,6 +130,8 @@ func (c *AddonUpdater) getStatusMutex(addonName string) *sync.Mutex {
 }
 
 func (c *AddonUpdater) removeStatusWaitGroup(addonName string) {
+	c.statusMapMu.Lock()
+	defer c.statusMapMu.Unlock()
 	delete(c.statusMap, addonName)
 }
 
