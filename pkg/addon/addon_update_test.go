@@ -16,6 +16,7 @@ package addon
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -827,4 +828,29 @@ func TestUpdateStatus_AllowsValidationFailedOnSpecChange(t *testing.T) {
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 	g.Expect(current.Status.Lifecycle.Installed).To(gomega.Equal(addonmgrv1alpha1.ValidationFailed),
 		"ValidationFailed must be written when the spec (checksum) has changed — guard must not block new-cycle writes")
+}
+
+// TestStatusMapConcurrentGetAndRemove exercises the same concurrent map access that
+// fails CI under -race: AddonReconciler.RemoveFromCache deletes from statusMap while
+// WorkflowReconciler.UpdateStatus looks up (and may insert) a per-addon mutex.
+func TestStatusMapConcurrentGetAndRemove(t *testing.T) {
+	updater := NewAddonUpdater(fakeRcdr, fake.NewClientBuilder().WithScheme(scheme).Build(), NewAddonVersionCacheClient(), ctrl.Log.WithName("test"))
+	const addonName = "status-map-race-addon"
+
+	var wg sync.WaitGroup
+	const goroutines = 50
+	wg.Add(goroutines * 2)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			m := updater.getStatusMutex(addonName)
+			m.Lock()
+			m.Unlock()
+		}()
+		go func() {
+			defer wg.Done()
+			updater.RemoveFromCache(addonName)
+		}()
+	}
+	wg.Wait()
 }
